@@ -1,6 +1,6 @@
 # Arrively — Product Requirements
 
-> Status: Draft v0.6 · Owner: TBD · Last updated: 2026-10-10
+> Status: Draft v0.7 · Owner: TBD · Last updated: 2026-10-10
 
 ## 1. Overview
 
@@ -16,8 +16,8 @@ The experience ends when the driver arrives and the stop is completed. Anything 
 
 It ships in two forms:
 
-1. **Standalone app**: a hosted, white-label product for smaller operators that don't have their own software.
-2. **API and SDKs**: the routing, tracking, ETA, and notification engine, exposed so companies can add it to their existing apps.
+1. **Standalone app**: a single **Arrively-branded** app for smaller operators that don't have their own software. It is not white-label: every business signs up to the same hosted Arrively product, drivers use the same Arrively driver app from the app stores, and customers get Arrively tracking pages and texts. Each business appears inside the product by name (and optional logo) so customers know who is coming. There are no separate per-business instances, custom apps, or custom domains.
+2. **API and SDKs**: the routing, tracking, ETA, and notification engine, exposed so companies can add it to their existing apps under their own brand.
 
 Both forms run on the same core platform. The standalone app is a client of the public API.
 
@@ -63,7 +63,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 |---|---|
 | **Customer** | The person waiting for the driver: a delivery recipient, a homeowner expecting a technician, or someone waiting to be picked up. Usually has no account and may not install anything. |
 | **Driver** | The person traveling to the customer: a driver, courier, or technician. Shares location while on duty. The operator can choose which word customers see (OPS-12). |
-| **Operator admin** | The business owner or manager. Configures branding, notifications, drivers, and billing. Adds stops and assigns them to drivers. |
+| **Operator admin** | The business owner or manager. Configures business profile (name, logo, support phone), notifications, drivers, and billing. Adds stops and assigns them to drivers. |
 | **Developer / integrator** | Engineer at an API customer who builds on the API and SDKs. |
 | **Platform admin** | Arrively staff who manage tenants, support, and abuse. |
 
@@ -154,7 +154,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | NTF-7 | Delivery status tracking (queued, sent, delivered, failed), with retry and channel fallback (for example push fails, so send SMS). | P0 |
 | NTF-8 | Handle opt-out and opt-in (STOP/HELP/START keywords for SMS) and honor them as the law requires. | P0 |
 | NTF-9 | Quiet hours and rate limits so a customer never gets spammed, even on long routes with many reorderings. | P1 |
-| NTF-10 | Custom sender identity: a dedicated number per tenant, a branded sender name where supported, and a custom email domain. | P1 |
+| NTF-10 | Standalone messages come from Arrively's numbers and email domain and always name the business ("Acme Plumbing via Arrively"). API customers can use their own sender numbers and email domain (API-11). | P0 / P1 |
 | NTF-11 | Two-way SMS. A customer reply (for example "Running 5 min late") is forwarded to the driver and the operator. | P2 |
 
 ### 4.6 Masked calling and texting
@@ -180,7 +180,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | CUS-6 | Driver card with first name, photo, vehicle or uniform description, and plate when relevant, so the customer recognizes the right person. | P0 |
 | CUS-7 | Live updates over WebSocket or SSE, with a polling fallback. The page recovers automatically after network loss. | P0 |
 | CUS-8 | Clear views for stale location, reassignment, delay, cancellation, and the "completed" state. | P0 |
-| CUS-9 | Operator branding: logo, colors, company name, support contact, and a custom domain (`track.acmeplumbing.com`). | P0 logo/colors · P1 domain |
+| CUS-9 | Standalone tracking pages are Arrively-branded and served from Arrively's domain. They show the business's name, optional logo, and support phone inside Arrively's design. No custom colors or domains. | P0 |
 | CUS-10 | Contact actions: call or text the driver through a **masked number**, so neither side sees the other's real phone number. The business's phone number is also shown. | P0 |
 | CUS-11 | The customer can add access instructions ("Leave at side door", "Dog in yard") before the driver arrives. | P1 |
 | CUS-12 | Ask the customer to enable web push so they get later updates without SMS. | P1 |
@@ -197,7 +197,7 @@ For operators without their own software.
 
 | ID | Requirement | Pri |
 |---|---|---|
-| OPS-1 | Self-serve signup, organization setup, and an onboarding wizard (branding, first driver, test route) that gets an operator live in under 30 min. | P0 |
+| OPS-1 | Self-serve signup, organization setup, and an onboarding wizard (business profile, first driver, test route) that gets an operator live in under 30 min. | P0 |
 | OPS-2 | Create stops by hand and assign them to a driver. The driver optimizes the order in the app (DRV-4). Tracking links go out automatically. | P0 |
 | OPS-3 | Import stops from CSV and assign them to a driver in one step. Recurring stops (for example weekly service). | P0 import · P1 recurring |
 | OPS-4 | Live map of all active drivers and routes for the operator, showing each driver's progress ("5 of 12 done, 20 min behind"), with filters. | P0 |
@@ -234,7 +234,7 @@ Not in the MVP. In the meantime, operators create stops manually, by CSV import,
 
 | ID | Requirement | Pri |
 |---|---|---|
-| BKG-1 | A branded public booking form: the customer enters an address, preferred window, and contact details, and accepts SMS consent. Creates a `scheduled` stop for the operator to assign. | P1 |
+| BKG-1 | An Arrively-hosted public booking page for each business: the customer enters an address, preferred window, and contact details, and accepts SMS consent. Creates a `scheduled` stop for the operator to assign. | P1 |
 | BKG-2 | The operator approves or declines requests, and the customer is notified either way. | P1 |
 | BKG-3 | Embeddable booking widget for the operator's website. | P2 |
 | BKG-4 | Basic availability rules: business hours, service area, lead time. | P2 |
@@ -265,7 +265,7 @@ For companies with existing apps.
 
 | ID | Requirement | Pri |
 |---|---|---|
-| SDK-1 | **Hosted tracking page** (the same as CUS-*) usable by API customers with their branding, so no front-end work is required. | P0 |
+| SDK-1 | **Hosted tracking page** (the same as CUS-*) that API customers can theme with their own logo, colors, and domain, so no front-end work is required. Custom branding is available only to API customers. | P0 logo/colors · P1 domain |
 | SDK-2 | **Web component / JS SDK** (`<arrively-tracker stop-token="...">`) that embeds the map, ETA, and stop position in any web page. React wrapper included. Themeable. | P0 |
 | SDK-3 | **iOS (Swift) and Android (Kotlin) customer SDKs**: a drop-in tracking view and a headless data stream, so customers can add tracking to native apps. | P1 |
 | SDK-4 | **Native driver SDKs (Swift/Kotlin)** that handle background location, route display, and stop actions for customers' existing driver apps. | P1 |
@@ -278,12 +278,12 @@ For companies with existing apps.
 
 ## 7. Cross-cutting requirements
 
-### 7.1 Multi-tenancy and white-labeling
+### 7.1 Multi-tenancy and branding
 
-- MT-1 (P0): Strict tenant isolation in data storage, API keys, and logs. Every query is tenant-scoped.
-- MT-2 (P0): Per-tenant branding (logo, colors, sender name, support contact, terms and privacy links).
-- MT-3 (P1): Custom domains with automatic TLS.
-- MT-4 (P1): Sub-accounts for resellers or franchises (one parent, many child operators).
+- MT-1 (P0): One shared, multi-tenant platform for all businesses. No per-customer deployments. Strict tenant isolation in data storage, API keys, and logs. Every query is tenant-scoped.
+- MT-2 (P0): Standalone businesses get an Arrively-branded experience with their business name, optional logo, and support contact. Full custom branding (colors, sender name, terms and privacy links) is for API customers only.
+- MT-3 (P1): Custom domains with automatic TLS for API customers' hosted tracking pages.
+- MT-4 (P2): Multi-location businesses: one parent account with several locations sharing billing.
 
 ### 7.2 Privacy and safety
 
@@ -397,7 +397,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - Core stop, route, location, ETA, and notification engine
 - Single-driver route optimization, with manual reordering and skipping
 - SMS notifications, including stops ahead ("2 stops before you", "You're next")
-- Hosted, branded customer tracking page with live driver location, stops ahead, and privacy rules
+- Arrively-branded customer tracking page with live driver location, stops ahead, and privacy rules
 - Operator console (manual and CSV stops, assigning to drivers, live map, drivers, notification settings, billing)
 - Cross-platform driver app with route optimization, route view, and background location
 - Masked calling and texting between customer and driver
@@ -411,7 +411,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - Planned routes for future days
 - Email, web push, and native push
 - Native customer and driver SDKs
-- Custom domains
+- Custom domains for API customers' hosted tracking pages
 - Reports, ETA accuracy, and learned time on site
 - Recurring stops
 - Public booking form (BKG-1, BKG-2)
@@ -428,7 +428,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - Two-way replies to notification texts
 - Fully native driver apps (Swift/Kotlin)
 - Telematics integrations
-- Reseller accounts
+- Multi-location business accounts
 - Office roles (for example a dispatcher)
 - Expansion beyond the US
 
@@ -451,6 +451,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 | Driver at another stop | The marker just appears stopped, with no label. The stops-ahead count drops only when the driver leaves that stop and heads to the next. |
 | Customer–driver contact | Masked call and text to the driver in the MVP. |
 | Which vertical to set up first | Both. Each ships with its own preset, and onboarding asks which fits. |
+| Standalone branding | One Arrively-branded, multi-tenant product. Not white-label, no per-business instances. Custom branding is for API customers only. |
 | Who optimizes routes | The driver. The operator admin adds and assigns stops. No dispatcher role for now. |
 
 ## 13. Open questions
