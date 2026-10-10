@@ -1,6 +1,6 @@
 # Arrively — Product Requirements
 
-> Status: Draft v0.4 · Owner: TBD · Last updated: 2026-10-10
+> Status: Draft v0.5 · Owner: TBD · Last updated: 2026-10-10
 
 ## 1. Overview
 
@@ -47,7 +47,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 - Markets outside the United States.
 - Healthcare and medical transport (HIPAA) use cases.
 - Turn-by-turn navigation for drivers. The driver app shows the optimized route and deep-links each leg to Google Maps, Apple Maps, or Waze.
-- In-app customer–driver chat. Masked calling and SMS are a candidate for P2.
+- In-app customer–driver chat. Customers and drivers reach each other by masked phone call and text instead (CUS-10, DRV-11).
 
 ### 1.4 Priority key
 
@@ -156,7 +156,18 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | NTF-10 | Custom sender identity: a dedicated number per tenant, a branded sender name where supported, and a custom email domain. | P1 |
 | NTF-11 | Two-way SMS. A customer reply (for example "Running 5 min late") is forwarded to the driver and the operator. | P2 |
 
-### 4.6 Customer tracking experience (web, no install)
+### 4.6 Masked calling and texting
+
+| ID | Requirement | Pri |
+|---|---|---|
+| MSK-1 | Each active stop gets a masked phone number. When the customer calls or texts it, the call or text goes to the driver, and the reverse. Neither sees the other's real number. | P0 |
+| MSK-2 | Masked numbers work only while the stop is active (route started through completed, plus a short grace period, default 30 min). After that, calls and texts get a short automated reply with the business's main number. | P0 |
+| MSK-3 | Reuse numbers from a per-tenant pool, so a few numbers can serve many stops at once. | P0 |
+| MSK-4 | Log call and text metadata (time, duration, direction) for each stop, but no call recordings and no message content in the console by default. | P0 |
+| MSK-5 | Masked texting falls under the same SMS consent and opt-out rules as notifications (CMP-1, CMP-2). | P0 |
+| MSK-6 | Through the API, integrators can request a masked number for a stop and use it in their own app. | P1 |
+
+### 4.7 Customer tracking experience (web, no install)
 
 | ID | Requirement | Pri |
 |---|---|---|
@@ -169,7 +180,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | CUS-7 | Live updates over WebSocket or SSE, with a polling fallback. The page recovers automatically after network loss. | P0 |
 | CUS-8 | Clear views for stale location, reassignment, delay, cancellation, and the "completed" state. | P0 |
 | CUS-9 | Operator branding: logo, colors, company name, support contact, and a custom domain (`track.acmeplumbing.com`). | P0 logo/colors · P1 domain |
-| CUS-10 | Contact actions: call or text the driver or the business. Numbers are masked in P2. | P1 |
+| CUS-10 | Contact actions: call or text the driver through a **masked number**, so neither side sees the other's real phone number. The business's phone number is also shown. | P0 |
 | CUS-11 | The customer can add access instructions ("Leave at side door", "Dog in yard") before the driver arrives. | P1 |
 | CUS-12 | Ask the customer to enable web push so they get later updates without SMS. | P1 |
 | CUS-13 | The customer can say they're not available, and the driver and operator are alerted to skip or reschedule. | P2 |
@@ -196,13 +207,13 @@ For operators without their own software.
 | OPS-9 | Reports: on-time arrival rate, average driver wait at the door, no-show rate, ETA accuracy, drive time saved by optimization, notification delivery rate. | P1 |
 | OPS-10 | Billing and subscription management (plans, usage, invoices, SMS overage). | P0 |
 | OPS-11 | Lightweight integrations: Zapier/Make, Google Calendar or iCal import, and an email-to-stop parser. | P2 |
-| OPS-12 | Industry presets that set default wording ("driver", "technician", "courier"), notification templates, and arrival radius. | P0 |
+| OPS-12 | Industry presets that set default wording ("driver", "technician", "courier"), notification templates, and arrival radius. Both launch verticals ship with full presets: **Delivery and field services** and **Rideshare-type pickups**. Onboarding asks which one fits the business and applies it. | P0 |
 
 ### 5.2 Driver app
 
 | ID | Requirement | Pri |
 |---|---|---|
-| DRV-1 | iOS and Android app (native or cross-platform such as React Native or Flutter) with reliable **background location**. A PWA alone is not enough because iOS limits background geolocation. | P0 |
+| DRV-1 | iOS and Android app with reliable **background location**, built **cross-platform** (React Native or Flutter) for the MVP while the product is validated. A web app alone is not enough because iOS limits background location. Keep location, routing, and stop logic in shared modules with clean interfaces so the move to native (DRV-13) is a rewrite of the UI, not the business logic. | P0 |
 | DRV-2 | Sign in with a phone number and OTP. Go on duty and off duty. | P0 |
 | DRV-3 | **Route view**: the optimized stop list in order, the whole route on a map, total stops, stops remaining, total drive time and distance, and ETA for each stop. | P0 |
 | DRV-4 | **The driver optimizes the route**, and can reorder stops by hand or skip a stop (RTE-2, RTE-5). | P0 |
@@ -212,8 +223,9 @@ For operators without their own software.
 | DRV-8 | Push alerts to the driver when the operator adds, changes, or cancels stops, or a customer cancels. | P0 |
 | DRV-9 | Battery-aware tracking. Typical battery use on a 1-hour shift under 8%. | P1 |
 | DRV-10 | A lightweight "web driver link" fallback for occasional drivers, with documented limitations (foreground only). | P1 |
+| DRV-13 | **Fully native driver apps** (Swift for iOS, Kotlin for Android) replace the cross-platform app once the product is validated, for better battery use, location reliability, and platform features. The native driver SDKs (SDK-4) share this code. | P2 |
 | DRV-12 | Owner-operators can create their own stops in the driver app, with no console needed. | P1 |
-| DRV-11 | Call or text the customer through masked numbers. | P2 |
+| DRV-11 | Call or text the customer through a masked number from the stop screen. | P0 |
 
 ### 5.3 Booking (post-MVP)
 
@@ -255,7 +267,7 @@ For companies with existing apps.
 | SDK-1 | **Hosted tracking page** (the same as CUS-*) usable by API customers with their branding, so no front-end work is required. | P0 |
 | SDK-2 | **Web component / JS SDK** (`<arrively-tracker stop-token="...">`) that embeds the map, ETA, and stop position in any web page. React wrapper included. Themeable. | P0 |
 | SDK-3 | **iOS (Swift) and Android (Kotlin) customer SDKs**: a drop-in tracking view and a headless data stream, so customers can add tracking to native apps. | P1 |
-| SDK-4 | **Driver SDKs (iOS/Android)** that handle background location, route display, and stop actions for customers' existing driver apps. | P1 |
+| SDK-4 | **Native driver SDKs (Swift/Kotlin)** that handle background location, route display, and stop actions for customers' existing driver apps. | P1 |
 | SDK-5 | React Native and Flutter wrappers. | P2 |
 | SDK-6 | Server SDKs: Node.js and Python (P0); Ruby, Go, Java, PHP, .NET (P1–P2). | P0+ |
 | SDK-7 | Developer portal: docs, quickstarts, API reference, interactive console, API key management, webhook tester, usage dashboard, changelog. | P0 |
@@ -342,8 +354,9 @@ For companies with existing apps.
 
 | Area | Candidates |
 |---|---|
-| Maps, geocoding, routing, traffic ETA | Google Maps Platform, Mapbox, HERE, TomTom (all have strong US coverage). |
-| Route optimization | Google Route Optimization API, Mapbox Optimization API, HERE Tour Planning, or self-hosted (Google OR-Tools, VROOM) with a commercial travel-time matrix. |
+| Maps, geocoding, routing, traffic ETA | **Mapbox (decided)**: Maps SDKs and GL JS for the map, Search/Geocoding, Directions with traffic, and Matrix for travel times between stops. |
+| Route optimization | **Mapbox Optimization API** where its stop limits allow. Mapbox's per-request stop limits are below the 100-stop target (RTE-7), so larger routes need a self-hosted solver (VROOM or Google OR-Tools) fed by Mapbox Matrix travel times. Confirm current limits and pricing before building. |
+| Masked calling and texting | Twilio, Vonage, Telnyx, Bandwidth (number pools with call and SMS forwarding). |
 | SMS / voice / WhatsApp | Twilio, Vonage, Bird, Telnyx. Use at least two for failover. |
 | Email | SendGrid, Postmark, Amazon SES |
 | Push | APNs, FCM, Web Push (VAPID) |
@@ -357,7 +370,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 
 - **Standalone**: tiers per active driver per month, with included SMS and overage billing. Free trial.
 - **API**: usage-based pricing per tracked stop, per optimization run, and per notification. Free developer tier in test mode.
-- Both products share metering. Requirement BIL-1 (P0): accurate per-tenant metering of stops, optimizations, location pings, routing calls, and messages.
+- Both products share metering. Requirement BIL-1 (P0): accurate per-tenant metering of stops, optimizations, location pings, routing calls, messages, and masked call minutes.
 
 ---
 
@@ -385,7 +398,10 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - SMS notifications, including stops ahead ("2 stops before you", "You're next")
 - Hosted, branded customer tracking page with live driver location, stops ahead, and privacy rules
 - Operator console (manual and CSV stops, assigning to drivers, live map, drivers, notification settings, billing)
-- Native driver app with route optimization, route view, and background location
+- Cross-platform driver app with route optimization, route view, and background location
+- Masked calling and texting between customer and driver
+- Industry presets for both delivery/field services and rideshare-type pickups
+- Mapbox for maps, routing, ETAs, and optimization
 - REST API (including optimization), webhooks, JS embed, Node/Python SDKs, developer portal, test mode and simulator
 
 **Phase 2 (P1)**
@@ -407,7 +423,8 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - Driver breaks and shift constraints
 - Booking widget and availability rules
 - WhatsApp and voice
-- Masked calling and two-way SMS
+- Two-way replies to notification texts
+- Fully native driver apps (Swift/Kotlin)
 - Telematics integrations
 - Reseller accounts
 - Office roles (for example a dispatcher)
@@ -427,12 +444,14 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 | Multi-stop routes | Route optimization for the driver and stops ahead for the customer are in the MVP. |
 | Stop count shown to customers | Only the stops ahead of them. Never the route total. |
 | Map before the customer is next | Show the driver's live location and the stops ahead. Never show where other stops are. |
+| Driver app | Cross-platform (React Native or Flutter) for the MVP while validating the product. Fully native (Swift/Kotlin) later. |
+| Map and routing provider | Mapbox. |
+| Customer–driver contact | Masked call and text to the driver in the MVP. |
+| Which vertical to set up first | Both. Each ships with its own preset, and onboarding asks which fits. |
 | Who optimizes routes | The driver. The operator admin adds and assigns stops. No dispatcher role for now. |
 
 ## 13. Open questions
 
-1. **Driver app strategy**: build a cross-platform native app (recommended), or start with a web-only driver link and accept its limits?
-2. **Map and optimization provider**: Google offers the best traffic ETA and has an optimization API. Mapbox costs less and is easier to style. Self-hosted optimization lowers per-run cost but needs engineering. Is the per-use cost acceptable at the target price points?
-3. Should customers be able to **reply to or contact** drivers in the MVP, or only from P2?
-4. Of the two verticals, which one should **onboarding and default templates** favor first?
-5. **Driver at another stop**: should the live map add a mitigation, such as freezing the marker or showing a "Driver is at another stop" banner while the driver is parked at a stop ahead? Otherwise customers can see where other customers are.
+1. **Cross-platform framework**: React Native or Flutter? React Native makes it easier to share code with a React web console. Flutter gives more consistent rendering across devices.
+2. **Large routes on Mapbox**: build the self-hosted optimizer for routes above Mapbox's stop limit in the MVP, or cap MVP routes at Mapbox's limit and add it in P1?
+3. **Driver at another stop**: should the live map add a mitigation, such as freezing the marker or showing a "Driver is at another stop" banner while the driver is parked at a stop ahead? Otherwise customers can see where other customers are.
