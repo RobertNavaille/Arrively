@@ -1,6 +1,6 @@
 # Arrively — Product Requirements
 
-> Status: Draft v0.7 · Owner: TBD · Last updated: 2026-10-10
+> Status: Draft v0.8 · Owner: TBD · Last updated: 2026-10-10
 
 ## 1. Overview
 
@@ -46,7 +46,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 - Splitting stops automatically across several drivers (planned for P2, RTE-10).
 - Markets outside the United States.
 - Healthcare and medical transport (HIPAA) use cases.
-- Turn-by-turn navigation for drivers. The driver app shows the optimized route and deep-links each leg to Google Maps, Apple Maps, or Waze.
+- Turn-by-turn navigation for drivers. The driver app reveals one stop at a time and deep-links the current stop to Google Maps, Apple Maps, or Waze (section 5.2.1).
 - In-app customer–driver chat. Customers and drivers reach each other by masked phone call and text instead (CUS-10, DRV-11).
 
 ### 1.4 Priority key
@@ -108,9 +108,9 @@ Both forms run on the same core platform. The standalone app is a client of the 
 |---|---|---|
 | RTE-1 | Build a route for one driver from a set of stops, with a start location (depot, driver's current position, or an address) and an optional end location. | P0 |
 | RTE-2 | **Optimize the stop order** to minimize total drive time, using traffic-aware travel times. Respect each stop's arrival window and time on site. | P0 |
-| RTE-3 | Let the driver pin stops (for example "must be first", "must be last", or "fixed position") before optimizing. | P1 |
-| RTE-4 | Show the result before it's accepted: the ordered stop list, the route on a map, total drive time and distance, per-stop ETAs, time saved compared with the original order, and any windows that can't be met. | P0 |
-| RTE-5 | The driver can reorder stops by hand or skip a stop. All affected customers' positions and ETAs update. | P0 |
+| RTE-3 | Let the operator admin pin stops (for example "must be first", "must be last", or "fixed position") before optimizing. | P1 |
+| RTE-4 | Show the result before it's accepted. In the console, the operator admin sees the full ordered list, the route on a map, total drive time and distance, per-stop ETAs, time saved, and any windows that can't be met. In the driver app, the driver sees only the totals, the time saved, and any missed windows. No addresses (DRV-14). | P0 |
+| RTE-5 | The operator admin can reorder stops by hand in the console. The driver can't reorder, because they can't see future addresses. The driver can only skip or defer the current stop (DRV-17). All affected customers' positions and ETAs update. | P0 |
 | RTE-6 | **Re-optimize** when a stop is added, cancelled, or running late. The next stop the driver is heading to and any stop whose customer got an "on the way" message stay in place, so customers aren't told one thing and then shown another. | P1 |
 | RTE-7 | **MVP:** routes are capped at the Mapbox Optimization API's per-request limit (v1 allows 12 coordinates including start and end; confirm the current limit before building). The app says so clearly when a driver tries to add more. **P1:** a self-hosted optimizer (VROOM or OR-Tools on Mapbox Matrix travel times) raises the cap to at least 100 stops, returning in under 10 s for 50 stops. | P0 / P1 |
 | RTE-8 | Planned routes for a future day, so customers can be told their window ahead of time. | P1 |
@@ -198,7 +198,7 @@ For operators without their own software.
 | ID | Requirement | Pri |
 |---|---|---|
 | OPS-1 | Self-serve signup, organization setup, and an onboarding wizard (business profile, first driver, test route) that gets an operator live in under 30 min. | P0 |
-| OPS-2 | Create stops by hand and assign them to a driver. The driver optimizes the order in the app (DRV-4). Tracking links go out automatically. | P0 |
+| OPS-2 | Create stops by hand and assign them to a driver. The driver runs optimization in the app (DRV-4), and the operator admin can also optimize and reorder in the console. Tracking links go out automatically. | P0 |
 | OPS-3 | Import stops from CSV and assign them to a driver in one step. Recurring stops (for example weekly service). | P0 import · P1 recurring |
 | OPS-4 | Live map of all active drivers and routes for the operator, showing each driver's progress ("5 of 12 done, 20 min behind"), with filters. | P0 |
 | OPS-5 | Manage drivers and vehicles: invite drivers by SMS or email, upload photos, enter vehicle details, deactivate. | P0 |
@@ -216,10 +216,10 @@ For operators without their own software.
 |---|---|---|
 | DRV-1 | iOS and Android app with reliable **background location**, built in **React Native** for the MVP while the product is validated. A web app alone is not enough because iOS limits background location. Keep location, routing, and stop logic in shared modules with clean interfaces so the move to native (DRV-13) is a rewrite of the UI, not the business logic. | P0 |
 | DRV-2 | Sign in with a phone number and OTP. Go on duty and off duty. | P0 |
-| DRV-3 | **Route view**: the optimized stop list in order, the whole route on a map, total stops, stops remaining, total drive time and distance, and ETA for each stop. | P0 |
-| DRV-4 | **The driver optimizes the route**, and can reorder stops by hand or skip a stop (RTE-2, RTE-5). | P0 |
-| DRV-5 | Stop actions: Start route, Arrived, Completed, No-show, Skip, each with a timestamp. Completing a stop moves to the next one and notifies the following customers. | P0 |
-| DRV-6 | One tap to open navigation to the next stop in Google Maps, Apple Maps, or Waze. | P0 |
+| DRV-3 | **Route overview**: total stops, stops remaining, estimated total drive time, and the expected finish time. It shows no addresses, pins, or map of future stops (DRV-14). | P0 |
+| DRV-4 | **The driver runs route optimization** before starting the route (RTE-2). The order is computed on the server, and the driver sees only the totals (RTE-4). | P0 |
+| DRV-5 | Stop actions: Start route, Arrived, Completed, No-show, Skip, each with a timestamp and the driver's location. Marking a stop reveals the next one (DRV-15). Customer notifications follow departure (STP-10). | P0 |
+| DRV-6 | One tap to open navigation to the **current** stop in Google Maps, Apple Maps, or Waze. Only the current stop's address is ever passed to the navigation app. | P0 |
 | DRV-7 | Location sharing only while on duty, with a clear indicator. | P0 |
 | DRV-8 | Push alerts to the driver when the operator adds, changes, or cancels stops, or a customer cancels. | P0 |
 | DRV-9 | Battery-aware tracking. Typical battery use on a 1-hour shift under 8%. | P1 |
@@ -227,6 +227,22 @@ For operators without their own software.
 | DRV-13 | **Fully native driver apps** (Swift for iOS, Kotlin for Android) replace the cross-platform app once the product is validated, for better battery use, location reliability, and platform features. The native driver SDKs (SDK-4) share this code. | P2 |
 | DRV-12 | Owner-operators can create their own stops in the driver app, with no console needed. | P1 |
 | DRV-11 | Call or text the customer through a masked number from the stop screen. | P0 |
+
+#### 5.2.1 Stop-by-stop reveal
+
+The goal is that every stop is marked consistently and reliably. The driver sees only one stop at a time, and the next one is revealed only after the current one is marked.
+
+| ID | Requirement | Pri |
+|---|---|---|
+| DRV-14 | **One stop visible at a time.** The driver app shows the address, pin, notes, customer first name, and contact button only for the current stop. Future stops appear only as a count. Completed stops are visible in a history list. | P0 |
+| DRV-15 | **Reveal on marking.** The next stop's details appear only after the current stop is marked Completed, No-show, or Skipped. There is no way to peek ahead or open navigation to a later stop. | P0 |
+| DRV-16 | **Enforced on the server.** The API returns the current stop's details to the driver's session and nothing beyond it. Hiding them only in the app's screens is not enough. The driver SDK and API (for integrators) offer the same sequential mode as an option. | P0 |
+| DRV-17 | **Skip and defer need a reason.** The driver can skip the current stop (it's removed from today's route) or defer it (it moves to the end), choosing from a short reason list (for example "Customer not home", "Access blocked", "Out of time"). The operator admin is notified. | P0 |
+| DRV-18 | **Location check when marking.** Completed and No-show must be marked inside the stop's geofence (STP-4). Marking from outside needs a reason and is flagged to the operator admin. | P0 |
+| DRV-19 | **Unmarked-stop reminder.** If the driver arrives at a stop and then leaves its geofence without marking it, the app sends a notification and keeps prompting until the stop is marked. | P0 |
+| DRV-20 | **Undo window.** A mark can be undone within 60 s, in case of a wrong tap. After that, only the operator admin can correct it in the console, which keeps an audit record. | P1 |
+| DRV-21 | **Offline marking.** The app can record a mark without a connection and sync it later. To reveal the next stop offline, the app can hold that stop's data on the device without showing it. The operator can turn this off. | P1 |
+| DRV-22 | Owner-operators who entered the stops themselves (DRV-12) can turn the reveal rule off for their own routes. | P1 |
 
 ### 5.3 Booking (post-MVP)
 
@@ -268,7 +284,7 @@ For companies with existing apps.
 | SDK-1 | **Hosted tracking page** (the same as CUS-*) that API customers can theme with their own logo, colors, and domain, so no front-end work is required. Custom branding is available only to API customers. | P0 logo/colors · P1 domain |
 | SDK-2 | **Web component / JS SDK** (`<arrively-tracker stop-token="...">`) that embeds the map, ETA, and stop position in any web page. React wrapper included. Themeable. | P0 |
 | SDK-3 | **iOS (Swift) and Android (Kotlin) customer SDKs**: a drop-in tracking view and a headless data stream, so customers can add tracking to native apps. | P1 |
-| SDK-4 | **Native driver SDKs (Swift/Kotlin)** that handle background location, route display, and stop actions for customers' existing driver apps. | P1 |
+| SDK-4 | **Native driver SDKs (Swift/Kotlin)** that handle background location, stop display (including optional stop-by-stop reveal, DRV-14–DRV-16), and stop actions for customers' existing driver apps. | P1 |
 | SDK-5 | React Native and Flutter wrappers. | P2 |
 | SDK-6 | Server SDKs: Node.js and Python (P0); Ruby, Go, Java, PHP, .NET (P1–P2). | P0+ |
 | SDK-7 | Developer portal: docs, quickstarts, API reference, interactive console, API key management, webhook tester, usage dashboard, changelog. | P0 |
@@ -399,7 +415,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - SMS notifications, including stops ahead ("2 stops before you", "You're next")
 - Arrively-branded customer tracking page with live driver location, stops ahead, and privacy rules
 - Operator console (manual and CSV stops, assigning to drivers, live map, drivers, notification settings, billing)
-- Cross-platform driver app with route optimization, route view, and background location
+- Cross-platform driver app with route optimization, stop-by-stop reveal, location check when marking, and background location
 - Masked calling and texting between customer and driver
 - Industry presets for both delivery/field services and rideshare-type pickups
 - Mapbox for maps, routing, ETAs, and optimization
@@ -452,7 +468,8 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 | Customer–driver contact | Masked call and text to the driver in the MVP. |
 | Which vertical to set up first | Both. Each ships with its own preset, and onboarding asks which fits. |
 | Standalone branding | One Arrively-branded, multi-tenant product. Not white-label, no per-business instances. Custom branding is for API customers only. |
-| Who optimizes routes | The driver. The operator admin adds and assigns stops. No dispatcher role for now. |
+| Who optimizes routes | The driver runs optimization. The operator admin adds, assigns, and can reorder stops. No dispatcher role for now. |
+| Driver navigation | Deep-link to Google Maps, Apple Maps, or Waze for the current stop only. The driver sees one stop at a time, and the next address is revealed only after the current stop is marked. |
 
 ## 13. Open questions
 
