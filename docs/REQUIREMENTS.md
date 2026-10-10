@@ -1,6 +1,6 @@
 # Arrively — Product Requirements
 
-> Status: Draft v0.3 · Owner: TBD · Last updated: 2026-10-10
+> Status: Draft v0.4 · Owner: TBD · Last updated: 2026-10-10
 
 ## 1. Overview
 
@@ -10,7 +10,7 @@ Arrively covers one part of a service visit: **the driver getting to the custome
 - A continuously updated **ETA**.
 - **Proactive notifications** that get the customer ready before the driver arrives.
 
-For drivers with several stops, Arrively also **optimizes the order of stops** and shows each customer where they are in the line ("You're stop 4 of 9", "2 stops before you").
+For drivers with several stops, Arrively also **optimizes the order of stops** and tells each customer how many stops are ahead of them ("2 stops before you", "You're next").
 
 The experience ends when the driver arrives and the stop is completed. Anything after that, such as riding to a destination, doing the service work, or handing over a delivery, is out of scope.
 
@@ -35,7 +35,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 
 - Customers are ready when the driver arrives, so drivers wait less and fewer visits are missed.
 - Drivers with many stops spend less time driving.
-- Fewer "where is my driver?" calls to dispatch.
+- Fewer "where is my driver?" calls to the business.
 - A small operator can go live in under one day with no engineering work.
 - A developer can embed tracking and notifications in under one week.
 
@@ -63,8 +63,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 |---|---|
 | **Customer** | The person waiting for the driver: a delivery recipient, a homeowner expecting a technician, or someone waiting to be picked up. Usually has no account and may not install anything. |
 | **Driver** | The person traveling to the customer: a driver, courier, or technician. Shares location while on duty. The operator can choose which word customers see (OPS-12). |
-| **Operator admin** | The business owner or manager. Configures branding, notifications, users, and billing. |
-| **Dispatcher** | Operator staff who create stops, build routes, assign drivers, and watch progress live. |
+| **Operator admin** | The business owner or manager. Configures branding, notifications, drivers, and billing. Adds stops and assigns them to drivers. |
 | **Developer / integrator** | Engineer at an API customer who builds on the API and SDKs. |
 | **Platform admin** | Arrively staff who manage tenants, support, and abuse. |
 
@@ -79,7 +78,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
   - `queued`: on an active route, with other stops ahead of it.
   - `en_route`: the driver is heading to this stop next.
   - `completed`: the driver marked the stop done. Tracking ends here.
-- **Stop position**: where a stop sits in the remaining route, such as "stop 4 of 9" or "2 stops before you".
+- **Stop position**: where a stop sits in the remaining route, expressed as stops ahead, such as "2 stops before you" or "You're next".
 - **Location ping**: a timestamped driver position with lat/lng, accuracy, heading, and speed.
 - **Tracking link**: a unique, expiring URL that shows the customer their stop live.
 - **Notification rule**: a trigger (event, ETA threshold, or stops-ahead threshold) with channel(s) and a message template.
@@ -108,9 +107,9 @@ Both forms run on the same core platform. The standalone app is a client of the 
 |---|---|---|
 | RTE-1 | Build a route for one driver from a set of stops, with a start location (depot, driver's current position, or an address) and an optional end location. | P0 |
 | RTE-2 | **Optimize the stop order** to minimize total drive time, using traffic-aware travel times. Respect each stop's arrival window and time on site. | P0 |
-| RTE-3 | Let the dispatcher or driver pin stops (for example "must be first", "must be last", or "fixed position") before optimizing. | P1 |
+| RTE-3 | Let the driver pin stops (for example "must be first", "must be last", or "fixed position") before optimizing. | P1 |
 | RTE-4 | Show the result before it's accepted: the ordered stop list, the route on a map, total drive time and distance, per-stop ETAs, time saved compared with the original order, and any windows that can't be met. | P0 |
-| RTE-5 | The driver or dispatcher can reorder stops by hand or skip a stop. All affected customers' positions and ETAs update. | P0 |
+| RTE-5 | The driver can reorder stops by hand or skip a stop. All affected customers' positions and ETAs update. | P0 |
 | RTE-6 | **Re-optimize** when a stop is added, cancelled, or running late. The next stop the driver is heading to and any stop whose customer got an "on the way" message stay in place, so customers aren't told one thing and then shown another. | P1 |
 | RTE-7 | Handle at least 100 stops per route. Optimization returns in under 10 s for 50 stops. | P0 |
 | RTE-8 | Planned routes for a future day, so customers can be told their window ahead of time. | P1 |
@@ -146,16 +145,16 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | ID | Requirement | Pri |
 |---|---|---|
 | NTF-1 | Channels: **SMS** (P0), **email** (P1), **web push** from the tracking page (P1), **native push** through the integrator's app (API customers, P1), **WhatsApp** (P2), **automated voice call** (P2, for accessibility). | — |
-| NTF-2 | Default triggers: stop scheduled (window and tracking link), route started ("You're stop 4 of 9 today"), **"N stops before you"** (configurable, default 2), **"You're next"**, **"X minutes away"** (configurable, default 10 min), **arriving now** (default 2 min), **driver has arrived**, significant delay, driver changed, stop cancelled or rescheduled. | P0 |
+| NTF-2 | Default triggers: stop scheduled (window and tracking link), route started ("There are 3 stops before yours"), **"N stops before you"** (configurable, default 2), **"You're next"**, **"X minutes away"** (configurable, default 10 min), **arriving now** (default 2 min), **driver has arrived**, significant delay, driver changed, stop cancelled or rescheduled. | P0 |
 | NTF-3 | Operators can turn each trigger on or off, set thresholds, and choose channels per trigger. | P0 |
-| NTF-4 | Message templates with variables (`{{driver_first_name}}`, `{{vehicle}}`, `{{eta_minutes}}`, `{{arrival_window}}`, `{{stop_number}}`, `{{total_stops}}`, `{{stops_ahead}}`, `{{tracking_url}}`, `{{company_name}}`), with English and Spanish versions. | P0 |
+| NTF-4 | Message templates with variables (`{{driver_first_name}}`, `{{vehicle}}`, `{{eta_minutes}}`, `{{arrival_window}}`, `{{stops_ahead}}`, `{{tracking_url}}`, `{{company_name}}`), with English and Spanish versions. | P0 |
 | NTF-5 | Each notification fires at most once per stop, guarded against ETA oscillation and route reordering. Notifications that are no longer relevant are suppressed (for example, skip "2 stops before you" if the customer is already next). | P0 |
 | NTF-6 | Waiting reminders after arrival ("Your driver has been waiting 3 minutes"), with the operator's no-show policy. | P1 |
 | NTF-7 | Delivery status tracking (queued, sent, delivered, failed), with retry and channel fallback (for example push fails, so send SMS). | P0 |
 | NTF-8 | Handle opt-out and opt-in (STOP/HELP/START keywords for SMS) and honor them as the law requires. | P0 |
 | NTF-9 | Quiet hours and rate limits so a customer never gets spammed, even on long routes with many reorderings. | P1 |
 | NTF-10 | Custom sender identity: a dedicated number per tenant, a branded sender name where supported, and a custom email domain. | P1 |
-| NTF-11 | Two-way SMS. A customer reply (for example "Running 5 min late") is forwarded to the driver and dispatcher. | P2 |
+| NTF-11 | Two-way SMS. A customer reply (for example "Running 5 min late") is forwarded to the driver and the operator. | P2 |
 
 ### 4.6 Customer tracking experience (web, no install)
 
@@ -163,17 +162,17 @@ Both forms run on the same core platform. The standalone app is a client of the 
 |---|---|---|
 | CUS-1 | A mobile-first web page opened from the tracking link. Loads in under 2 s on 4G with no login or app install. | P0 |
 | CUS-2 | A prominent ETA ("Arriving in 12 min · 2:34 PM") or arrival window, plus a plain-language status for each stop state. | P0 |
-| CUS-3 | **Stop position**: "You're stop 4 of 9", "2 stops before you", or "You're next". The operator chooses whether to show the total, the stops ahead, or both. | P0 |
+| CUS-3 | **Stops ahead**: "3 stops before you", "1 stop before you", or "You're next". The total number of stops on the route is never shown. | P0 |
 | CUS-4 | Live map showing the driver (smoothly animated marker, rotated to heading) and the customer's own pin, with an optional route line. Bounds fit both points automatically. | P0 |
-| CUS-5 | **Other customers stay private.** The customer never sees other stops' addresses or pins. While other stops are ahead, the map is hidden or shows only an approximate area (operator setting, default hidden). The precise live map appears once this stop is `en_route`. | P0 |
+| CUS-5 | **The driver is visible, other stops are not.** From the moment the route starts, the map shows the driver's live location and the number of stops ahead. It never shows other stops: no pins, no addresses, and no route line through them. Once this stop is `en_route`, a route line from the driver to the customer's pin can appear. | P0 |
 | CUS-6 | Driver card with first name, photo, vehicle or uniform description, and plate when relevant, so the customer recognizes the right person. | P0 |
 | CUS-7 | Live updates over WebSocket or SSE, with a polling fallback. The page recovers automatically after network loss. | P0 |
 | CUS-8 | Clear views for stale location, reassignment, delay, cancellation, and the "completed" state. | P0 |
 | CUS-9 | Operator branding: logo, colors, company name, support contact, and a custom domain (`track.acmeplumbing.com`). | P0 logo/colors · P1 domain |
-| CUS-10 | Contact actions: call or text the driver or dispatch. Numbers are masked in P2. | P1 |
+| CUS-10 | Contact actions: call or text the driver or the business. Numbers are masked in P2. | P1 |
 | CUS-11 | The customer can add access instructions ("Leave at side door", "Dog in yard") before the driver arrives. | P1 |
 | CUS-12 | Ask the customer to enable web push so they get later updates without SMS. | P1 |
-| CUS-13 | The customer can say they're not available, and the dispatcher is alerted to skip or reschedule. | P2 |
+| CUS-13 | The customer can say they're not available, and the driver and operator are alerted to skip or reschedule. | P2 |
 | CUS-14 | Short feedback prompt after the stop is completed. | P2 |
 
 ---
@@ -187,12 +186,12 @@ For operators without their own software.
 | ID | Requirement | Pri |
 |---|---|---|
 | OPS-1 | Self-serve signup, organization setup, and an onboarding wizard (branding, first driver, test route) that gets an operator live in under 30 min. | P0 |
-| OPS-2 | Create stops by hand, build and optimize routes (RTE-*), assign them to drivers, and send tracking links. | P0 |
-| OPS-3 | Import stops from CSV and optimize them into a route in one step. Recurring stops (for example weekly service). | P0 import · P1 recurring |
-| OPS-4 | Live dispatch map of all active drivers and routes, showing each driver's progress ("5 of 12 done, 20 min behind"), with filters. | P0 |
+| OPS-2 | Create stops by hand and assign them to a driver. The driver optimizes the order in the app (DRV-4). Tracking links go out automatically. | P0 |
+| OPS-3 | Import stops from CSV and assign them to a driver in one step. Recurring stops (for example weekly service). | P0 import · P1 recurring |
+| OPS-4 | Live map of all active drivers and routes for the operator, showing each driver's progress ("5 of 12 done, 20 min behind"), with filters. | P0 |
 | OPS-5 | Manage drivers and vehicles: invite drivers by SMS or email, upload photos, enter vehicle details, deactivate. | P0 |
 | OPS-6 | Configure notifications: toggle triggers, set thresholds, edit templates, and preview them. | P0 |
-| OPS-7 | Roles and permissions: Admin, Dispatcher, Viewer. | P0 |
+| OPS-7 | Roles and permissions: Admin and Driver. Additional office roles are out of scope for now. | P0 |
 | OPS-8 | Route and stop history with search, including the notification log for each stop. | P0 |
 | OPS-9 | Reports: on-time arrival rate, average driver wait at the door, no-show rate, ETA accuracy, drive time saved by optimization, notification delivery rate. | P1 |
 | OPS-10 | Billing and subscription management (plans, usage, invoices, SMS overage). | P0 |
@@ -206,13 +205,14 @@ For operators without their own software.
 | DRV-1 | iOS and Android app (native or cross-platform such as React Native or Flutter) with reliable **background location**. A PWA alone is not enough because iOS limits background geolocation. | P0 |
 | DRV-2 | Sign in with a phone number and OTP. Go on duty and off duty. | P0 |
 | DRV-3 | **Route view**: the optimized stop list in order, the whole route on a map, total stops, stops remaining, total drive time and distance, and ETA for each stop. | P0 |
-| DRV-4 | The driver can optimize their own route, reorder stops by hand, or skip a stop (RTE-2, RTE-5). | P0 |
+| DRV-4 | **The driver optimizes the route**, and can reorder stops by hand or skip a stop (RTE-2, RTE-5). | P0 |
 | DRV-5 | Stop actions: Start route, Arrived, Completed, No-show, Skip, each with a timestamp. Completing a stop moves to the next one and notifies the following customers. | P0 |
 | DRV-6 | One tap to open navigation to the next stop in Google Maps, Apple Maps, or Waze. | P0 |
 | DRV-7 | Location sharing only while on duty, with a clear indicator. | P0 |
-| DRV-8 | Push alerts to the driver when stops are added, changed, cancelled, or reordered by dispatch. | P0 |
+| DRV-8 | Push alerts to the driver when the operator adds, changes, or cancels stops, or a customer cancels. | P0 |
 | DRV-9 | Battery-aware tracking. Typical battery use on a 1-hour shift under 8%. | P1 |
 | DRV-10 | A lightweight "web driver link" fallback for occasional drivers, with documented limitations (foreground only). | P1 |
+| DRV-12 | Owner-operators can create their own stops in the driver app, with no console needed. | P1 |
 | DRV-11 | Call or text the customer through masked numbers. | P2 |
 
 ### 5.3 Booking (post-MVP)
@@ -221,8 +221,8 @@ Not in the MVP. In the meantime, operators create stops manually, by CSV import,
 
 | ID | Requirement | Pri |
 |---|---|---|
-| BKG-1 | A branded public booking form: the customer enters an address, preferred window, and contact details, and accepts SMS consent. Creates a `scheduled` stop for the dispatcher to route. | P1 |
-| BKG-2 | Dispatcher approves or declines requests, and the customer is notified either way. | P1 |
+| BKG-1 | A branded public booking form: the customer enters an address, preferred window, and contact details, and accepts SMS consent. Creates a `scheduled` stop for the operator to assign. | P1 |
+| BKG-2 | The operator approves or declines requests, and the customer is notified either way. | P1 |
 | BKG-3 | Embeddable booking widget for the operator's website. | P2 |
 | BKG-4 | Basic availability rules: business hours, service area, lead time. | P2 |
 
@@ -275,8 +275,8 @@ For companies with existing apps.
 ### 7.2 Privacy and safety
 
 - PRV-1 (P0): Tracking links use unguessable tokens (≥128 bits of entropy). They expire automatically after the stop is completed plus a short grace period (default 30 min).
-- PRV-2 (P0): A customer sees the driver's precise location only while their own stop is `en_route` or `arriving`. Never before the route starts, never while the driver is at another customer's address, and never after their stop is completed (see CUS-5).
-- PRV-3 (P0): A customer never sees any other customer's name, address, or position on the map. Stop counts are the only information shared about other stops.
+- PRV-2 (P0): A customer sees the driver's live location only from route start until their own stop is completed. Never before the route starts and never after (see CUS-5). Customers can see where the driver is while the driver is at another stop. That trade-off is accepted (section 12).
+- PRV-3 (P0): A customer never sees any other customer's name, address, or position on the map. The number of stops ahead is the only information shared about other stops.
 - PRV-4 (P0): Minimize exposed driver data: first name, photo, vehicle. Never the full name or personal phone number.
 - PRV-5 (P0): No driver tracking off duty. Drivers can see when they are being tracked.
 - PRV-6 (P0): Configurable data retention. Raw location data is kept 30–90 days by default, then deleted or aggregated. Tooling for deletion and export requests (CCPA/CPRA and other US state privacy laws).
@@ -318,7 +318,7 @@ For companies with existing apps.
 - REL-2 (P0): Graceful degradation.
   - If the map provider fails, show ETA, stop position, and status without the map.
   - If routing fails, use the approximate ETA.
-  - If optimization fails, keep the current stop order and tell the dispatcher.
+  - If optimization fails, keep the current stop order and tell the driver.
   - If the SMS provider fails, fail over to a secondary provider (P1).
 - REL-3 (P0): No duplicate notifications under retries or failover (idempotent notification dispatch).
 - REL-4 (P1): Multi-AZ deployment. Documented RPO ≤ 5 min and RTO ≤ 1 h.
@@ -382,10 +382,10 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 **MVP (P0)**
 - Core stop, route, location, ETA, and notification engine
 - Single-driver route optimization, with manual reordering and skipping
-- SMS notifications, including stop position ("stop 4 of 9", "You're next")
-- Hosted, branded customer tracking page with stop position and privacy rules
-- Operator console (manual and CSV stops, route building, live map, drivers, notification settings, billing)
-- Native driver app with route view and background location
+- SMS notifications, including stops ahead ("2 stops before you", "You're next")
+- Hosted, branded customer tracking page with live driver location, stops ahead, and privacy rules
+- Operator console (manual and CSV stops, assigning to drivers, live map, drivers, notification settings, billing)
+- Native driver app with route optimization, route view, and background location
 - REST API (including optimization), webhooks, JS embed, Node/Python SDKs, developer portal, test mode and simulator
 
 **Phase 2 (P1)**
@@ -410,6 +410,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - Masked calling and two-way SMS
 - Telematics integrations
 - Reseller accounts
+- Office roles (for example a dispatcher)
 - Expansion beyond the US
 
 ---
@@ -423,14 +424,15 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 | Launch markets | United States only. |
 | Who collects SMS consent | The operator. Arrively supplies the language, records consent, and enforces opt-outs. |
 | Booking in the standalone app | Not in the MVP. Lightweight booking in P1/P2. |
-| Multi-stop routes | Route optimization for the driver and stop position for the customer are in the MVP. |
+| Multi-stop routes | Route optimization for the driver and stops ahead for the customer are in the MVP. |
+| Stop count shown to customers | Only the stops ahead of them. Never the route total. |
+| Map before the customer is next | Show the driver's live location and the stops ahead. Never show where other stops are. |
+| Who optimizes routes | The driver. The operator admin adds and assigns stops. No dispatcher role for now. |
 
 ## 13. Open questions
 
-1. **Stop position wording**: should the default show customers the route total ("stop 4 of 9"), only the stops ahead ("3 stops before you"), or both? Some businesses may not want customers to know how many visits a driver has.
-2. **Map before the customer is next**: hidden (current default), approximate area, or precise?
-3. **Who optimizes in the standalone app**: the dispatcher only, the driver only, or both?
-4. **Driver app strategy**: build a cross-platform native app (recommended), or start with a web-only driver link and accept its limits?
-5. **Map and optimization provider**: Google offers the best traffic ETA and has an optimization API. Mapbox costs less and is easier to style. Self-hosted optimization lowers per-run cost but needs engineering. Is the per-use cost acceptable at the target price points?
-6. Should customers be able to **reply to or contact** drivers in the MVP, or only from P2?
-7. Of the two verticals, which one should **onboarding and default templates** favor first?
+1. **Driver app strategy**: build a cross-platform native app (recommended), or start with a web-only driver link and accept its limits?
+2. **Map and optimization provider**: Google offers the best traffic ETA and has an optimization API. Mapbox costs less and is easier to style. Self-hosted optimization lowers per-run cost but needs engineering. Is the per-use cost acceptable at the target price points?
+3. Should customers be able to **reply to or contact** drivers in the MVP, or only from P2?
+4. Of the two verticals, which one should **onboarding and default templates** favor first?
+5. **Driver at another stop**: should the live map add a mitigation, such as freezing the marker or showing a "Driver is at another stop" banner while the driver is parked at a stop ahead? Otherwise customers can see where other customers are.
