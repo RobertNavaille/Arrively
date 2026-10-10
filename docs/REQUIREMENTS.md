@@ -1,6 +1,6 @@
 # Arrively — Product Requirements
 
-> Status: Draft v0.1 · Owner: TBD · Last updated: 2026-10-10
+> Status: Draft v0.2 · Owner: TBD · Last updated: 2026-10-10
 
 ## 1. Overview
 
@@ -12,25 +12,36 @@ Arrively delivers the "your driver is on the way" part of a ride-hailing experie
 
 It ships in two forms:
 
-1. **Standalone app**: a hosted, white-label product for smaller operators (taxi and limo firms, shuttles, non-emergency medical transport, home services, local delivery) that don't have their own software.
+1. **Standalone app**: a hosted, white-label product for smaller operators that don't have their own software.
 2. **API and SDKs**: the tracking, ETA, and notification engine, exposed so companies can add it to their existing apps.
 
 Both forms run on the same core platform. The standalone app is a client of the public API.
 
-### 1.1 Goals
+### 1.1 Launch focus (decided)
+
+- **Target verticals:** two to start.
+  - **Rideshare-type transport**: taxi, limo, car service, small rideshare fleets. A driver picks up a rider.
+  - **Delivery and field services**: couriers, local delivery, plumbers, installers, cleaners. A driver or technician arrives at the customer.
+- **Market:** United States only at launch.
+- **SMS consent:** the operator collects consent from riders and customers. Arrively provides the required consent language, stores the consent record, and enforces opt-outs (CMP-2).
+- **Booking:** not in the MVP. Lightweight booking for standalone operators is planned for P1/P2 (section 5.3).
+
+### 1.2 Goals
 
 - Riders are ready at the curb when the driver arrives, so drivers wait less and fewer pickups are missed.
 - Fewer "where is my driver?" calls to dispatch.
 - A small operator can go live in under one day with no engineering work.
 - A developer can embed tracking and notifications in under one week.
 
-### 1.2 Non-goals (initial release)
+### 1.3 Non-goals (initial release)
 
-- Ride booking, pricing, payments, or driver–rider matching and dispatch optimization.
+- Booking (planned for P1/P2, see section 5.3), pricing, payments, or driver–rider matching and dispatch optimization.
+- Markets outside the United States.
+- Healthcare and medical transport (HIPAA) use cases.
 - Turn-by-turn navigation for drivers (we deep-link to Google Maps, Apple Maps, or Waze).
 - In-app rider–driver chat. Masked calling and SMS are a candidate for P2.
 
-### 1.3 Priority key
+### 1.4 Priority key
 
 - **P0**: required for MVP
 - **P1**: soon after launch
@@ -42,7 +53,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 
 | Actor | Description |
 |---|---|
-| **Rider** | The person being picked up. Usually has no account and may not install anything. |
+| **Rider / customer** | The person waiting for the arrival: a rider being picked up, or a customer waiting for a delivery or technician. Usually has no account and may not install anything. This document says "rider" for both. |
 | **Driver** | Shares location while assigned to a trip. |
 | **Operator admin** | The business owner or manager. Configures branding, notifications, users, and billing. |
 | **Dispatcher** | Operator staff who create and assign trips and watch them live. |
@@ -54,8 +65,9 @@ Both forms run on the same core platform. The standalone app is a client of the 
 ## 3. Core concepts
 
 - **Tenant (Organization)**: an operator or API customer. All data is isolated per tenant.
-- **Trip**: one pickup. It has a rider, a pickup location, an optional drop-off, an optional scheduled time, and an assigned driver and vehicle.
-- **Trip states**: `scheduled → driver_assigned → en_route → arriving → arrived → in_progress → completed`, plus `cancelled` and `no_show`.
+- **Trip type**: `pickup` (rider gets in the vehicle) or `visit` (driver or technician arrives at the customer's location for a delivery or service job). Type sets the default states, notification wording, and labels such as "driver" vs. "technician".
+- **Trip**: one pickup or visit. It has a rider, a pickup location, an optional drop-off, an optional scheduled time, and an assigned driver and vehicle.
+- **Trip states**: `scheduled → driver_assigned → en_route → arriving → arrived → in_progress → completed`, plus `cancelled` and `no_show`. For `visit` trips, `in_progress` means the job or hand-off is under way.
 - **Location ping**: a timestamped driver position with lat/lng, accuracy, heading, and speed.
 - **Tracking link**: a unique, expiring URL that shows the rider the live trip.
 - **Notification rule**: a trigger (event or ETA threshold) with channel(s) and a message template.
@@ -77,6 +89,9 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | TRP-7 | Support pickup notes such as "Gate code 1234" or "North entrance". | P1 |
 | TRP-8 | Support multi-stop trips and shared rides (several riders, each with their own ETA). | P2 |
 | TRP-9 | Keep a full audit trail of state changes and notifications per trip. | P0 |
+| TRP-10 | Support both trip types (`pickup` and `visit`), with type-specific default labels, notification templates, and arrival geofence radius. | P0 |
+| TRP-11 | Support an **arrival window** (for example 2–4 PM) as well as an exact pickup time. The rider sees the window until a driver is en route, then the live ETA. | P0 |
+| TRP-12 | For drivers with several jobs in a row (field services, delivery routes), show the rider their place in the queue ("You're next" or "2 stops before you") and an ETA that accounts for stops ahead. | P1 |
 
 ### 4.2 Driver location ingestion
 
@@ -97,7 +112,8 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | ETA-2 | Recompute on significant movement or at least every 30 s while en route. Throttle routing API calls to control cost. | P0 |
 | ETA-3 | Smooth the displayed ETA so it doesn't flicker (hysteresis). Never show a negative ETA or "0 min" before arrival. | P0 |
 | ETA-4 | Emit an `eta.changed` event when ETA moves past a configurable delta (for example ±3 min). | P0 |
-| ETA-5 | Before a driver is assigned on a scheduled trip, show the scheduled time or a window instead of a live ETA. | P0 |
+| ETA-5 | Before a driver is en route on a scheduled trip, show the scheduled time or arrival window instead of a live ETA. | P0 |
+| ETA-9 | For drivers with several stops ahead, add the estimated time for each earlier stop (operator-set default service time per job type) to the rider's ETA. | P1 |
 | ETA-6 | Track ETA accuracy (predicted vs. actual arrival) per tenant for quality reporting. | P1 |
 | ETA-7 | Fall back to straight-line distance × average speed if the routing provider is unavailable, and mark the ETA as approximate. | P1 |
 | ETA-8 | Show an ETA to drop-off once the trip is in progress. | P2 |
@@ -116,6 +132,8 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | NTF-8 | Handle opt-out and opt-in (STOP/HELP/START keywords for SMS) and honor them across all tenants as the law requires. | P0 |
 | NTF-9 | Quiet-hours and rate-limit protections so a rider never gets spammed. | P1 |
 | NTF-10 | Two-way SMS. A rider reply (for example "I'll be 2 min") is forwarded to the driver and dispatcher. | P2 |
+| NTF-12 | Separate default template sets for pickups ("Your driver is 5 minutes away") and visits ("Your technician is on the way", "Your delivery is arriving"), editable by the operator. | P0 |
+| NTF-13 | "You're next" notification when a multi-stop driver finishes the job before the rider's. | P1 |
 | NTF-11 | Custom sender identity: a dedicated number per tenant, a branded sender name where supported, and a custom email domain. | P1 |
 
 ### 4.5 Rider tracking experience (web, no install)
@@ -125,7 +143,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | RDR-1 | A mobile-first web page opened from the tracking link. Loads in under 2 s on 4G with no login or app install. | P0 |
 | RDR-2 | Live map with the driver's vehicle marker (smoothly animated, rotated to heading), the pickup pin, and an optional route line. Bounds fit both points automatically. | P0 |
 | RDR-3 | A prominent ETA ("Arriving in 4 min · 2:34 PM") plus a status label for each trip state. | P0 |
-| RDR-4 | Driver card with first name, photo, vehicle make, model, and color, and license plate. Shown so the rider can verify the right car. | P0 |
+| RDR-4 | Driver card with first name, photo, vehicle make, model, and color, and license plate. Shown so the rider can verify the right car (pickups) or recognize the right person at the door (visits). Visits can show the company vehicle or uniform instead of a plate. | P0 |
 | RDR-5 | Contact actions: call or text the driver or dispatch. Numbers are masked in P2. | P1 |
 | RDR-6 | Show pickup notes, and let the rider adjust the pickup pin within a limited radius before the driver is en route (operator setting). | P2 |
 | RDR-7 | Live updates over WebSocket or SSE, with a polling fallback. The page recovers automatically after network loss. | P0 |
@@ -133,6 +151,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | RDR-9 | Operator branding: logo, colors, company name, support contact, and a custom domain (`track.acmecabs.com`). | P0 logo/colors · P1 domain |
 | RDR-10 | Ask the rider to enable web push so they get later updates without SMS. | P1 |
 | RDR-11 | Post-trip rating or feedback prompt. | P2 |
+| RDR-13 | Delivery and visit instructions from the rider ("Leave at side door", "Dog in yard") before the driver arrives. | P1 |
 | RDR-12 | Share the trip status with a friend or family member through a read-only link. | P2 |
 
 ---
@@ -170,6 +189,19 @@ For operators without their own software.
 | DRV-7 | Battery-aware tracking. Typical battery use on a 1-hour shift under 8%. | P1 |
 | DRV-8 | Call or text the rider through masked numbers. | P2 |
 | DRV-9 | A lightweight "web driver link" fallback for occasional drivers, with documented limitations (foreground only). | P1 |
+
+---
+
+### 5.3 Booking (post-MVP)
+
+Not in the MVP. In the meantime, operators create trips manually, by CSV import, or through integrations.
+
+| ID | Requirement | Pri |
+|---|---|---|
+| BKG-1 | A branded public booking form: the rider or customer enters pickup or service address, time or preferred window, and contact details, and accepts SMS consent. Creates a trip in `scheduled` state for the dispatcher to assign. | P1 |
+| BKG-2 | Embeddable booking widget for the operator's website. | P2 |
+| BKG-3 | Dispatcher approves or declines requests, and the rider is notified either way. | P1 |
+| BKG-4 | Basic availability rules: business hours, service area, lead time. | P2 |
 
 ---
 
@@ -222,7 +254,7 @@ For companies with existing apps.
 - PRV-2 (P0): The rider sees the driver's location only during the active window (`driver_assigned`/`en_route` through `in_progress`). Never before assignment or after completion.
 - PRV-3 (P0): Minimize exposed driver data: first name, photo, vehicle. Never the full name or personal phone number.
 - PRV-4 (P0): No driver tracking off-duty. Drivers can see when they are being tracked.
-- PRV-5 (P0): Configurable data retention. Raw location data is kept 30–90 days by default, then deleted or aggregated. Tooling for deletion and export requests (GDPR/CCPA DSARs).
+- PRV-5 (P0): Configurable data retention. Raw location data is kept 30–90 days by default, then deleted or aggregated. Tooling for deletion and export requests (CCPA/CPRA and other US state privacy laws).
 - PRV-6 (P1): Optional location obfuscation near the driver's start point, so a home address isn't revealed.
 - PRV-7 (P1): Abuse controls: revoke links, block numbers, rate-limit link views.
 
@@ -233,13 +265,18 @@ For companies with existing apps.
 - SEC-3 (P0): Role-based access control. API key scopes. Audit logs of admin actions.
 - SEC-4 (P0): OWASP Top 10 protections, dependency scanning, annual third-party pen test.
 - SEC-5 (P1): SOC 2 Type II readiness.
-- SEC-6 (P2): HIPAA-eligible configuration (BAA) for non-emergency medical transport customers.
+- SEC-6: HIPAA-eligible configuration is out of scope while healthcare is not a target vertical.
 
 ### 7.4 Compliance (messaging and legal)
 
-- CMP-1 (P0): SMS compliance with TCPA/CTIA, US A2P 10DLC registration per tenant or brand, toll-free verification, and Canada/UK/EU equivalents. Record consent capture.
-- CMP-2 (P0): Configurable consent language for operators to show at booking. Store a consent record per rider.
-- CMP-3 (P0): GDPR/CCPA. A DPA available to customers, a sub-processor list, and EU data residency (P2).
+- CMP-1 (P0): US SMS compliance with TCPA and CTIA guidelines, A2P 10DLC brand and campaign registration per tenant (handled by Arrively during onboarding), and toll-free number verification. Messages are transactional only, never marketing.
+- CMP-2 (P0): **The operator collects SMS consent.** Arrively provides:
+  - Required consent language for operators to show wherever they take bookings (phone script, web form, booking app).
+  - An API field and console checkbox to record consent (timestamp, source, wording version) on every trip. Without it, SMS isn't sent; email and the tracking link still work.
+  - Opt-out enforcement (STOP/HELP/START) across all of that tenant's messages.
+  - Terms that make the operator responsible for valid consent.
+- CMP-5 (P1): The first SMS to a new phone number includes the company name and opt-out instructions.
+- CMP-3 (P0): CCPA/CPRA and other US state privacy laws. A DPA available to customers and a sub-processor list. All data hosted in the US.
 - CMP-4 (P0): Terms of service and acceptable-use policy that bar covert tracking.
 
 ### 7.5 Performance and scalability
@@ -261,8 +298,8 @@ For companies with existing apps.
 
 - A11Y-1 (P0): Rider tracking page and operator console meet **WCAG 2.2 AA**. ETA and status are exposed as text and through screen-reader live regions, not only on the map.
 - A11Y-2 (P1): A high-contrast map theme and a "no-map" text-only view.
-- L10N-1 (P0): All rider-facing text can be localized. Launch with English and Spanish. Templates per locale. Times and units follow the rider's locale and time zone.
-- L10N-2 (P1): Additional languages (FR, PT, DE). RTL support (P2).
+- L10N-1 (P0): All rider-facing text can be localized. Launch with US English and Spanish. Templates per locale. Imperial units (miles, feet), 12-hour times, all US time zones (including Alaska and Hawaii), and US address formats.
+- L10N-2 (P2): More languages and non-US formats when expanding beyond the US.
 
 ### 7.8 Observability and support
 
@@ -276,7 +313,7 @@ For companies with existing apps.
 
 | Area | Candidates |
 |---|---|
-| Maps, geocoding, routing, traffic ETA | Google Maps Platform, Mapbox, HERE, TomTom. Abstract behind an interface so providers can be switched. |
+| Maps, geocoding, routing, traffic ETA | Google Maps Platform, Mapbox, HERE, TomTom (all have strong US coverage). Abstract behind an interface so providers can be switched. |
 | SMS / voice / WhatsApp | Twilio, Vonage, MessageBird/Bird, Telnyx. Use at least two for failover. |
 | Email | SendGrid, Postmark, Amazon SES |
 | Push | APNs, FCM, Web Push (VAPID) |
@@ -325,29 +362,38 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - Custom domains
 - Reports and ETA accuracy
 - CSV and recurring trips
+- Multi-stop queue position and "You're next" (TRP-12, NTF-13)
+- Public booking form (BKG-1, BKG-3)
 - SMS provider failover
 - SSO
 - Bring-your-own provider credentials
 - SOC 2
 
 **Phase 3 (P2)**
+- Lightweight booking (BKG-*), starting in P1
 - WhatsApp and voice
 - Masked calling and two-way SMS
 - Multi-stop and shared rides
 - Telematics integrations
-- HIPAA
-- EU data residency
+- Expansion beyond the US
 - Reseller accounts
 - Rider pickup-pin adjustment
 
 ---
 
-## 12. Open questions
+## 12. Decisions
 
-1. **Target verticals first**: rideshare/taxi, non-emergency medical transport, delivery, or field services? The choice affects compliance (HIPAA), terms (rider vs. customer), and the default triggers.
-2. **Geographic launch markets**: these determine SMS registration work, languages, and map provider coverage.
-3. **Driver app strategy**: build a cross-platform native app (recommended), or start with a web-only driver link and accept its limits?
-4. **Map provider**: Google offers the best traffic ETA. Mapbox costs less and is easier to style. Is the per-load cost acceptable at the target price points?
-5. **Who owns rider consent** for SMS: Arrively or the operator? This shapes the onboarding flow and liability.
-6. Does the standalone product need **basic booking or dispatch** to be useful for the smallest operators, or does it stay strictly "tracking + notifications"?
-7. Should riders be able to **reply to or contact** drivers in the MVP, or only from P2?
+| Question | Decision |
+|---|---|
+| Target verticals | Rideshare-type transport, and delivery and field services. |
+| Launch markets | United States only. |
+| Who collects SMS consent | The operator. Arrively supplies the language, records consent, and enforces opt-outs. |
+| Booking in the standalone app | Not in the MVP. Lightweight booking in P1/P2. |
+
+## 13. Open questions
+
+1. **Driver app strategy**: build a cross-platform native app (recommended), or start with a web-only driver link and accept its limits?
+2. **Map provider**: Google offers the best traffic ETA. Mapbox costs less and is easier to style. Is the per-load cost acceptable at the target price points?
+3. Should riders be able to **reply to or contact** drivers in the MVP, or only from P2?
+4. **Proof of delivery or job completion** (photo, signature): in scope for delivery and field-service customers, or left to their own tools?
+5. Of the two verticals, which one should **onboarding and default templates** favor first?
