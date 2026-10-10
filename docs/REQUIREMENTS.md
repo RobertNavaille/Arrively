@@ -1,6 +1,6 @@
 # Arrively — Product Requirements
 
-> Status: Draft v0.5 · Owner: TBD · Last updated: 2026-10-10
+> Status: Draft v0.6 · Owner: TBD · Last updated: 2026-10-10
 
 ## 1. Overview
 
@@ -76,7 +76,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 - **Route**: a driver's ordered list of stops for a shift or day, with a start location and an optional end location. A route with one stop is the simple case (for example a single taxi pickup).
 - **Stop states**: `scheduled → queued → en_route → arriving → arrived → completed`, plus `cancelled`, `skipped`, and `no_show`.
   - `queued`: on an active route, with other stops ahead of it.
-  - `en_route`: the driver is heading to this stop next.
+  - `en_route`: the driver has left the previous stop (or started the route) and is heading to this stop.
   - `completed`: the driver marked the stop done. Tracking ends here.
 - **Stop position**: where a stop sits in the remaining route, expressed as stops ahead, such as "2 stops before you" or "You're next".
 - **Location ping**: a timestamped driver position with lat/lng, accuracy, heading, and speed.
@@ -100,6 +100,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | STP-7 | Support arrival windows (for example 2–4 PM) as well as exact times. | P0 |
 | STP-8 | Stop notes for the driver, such as "Gate code 1234" or "Dog in yard". | P1 |
 | STP-9 | Keep a full audit trail of state changes and notifications per stop. | P0 |
+| STP-10 | **Departure detection**: a stop counts as left when the driver exits its geofence after marking it completed, skipped, or no-show. Only then does the next stop become `en_route` and every later customer's stops-ahead count drop by one. Marking a stop completed while still parked there changes nothing for other customers. | P0 |
 
 ### 4.2 Route optimization (multi-stop)
 
@@ -111,7 +112,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | RTE-4 | Show the result before it's accepted: the ordered stop list, the route on a map, total drive time and distance, per-stop ETAs, time saved compared with the original order, and any windows that can't be met. | P0 |
 | RTE-5 | The driver can reorder stops by hand or skip a stop. All affected customers' positions and ETAs update. | P0 |
 | RTE-6 | **Re-optimize** when a stop is added, cancelled, or running late. The next stop the driver is heading to and any stop whose customer got an "on the way" message stay in place, so customers aren't told one thing and then shown another. | P1 |
-| RTE-7 | Handle at least 100 stops per route. Optimization returns in under 10 s for 50 stops. | P0 |
+| RTE-7 | **MVP:** routes are capped at the Mapbox Optimization API's per-request limit (v1 allows 12 coordinates including start and end; confirm the current limit before building). The app says so clearly when a driver tries to add more. **P1:** a self-hosted optimizer (VROOM or OR-Tools on Mapbox Matrix travel times) raises the cap to at least 100 stops, returning in under 10 s for 50 stops. | P0 / P1 |
 | RTE-8 | Planned routes for a future day, so customers can be told their window ahead of time. | P1 |
 | RTE-9 | Driver breaks and shift end time as route constraints. | P2 |
 | RTE-10 | Distribute a pool of stops across several drivers (vehicle routing), with optional capacity limits. | P2 |
@@ -145,7 +146,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | ID | Requirement | Pri |
 |---|---|---|
 | NTF-1 | Channels: **SMS** (P0), **email** (P1), **web push** from the tracking page (P1), **native push** through the integrator's app (API customers, P1), **WhatsApp** (P2), **automated voice call** (P2, for accessibility). | — |
-| NTF-2 | Default triggers: stop scheduled (window and tracking link), route started ("There are 3 stops before yours"), **"N stops before you"** (configurable, default 2), **"You're next"**, **"X minutes away"** (configurable, default 10 min), **arriving now** (default 2 min), **driver has arrived**, significant delay, driver changed, stop cancelled or rescheduled. | P0 |
+| NTF-2 | Default triggers: stop scheduled (window and tracking link), route started ("There are 3 stops before yours"), **"N stops before you"** (configurable, default 2), **"You're next"** (sent when the driver leaves the previous stop, STP-10), **"X minutes away"** (configurable, default 10 min), **arriving now** (default 2 min), **driver has arrived**, significant delay, driver changed, stop cancelled or rescheduled. | P0 |
 | NTF-3 | Operators can turn each trigger on or off, set thresholds, and choose channels per trigger. | P0 |
 | NTF-4 | Message templates with variables (`{{driver_first_name}}`, `{{vehicle}}`, `{{eta_minutes}}`, `{{arrival_window}}`, `{{stops_ahead}}`, `{{tracking_url}}`, `{{company_name}}`), with English and Spanish versions. | P0 |
 | NTF-5 | Each notification fires at most once per stop, guarded against ETA oscillation and route reordering. Notifications that are no longer relevant are suppressed (for example, skip "2 stops before you" if the customer is already next). | P0 |
@@ -173,9 +174,9 @@ Both forms run on the same core platform. The standalone app is a client of the 
 |---|---|---|
 | CUS-1 | A mobile-first web page opened from the tracking link. Loads in under 2 s on 4G with no login or app install. | P0 |
 | CUS-2 | A prominent ETA ("Arriving in 12 min · 2:34 PM") or arrival window, plus a plain-language status for each stop state. | P0 |
-| CUS-3 | **Stops ahead**: "3 stops before you", "1 stop before you", or "You're next". The total number of stops on the route is never shown. | P0 |
+| CUS-3 | **Stops ahead**: "3 stops before you", "1 stop before you", or "You're next". The total number of stops on the route is never shown. The count changes only when the driver leaves a stop and starts driving to the next one (STP-10), not when the driver arrives at it or marks it done. | P0 |
 | CUS-4 | Live map showing the driver (smoothly animated marker, rotated to heading) and the customer's own pin, with an optional route line. Bounds fit both points automatically. | P0 |
-| CUS-5 | **The driver is visible, other stops are not.** From the moment the route starts, the map shows the driver's live location and the number of stops ahead. It never shows other stops: no pins, no addresses, and no route line through them. Once this stop is `en_route`, a route line from the driver to the customer's pin can appear. | P0 |
+| CUS-5 | **The driver is visible, other stops are not.** From the moment the route starts, the map shows the driver's live location and the number of stops ahead. It never shows other stops: no pins, no addresses, and no route line through them. Once this stop is `en_route`, a route line from the driver to the customer's pin can appear. While the driver is at another stop, the marker simply appears stopped. Nothing on the page says the driver is at a stop. | P0 |
 | CUS-6 | Driver card with first name, photo, vehicle or uniform description, and plate when relevant, so the customer recognizes the right person. | P0 |
 | CUS-7 | Live updates over WebSocket or SSE, with a polling fallback. The page recovers automatically after network loss. | P0 |
 | CUS-8 | Clear views for stale location, reassignment, delay, cancellation, and the "completed" state. | P0 |
@@ -213,7 +214,7 @@ For operators without their own software.
 
 | ID | Requirement | Pri |
 |---|---|---|
-| DRV-1 | iOS and Android app with reliable **background location**, built **cross-platform** (React Native or Flutter) for the MVP while the product is validated. A web app alone is not enough because iOS limits background location. Keep location, routing, and stop logic in shared modules with clean interfaces so the move to native (DRV-13) is a rewrite of the UI, not the business logic. | P0 |
+| DRV-1 | iOS and Android app with reliable **background location**, built in **React Native** for the MVP while the product is validated. A web app alone is not enough because iOS limits background location. Keep location, routing, and stop logic in shared modules with clean interfaces so the move to native (DRV-13) is a rewrite of the UI, not the business logic. | P0 |
 | DRV-2 | Sign in with a phone number and OTP. Go on duty and off duty. | P0 |
 | DRV-3 | **Route view**: the optimized stop list in order, the whole route on a map, total stops, stops remaining, total drive time and distance, and ETA for each stop. | P0 |
 | DRV-4 | **The driver optimizes the route**, and can reorder stops by hand or skip a stop (RTE-2, RTE-5). | P0 |
@@ -287,7 +288,7 @@ For companies with existing apps.
 ### 7.2 Privacy and safety
 
 - PRV-1 (P0): Tracking links use unguessable tokens (≥128 bits of entropy). They expire automatically after the stop is completed plus a short grace period (default 30 min).
-- PRV-2 (P0): A customer sees the driver's live location only from route start until their own stop is completed. Never before the route starts and never after (see CUS-5). Customers can see where the driver is while the driver is at another stop. That trade-off is accepted (section 12).
+- PRV-2 (P0): A customer sees the driver's live location only from route start until their own stop is completed. Never before the route starts and never after (see CUS-5). While the driver is at another stop, customers see only a stationary marker. Nothing labels it as a stop, and the stops-ahead count doesn't change until the driver leaves (CUS-3, CUS-5).
 - PRV-3 (P0): A customer never sees any other customer's name, address, or position on the map. The number of stops ahead is the only information shared about other stops.
 - PRV-4 (P0): Minimize exposed driver data: first name, photo, vehicle. Never the full name or personal phone number.
 - PRV-5 (P0): No driver tracking off duty. Drivers can see when they are being tracked.
@@ -321,7 +322,7 @@ For companies with existing apps.
 - PERF-2 (P0): Notification trigger to SMS hand-off to the provider at p95 ≤ 5 s.
 - PERF-3 (P0): Tracking page first meaningful paint ≤ 2 s on mid-range mobile over 4G. JS bundle ≤ 200 KB gzipped, excluding map tiles.
 - PERF-4 (P0): API p95 latency ≤ 200 ms for reads, ≤ 300 ms for writes, excluding external routing and optimization calls.
-- PERF-5 (P0): Route optimization returns in under 10 s for 50 stops, and under 30 s for 100 stops.
+- PERF-5: Route optimization returns in under 5 s for MVP routes within the Mapbox limit (P0). With the self-hosted optimizer, under 10 s for 50 stops and under 30 s for 100 stops (P1).
 - PERF-6 (P1): Scale horizontally to 10k concurrently active routes, 200k active stops, and 20k location pings/s at launch, and to 10× without re-architecture.
 
 ### 7.6 Reliability
@@ -355,7 +356,7 @@ For companies with existing apps.
 | Area | Candidates |
 |---|---|
 | Maps, geocoding, routing, traffic ETA | **Mapbox (decided)**: Maps SDKs and GL JS for the map, Search/Geocoding, Directions with traffic, and Matrix for travel times between stops. |
-| Route optimization | **Mapbox Optimization API** where its stop limits allow. Mapbox's per-request stop limits are below the 100-stop target (RTE-7), so larger routes need a self-hosted solver (VROOM or Google OR-Tools) fed by Mapbox Matrix travel times. Confirm current limits and pricing before building. |
+| Route optimization | **Mapbox Optimization API** where its stop limits allow. The MVP caps routes at Mapbox's per-request limit (RTE-7). In P1, larger routes use a self-hosted solver (VROOM or Google OR-Tools) fed by Mapbox Matrix travel times. Confirm current limits and pricing before building. |
 | Masked calling and texting | Twilio, Vonage, Telnyx, Bandwidth (number pools with call and SMS forwarding). |
 | SMS / voice / WhatsApp | Twilio, Vonage, Bird, Telnyx. Use at least two for failover. |
 | Email | SendGrid, Postmark, Amazon SES |
@@ -405,6 +406,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - REST API (including optimization), webhooks, JS embed, Node/Python SDKs, developer portal, test mode and simulator
 
 **Phase 2 (P1)**
+- Self-hosted optimizer for routes over the Mapbox limit (up to 100+ stops)
 - Automatic re-optimization when stops change, and pinned stops
 - Planned routes for future days
 - Email, web push, and native push
@@ -444,14 +446,13 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 | Multi-stop routes | Route optimization for the driver and stops ahead for the customer are in the MVP. |
 | Stop count shown to customers | Only the stops ahead of them. Never the route total. |
 | Map before the customer is next | Show the driver's live location and the stops ahead. Never show where other stops are. |
-| Driver app | Cross-platform (React Native or Flutter) for the MVP while validating the product. Fully native (Swift/Kotlin) later. |
-| Map and routing provider | Mapbox. |
+| Driver app | React Native for the MVP while validating the product. Fully native (Swift/Kotlin) later. |
+| Map and routing provider | Mapbox. MVP routes are capped at the Mapbox Optimization API's stop limit. A self-hosted optimizer for bigger routes comes in P1. |
+| Driver at another stop | The marker just appears stopped, with no label. The stops-ahead count drops only when the driver leaves that stop and heads to the next. |
 | Customer–driver contact | Masked call and text to the driver in the MVP. |
 | Which vertical to set up first | Both. Each ships with its own preset, and onboarding asks which fits. |
 | Who optimizes routes | The driver. The operator admin adds and assigns stops. No dispatcher role for now. |
 
 ## 13. Open questions
 
-1. **Cross-platform framework**: React Native or Flutter? React Native makes it easier to share code with a React web console. Flutter gives more consistent rendering across devices.
-2. **Large routes on Mapbox**: build the self-hosted optimizer for routes above Mapbox's stop limit in the MVP, or cap MVP routes at Mapbox's limit and add it in P1?
-3. **Driver at another stop**: should the live map add a mitigation, such as freezing the marker or showing a "Driver is at another stop" banner while the driver is parked at a stop ahead? Otherwise customers can see where other customers are.
+None at the moment.
