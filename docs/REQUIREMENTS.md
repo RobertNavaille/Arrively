@@ -1,6 +1,6 @@
 # Arrively — Product Requirements
 
-> Status: Draft v0.9 · Owner: TBD · Last updated: 2026-10-10
+> Status: Draft v0.10 · Owner: TBD · Last updated: 2026-10-10
 
 ## 1. Overview
 
@@ -19,7 +19,7 @@ It ships in two forms, one at a time:
 1. **Standalone app (v1, the MVP)**: a single **Arrively-branded** app for smaller operators that don't have their own software. It is not white-label: every business signs up to the same hosted Arrively product, drivers use the same Arrively driver app from the app stores, and customers get Arrively tracking pages and texts. Each business appears inside the product by name (and optional logo) so customers know who is coming. There are no separate per-business instances, custom apps, or custom domains.
 2. **API and SDKs (v2, Phase 2)**: the routing, tracking, ETA, and notification engine, exposed so companies can add it to their existing apps under their own brand.
 
-Both forms run on the same core platform. In v1, the standalone app's driver app, console, and tracking page are built on an **internal API** designed to the public API's standards (section 6). In v2, launching the API mostly means publishing and documenting what already exists, not building a second system.
+Both forms run on the same core platform. In v1, the standalone app is built entirely on the same API that will become the public API in v2. **v1 exists to validate the UX and behavior** (stop states, ETAs, notification timing, stop-by-stop reveal, route optimization) with real businesses before that API and the SDKs are released to developers. See section 6.0.
 
 ### 1.1 Launch focus (decided)
 
@@ -262,6 +262,17 @@ Not in the MVP. In the meantime, operators create stops manually, by CSV import,
 
 For companies with existing apps. **Not part of v1.** The core of this section ships in Phase 2 (P1), and the extras in Phase 3 (P2). v1 still builds on an internal API that follows API-1, API-4, API-6, and API-8's design, so it can be opened up later without a rewrite.
 
+### 6.0 Building v1 on the future API
+
+| ID | Requirement | Pri |
+|---|---|---|
+| ARC-1 | **One API, no shortcuts.** The driver app, operator console, and customer tracking page use only API endpoints and real-time channels. None of them reads the database directly or uses private back doors. | P0 |
+| ARC-2 | **Every app action is an API operation.** Anything a driver or operator can do in v1 (create a stop, optimize, mark a stop, skip with a reason, record consent) is a documented API operation, even before the documentation is public. | P0 |
+| ARC-3 | **Rules live on the server.** Stop states, departure detection, stop-by-stop reveal, notification triggers, and privacy rules are enforced by the platform, not by the apps. API customers in v2 then get the same behavior automatically. | P0 |
+| ARC-4 | **Free to change during v1.** Until the public launch, the API can change without a deprecation policy, because Arrively's own apps are its only clients. Every change is recorded so the v2 docs and changelog start accurate. | P0 |
+| ARC-5 | **Measure the behavior being validated**: notification timing vs. actual arrival, ETA accuracy, how often drivers skip, defer, or mark from outside the stop, unmarked-stop reminders, tracking-link opens, and customer contact through masked numbers. | P0 |
+| ARC-6 | **Release gate for v2.** The API and SDKs are released only when: (a) the stop state machine and notification rules have gone 8+ weeks without a breaking change, (b) the v1 success metrics (section 10) are being met, and (c) at least one pilot API customer has built on it in test mode. The exact thresholds can be set later. | P0 |
+
 ### 6.1 Public API
 
 | ID | Requirement | Pri |
@@ -420,7 +431,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - Masked calling and texting between customer and driver
 - Industry presets for both delivery/field services and rideshare-type pickups
 - Mapbox for maps, routing, ETAs, and optimization
-- Internal API behind the driver app, console, and tracking page, designed so it can become the public API in v2
+- The future public API, used only by Arrively's own apps for now (ARC-1 to ARC-5)
 
 **Phase 2 (P1)**
 - Routing:
@@ -502,7 +513,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 | Driver at another stop | The marker just appears stopped, with no label. The stops-ahead count drops only when the driver leaves that stop and heads to the next. |
 | Customer–driver contact | Masked call and text to the driver in the MVP. |
 | Which vertical to set up first | Both. Each ships with its own preset, and onboarding asks which fits. |
-| Product order | v1 is the standalone app only. The public API and SDKs launch in v2, with extras in Phase 3. v1 is built on an internal API designed to become the public one. |
+| Product order | v1 is the standalone app only. It runs on the same API that becomes public in v2, and is used to validate UX and behavior before the API and SDKs launch. API extras follow in Phase 3. |
 | Standalone branding | One Arrively-branded, multi-tenant product. Not white-label, no per-business instances. Custom branding is for API customers only, from v2. |
 | Who optimizes routes | The driver runs optimization. The operator admin adds, assigns, and can reorder stops. No dispatcher role for now. |
 | Driver navigation | Deep-link to Google Maps, Apple Maps, or Waze for the current stop only. The driver sees one stop at a time, and the next address is revealed only after the current stop is marked. |
