@@ -1,6 +1,6 @@
 # Arrively — Product Requirements
 
-> Status: Draft v0.8 · Owner: TBD · Last updated: 2026-10-10
+> Status: Draft v0.9 · Owner: TBD · Last updated: 2026-10-10
 
 ## 1. Overview
 
@@ -14,12 +14,12 @@ For drivers with several stops, Arrively also **optimizes the order of stops** a
 
 The experience ends when the driver arrives and the stop is completed. Anything after that, such as riding to a destination, doing the service work, or handing over a delivery, is out of scope.
 
-It ships in two forms:
+It ships in two forms, one at a time:
 
-1. **Standalone app**: a single **Arrively-branded** app for smaller operators that don't have their own software. It is not white-label: every business signs up to the same hosted Arrively product, drivers use the same Arrively driver app from the app stores, and customers get Arrively tracking pages and texts. Each business appears inside the product by name (and optional logo) so customers know who is coming. There are no separate per-business instances, custom apps, or custom domains.
-2. **API and SDKs**: the routing, tracking, ETA, and notification engine, exposed so companies can add it to their existing apps under their own brand.
+1. **Standalone app (v1, the MVP)**: a single **Arrively-branded** app for smaller operators that don't have their own software. It is not white-label: every business signs up to the same hosted Arrively product, drivers use the same Arrively driver app from the app stores, and customers get Arrively tracking pages and texts. Each business appears inside the product by name (and optional logo) so customers know who is coming. There are no separate per-business instances, custom apps, or custom domains.
+2. **API and SDKs (v2, Phase 2)**: the routing, tracking, ETA, and notification engine, exposed so companies can add it to their existing apps under their own brand.
 
-Both forms run on the same core platform. The standalone app is a client of the public API.
+Both forms run on the same core platform. In v1, the standalone app's driver app, console, and tracking page are built on an **internal API** designed to the public API's standards (section 6). In v2, launching the API mostly means publishing and documenting what already exists, not building a second system.
 
 ### 1.1 Launch focus (decided)
 
@@ -29,6 +29,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 - **Market:** United States only at launch.
 - **SMS consent:** the operator collects consent from customers. Arrively provides the required consent language, stores the consent record, and enforces opt-outs (CMP-2).
 - **Booking:** not in the MVP. Lightweight booking for standalone operators is planned for P1/P2 (section 5.3).
+- **Product order:** v1 is the standalone app only. The public API and SDKs come in v2 (section 6).
 - **Multi-stop routes:** route optimization for the driver and stop position for the customer are part of the MVP (section 4.2).
 
 ### 1.2 Goals
@@ -37,7 +38,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 - Drivers with many stops spend less time driving.
 - Fewer "where is my driver?" calls to the business.
 - A small operator can go live in under one day with no engineering work.
-- A developer can embed tracking and notifications in under one week.
+- (v2) A developer can embed tracking and notifications in under one week.
 
 ### 1.3 Non-goals (initial release)
 
@@ -64,7 +65,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | **Customer** | The person waiting for the driver: a delivery recipient, a homeowner expecting a technician, or someone waiting to be picked up. Usually has no account and may not install anything. |
 | **Driver** | The person traveling to the customer: a driver, courier, or technician. Shares location while on duty. The operator can choose which word customers see (OPS-12). |
 | **Operator admin** | The business owner or manager. Configures business profile (name, logo, support phone), notifications, drivers, and billing. Adds stops and assigns them to drivers. |
-| **Developer / integrator** | Engineer at an API customer who builds on the API and SDKs. |
+| **Developer / integrator** (v2) | Engineer at an API customer who builds on the API and SDKs. |
 | **Platform admin** | Arrively staff who manage tenants, support, and abuse. |
 
 ---
@@ -121,7 +122,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 
 | ID | Requirement | Pri |
 |---|---|---|
-| LOC-1 | Accept location pings from the Arrively driver app, from the driver SDK, and through the REST/streaming API (for customers with their own driver apps or telematics). | P0 |
+| LOC-1 | Accept location pings from the Arrively driver app (P0). In v2, also from the driver SDK and through the public API, for customers with their own driver apps or telematics (P1). | P0 / P1 |
 | LOC-2 | Default ping interval is 3–5 s while on an active route. Interval adapts to speed and battery. No tracking when off duty. | P0 |
 | LOC-3 | Filter out GPS jitter, inaccurate fixes, and impossible jumps. Snap to roads for display. | P1 |
 | LOC-4 | Detect stale locations. If no ping arrives for more than 30 s (configurable), mark the driver as "last seen X ago" in every view. | P0 |
@@ -154,7 +155,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | NTF-7 | Delivery status tracking (queued, sent, delivered, failed), with retry and channel fallback (for example push fails, so send SMS). | P0 |
 | NTF-8 | Handle opt-out and opt-in (STOP/HELP/START keywords for SMS) and honor them as the law requires. | P0 |
 | NTF-9 | Quiet hours and rate limits so a customer never gets spammed, even on long routes with many reorderings. | P1 |
-| NTF-10 | Standalone messages come from Arrively's numbers and email domain and always name the business ("Acme Plumbing via Arrively"). API customers can use their own sender numbers and email domain (API-11). | P0 / P1 |
+| NTF-10 | Standalone messages come from Arrively's numbers and email domain and always name the business ("Acme Plumbing via Arrively"). In v2, API customers can use their own sender numbers and email domain (API-11). | P0 / P2 |
 | NTF-11 | Two-way SMS. A customer reply (for example "Running 5 min late") is forwarded to the driver and the operator. | P2 |
 
 ### 4.6 Masked calling and texting
@@ -166,7 +167,7 @@ Both forms run on the same core platform. The standalone app is a client of the 
 | MSK-3 | Reuse numbers from a per-tenant pool, so a few numbers can serve many stops at once. | P0 |
 | MSK-4 | Log call and text metadata (time, duration, direction) for each stop, but no call recordings and no message content in the console by default. | P0 |
 | MSK-5 | Masked texting falls under the same SMS consent and opt-out rules as notifications (CMP-1, CMP-2). | P0 |
-| MSK-6 | Through the API, integrators can request a masked number for a stop and use it in their own app. | P1 |
+| MSK-6 | Through the API, integrators can request a masked number for a stop and use it in their own app. | P2 |
 
 ### 4.7 Customer tracking experience (web, no install)
 
@@ -236,7 +237,7 @@ The goal is that every stop is marked consistently and reliably. The driver sees
 |---|---|---|
 | DRV-14 | **One stop visible at a time.** The driver app shows the address, pin, notes, customer first name, and contact button only for the current stop. Future stops appear only as a count. Completed stops are visible in a history list. | P0 |
 | DRV-15 | **Reveal on marking.** The next stop's details appear only after the current stop is marked Completed, No-show, or Skipped. There is no way to peek ahead or open navigation to a later stop. | P0 |
-| DRV-16 | **Enforced on the server.** The API returns the current stop's details to the driver's session and nothing beyond it. Hiding them only in the app's screens is not enough. The driver SDK and API (for integrators) offer the same sequential mode as an option. | P0 |
+| DRV-16 | **Enforced on the server.** The API returns the current stop's details to the driver's session and nothing beyond it. Hiding them only in the app's screens is not enough. In v2, the driver SDK and public API offer the same sequential mode as an option. | P0 |
 | DRV-17 | **Skip and defer need a reason.** The driver can skip the current stop (it's removed from today's route) or defer it (it moves to the end), choosing from a short reason list (for example "Customer not home", "Access blocked", "Out of time"). The operator admin is notified. | P0 |
 | DRV-18 | **Location check when marking.** Completed and No-show must be marked inside the stop's geofence (STP-4). Marking from outside needs a reason and is flagged to the operator admin. | P0 |
 | DRV-19 | **Unmarked-stop reminder.** If the driver arrives at a stop and then leaves its geofence without marking it, the app sends a notification and keeps prompting until the stop is marked. | P0 |
@@ -257,38 +258,38 @@ Not in the MVP. In the meantime, operators create stops manually, by CSV import,
 
 ---
 
-## 6. Functional requirements: API and SDK product
+## 6. Functional requirements: API and SDK product (v2)
 
-For companies with existing apps.
+For companies with existing apps. **Not part of v1.** The core of this section ships in Phase 2 (P1), and the extras in Phase 3 (P2). v1 still builds on an internal API that follows API-1, API-4, API-6, and API-8's design, so it can be opened up later without a rewrite.
 
 ### 6.1 Public API
 
 | ID | Requirement | Pri |
 |---|---|---|
-| API-1 | Versioned REST API (`/v1`) with an OpenAPI 3 spec covering Stops, Routes, Drivers, Vehicles, Locations, Notifications, Templates, Tracking Links, and Webhooks. | P0 |
-| API-2 | Route optimization endpoint (`POST /v1/routes/{id}/optimize`), usable on its own or with tracking. Integrators can also supply their own stop order. | P0 |
-| API-3 | Location ingestion endpoint that accepts single and batch pings. Optional high-throughput stream (WebSocket or gRPC) for large fleets. | P0 / P1 |
-| API-4 | Authentication: secret API keys (server-side), publishable keys (client-side, restricted scope), and short-lived signed tokens for customer and driver SDK sessions. OAuth 2.0 for platform partners (P2). | P0 |
-| API-5 | Test and live modes with separate keys and data, plus a **simulator** that drives a fake driver along a route and completes stops. | P0 |
-| API-6 | Idempotency keys on all POST requests, consistent error format, cursor pagination. | P0 |
-| API-7 | Per-key rate limits with standard headers. Documented quotas. | P0 |
-| API-8 | Webhooks for stop state changes, `route.started`, `route.reordered`, `route.completed`, `eta.changed`, `stop.position_changed`, `notification.sent/delivered/failed`, and `location.stale`, signed with HMAC and retried with backoff. Includes a delivery log and replay. | P0 |
-| API-9 | Read-only endpoint (`GET /v1/stops/{id}/status`) returning ETA, state, and stop position, for integrators who render their own UI. | P0 |
-| API-10 | "Notifications-only" mode. The integrator sends its own locations, order, and ETAs, and Arrively handles notification logic and delivery. | P1 |
-| API-11 | "Bring your own" options: the integrator's own SMS provider credentials, their own push credentials (APNs/FCM), and their own map provider key. | P1 |
+| API-1 | Versioned REST API (`/v1`) with an OpenAPI 3 spec covering Stops, Routes, Drivers, Vehicles, Locations, Notifications, Templates, Tracking Links, and Webhooks. | P1 |
+| API-2 | Route optimization endpoint (`POST /v1/routes/{id}/optimize`), usable on its own or with tracking. Integrators can also supply their own stop order. | P1 |
+| API-3 | Location ingestion endpoint that accepts single and batch pings. Optional high-throughput stream (WebSocket or gRPC) for large fleets. | P1 / P2 |
+| API-4 | Authentication: secret API keys (server-side), publishable keys (client-side, restricted scope), and short-lived signed tokens for customer and driver SDK sessions. OAuth 2.0 for platform partners (P2). | P1 |
+| API-5 | Test and live modes with separate keys and data, plus a **simulator** that drives a fake driver along a route and completes stops. | P1 |
+| API-6 | Idempotency keys on all POST requests, consistent error format, cursor pagination. | P1 |
+| API-7 | Per-key rate limits with standard headers. Documented quotas. | P1 |
+| API-8 | Webhooks for stop state changes, `route.started`, `route.reordered`, `route.completed`, `eta.changed`, `stop.position_changed`, `notification.sent/delivered/failed`, and `location.stale`, signed with HMAC and retried with backoff. Includes a delivery log and replay. | P1 |
+| API-9 | Read-only endpoint (`GET /v1/stops/{id}/status`) returning ETA, state, and stop position, for integrators who render their own UI. | P1 |
+| API-10 | "Notifications-only" mode. The integrator sends its own locations, order, and ETAs, and Arrively handles notification logic and delivery. | P2 |
+| API-11 | "Bring your own" options: the integrator's own SMS provider credentials, their own push credentials (APNs/FCM), and their own map provider key. | P2 |
 
 ### 6.2 Embeddable UI and SDKs
 
 | ID | Requirement | Pri |
 |---|---|---|
-| SDK-1 | **Hosted tracking page** (the same as CUS-*) that API customers can theme with their own logo, colors, and domain, so no front-end work is required. Custom branding is available only to API customers. | P0 logo/colors · P1 domain |
-| SDK-2 | **Web component / JS SDK** (`<arrively-tracker stop-token="...">`) that embeds the map, ETA, and stop position in any web page. React wrapper included. Themeable. | P0 |
-| SDK-3 | **iOS (Swift) and Android (Kotlin) customer SDKs**: a drop-in tracking view and a headless data stream, so customers can add tracking to native apps. | P1 |
-| SDK-4 | **Native driver SDKs (Swift/Kotlin)** that handle background location, stop display (including optional stop-by-stop reveal, DRV-14–DRV-16), and stop actions for customers' existing driver apps. | P1 |
+| SDK-1 | **Hosted tracking page** (the same as CUS-*) that API customers can theme with their own logo, colors, and domain, so no front-end work is required. Custom branding is available only to API customers. | P1 logo/colors · P2 domain |
+| SDK-2 | **Web component / JS SDK** (`<arrively-tracker stop-token="...">`) that embeds the map, ETA, and stop position in any web page. React wrapper included. Themeable. | P1 |
+| SDK-3 | **iOS (Swift) and Android (Kotlin) customer SDKs**: a drop-in tracking view and a headless data stream, so customers can add tracking to native apps. | P2 |
+| SDK-4 | **Native driver SDKs (Swift/Kotlin)** that handle background location, stop display (including optional stop-by-stop reveal, DRV-14–DRV-16), and stop actions for customers' existing driver apps. | P2 |
 | SDK-5 | React Native and Flutter wrappers. | P2 |
-| SDK-6 | Server SDKs: Node.js and Python (P0); Ruby, Go, Java, PHP, .NET (P1–P2). | P0+ |
-| SDK-7 | Developer portal: docs, quickstarts, API reference, interactive console, API key management, webhook tester, usage dashboard, changelog. | P0 |
-| SDK-8 | Semantic versioning, a deprecation policy (at least 12 months' notice for breaking API changes), and status page. | P0 |
+| SDK-6 | Server SDKs: Node.js and Python (P1); Ruby, Go, Java, PHP, .NET (P2). | P1+ |
+| SDK-7 | Developer portal: docs, quickstarts, API reference, interactive console, API key management, webhook tester, usage dashboard, changelog. | P1 |
+| SDK-8 | Semantic versioning, a deprecation policy (at least 12 months' notice for breaking API changes), and status page. | P1 |
 
 ---
 
@@ -297,8 +298,8 @@ For companies with existing apps.
 ### 7.1 Multi-tenancy and branding
 
 - MT-1 (P0): One shared, multi-tenant platform for all businesses. No per-customer deployments. Strict tenant isolation in data storage, API keys, and logs. Every query is tenant-scoped.
-- MT-2 (P0): Standalone businesses get an Arrively-branded experience with their business name, optional logo, and support contact. Full custom branding (colors, sender name, terms and privacy links) is for API customers only.
-- MT-3 (P1): Custom domains with automatic TLS for API customers' hosted tracking pages.
+- MT-2 (P0): Standalone businesses get an Arrively-branded experience with their business name, optional logo, and support contact. Full custom branding (colors, sender name, terms and privacy links) is for API customers only, from v2.
+- MT-3 (P2): Custom domains with automatic TLS for API customers' hosted tracking pages.
 - MT-4 (P2): Multi-location businesses: one parent account with several locations sharing billing.
 
 ### 7.2 Privacy and safety
@@ -337,7 +338,7 @@ For companies with existing apps.
 - PERF-1 (P0): End-to-end location latency (driver device to customer screen) at p95 ≤ 3 s.
 - PERF-2 (P0): Notification trigger to SMS hand-off to the provider at p95 ≤ 5 s.
 - PERF-3 (P0): Tracking page first meaningful paint ≤ 2 s on mid-range mobile over 4G. JS bundle ≤ 200 KB gzipped, excluding map tiles.
-- PERF-4 (P0): API p95 latency ≤ 200 ms for reads, ≤ 300 ms for writes, excluding external routing and optimization calls.
+- PERF-4 (P0): Internal API (public API from v2) p95 latency ≤ 200 ms for reads, ≤ 300 ms for writes, excluding external routing and optimization calls.
 - PERF-5: Route optimization returns in under 5 s for MVP routes within the Mapbox limit (P0). With the self-hosted optimizer, under 10 s for 50 stops and under 30 s for 100 stops (P1).
 - PERF-6 (P1): Scale horizontally to 10k concurrently active routes, 200k active stops, and 20k location pings/s at launch, and to 10× without re-architecture.
 
@@ -386,7 +387,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 ## 9. Packaging and pricing assumptions (to validate)
 
 - **Standalone**: tiers per active driver per month, with included SMS and overage billing. Free trial.
-- **API**: usage-based pricing per tracked stop, per optimization run, and per notification. Free developer tier in test mode.
+- **API (v2)**: usage-based pricing per tracked stop, per optimization run, and per notification. Free developer tier in test mode.
 - Both products share metering. Requirement BIL-1 (P0): accurate per-tenant metering of stops, optimizations, location pings, routing calls, messages, and masked call minutes.
 
 ---
@@ -403,7 +404,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 | ETA accuracy (arrival within ±2 min of the ETA shown 10 min out) | ≥ 85% |
 | SMS delivery rate | ≥ 98% |
 | Standalone time-to-first-live-route | median < 1 day |
-| API time-to-first-webhook | median < 1 hour |
+| API time-to-first-webhook (after v2 launch) | median < 1 hour |
 
 ---
 
@@ -419,7 +420,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - Masked calling and texting between customer and driver
 - Industry presets for both delivery/field services and rideshare-type pickups
 - Mapbox for maps, routing, ETAs, and optimization
-- REST API (including optimization), webhooks, JS embed, Node/Python SDKs, developer portal, test mode and simulator
+- Internal API behind the driver app, console, and tracking page, designed so it can become the public API in v2
 
 **Phase 2 (P1)**
 - Routing:
@@ -440,13 +441,15 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
   - Web push opt-in
   - High-contrast and text-only views
 - Channels: email, web push, and native push
-- API and SDKs:
-  - Native customer and driver SDKs
-  - Masked numbers through the API
-  - Notifications-only mode
-  - Bring-your-own provider credentials
-  - Custom domains for hosted tracking pages
-  - Location streaming for large fleets
+- **Public API and SDKs (v2 launch):**
+  - REST API, including stand-alone route optimization
+  - Webhooks and a status endpoint
+  - Test mode and simulator
+  - Hosted tracking page that API customers can brand with their logo and colors
+  - Embeddable web widget, with a React version
+  - Node and Python libraries
+  - Developer portal
+  - Versioning policy and status page
 - ETA quality: GPS cleanup, offline location buffering, learned time on site, fallback ETA, ETA accuracy tracking
 - Reports for the operator
 - Public booking page with approve or decline (BKG-1, BKG-2)
@@ -462,6 +465,13 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
   - Scale targets
 
 **Phase 3 (P2)**
+- API extras:
+  - Native customer and driver SDKs
+  - Masked numbers through the API
+  - Notifications-only mode
+  - Bring-your-own provider credentials
+  - Custom domains
+  - Location streaming for large fleets
 - Multi-driver stop distribution and capacity limits
 - Driver breaks and shift constraints
 - Booking widget and availability rules
@@ -492,7 +502,8 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 | Driver at another stop | The marker just appears stopped, with no label. The stops-ahead count drops only when the driver leaves that stop and heads to the next. |
 | Customer–driver contact | Masked call and text to the driver in the MVP. |
 | Which vertical to set up first | Both. Each ships with its own preset, and onboarding asks which fits. |
-| Standalone branding | One Arrively-branded, multi-tenant product. Not white-label, no per-business instances. Custom branding is for API customers only. |
+| Product order | v1 is the standalone app only. The public API and SDKs launch in v2, with extras in Phase 3. v1 is built on an internal API designed to become the public one. |
+| Standalone branding | One Arrively-branded, multi-tenant product. Not white-label, no per-business instances. Custom branding is for API customers only, from v2. |
 | Who optimizes routes | The driver runs optimization. The operator admin adds, assigns, and can reorder stops. No dispatcher role for now. |
 | Driver navigation | Deep-link to Google Maps, Apple Maps, or Waze for the current stop only. The driver sees one stop at a time, and the next address is revealed only after the current stop is marked. |
 
