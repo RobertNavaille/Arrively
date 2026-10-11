@@ -411,7 +411,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 
 **MVP (P0)**
 - Core stop, route, location, ETA, and notification engine
-- Single-driver route optimization, with manual reordering and skipping
+- Single-driver route optimization (driver runs it; operator admin can reorder in the console), with skip and defer
 - SMS notifications, including stops ahead ("2 stops before you", "You're next")
 - Arrively-branded customer tracking page with live driver location, stops ahead, and privacy rules
 - Operator console (manual and CSV stops, assigning to drivers, live map, drivers, notification settings, billing)
@@ -422,19 +422,44 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - REST API (including optimization), webhooks, JS embed, Node/Python SDKs, developer portal, test mode and simulator
 
 **Phase 2 (P1)**
-- Self-hosted optimizer for routes over the Mapbox limit (up to 100+ stops)
-- Automatic re-optimization when stops change, and pinned stops
-- Planned routes for future days
-- Email, web push, and native push
-- Native customer and driver SDKs
-- Custom domains for API customers' hosted tracking pages
-- Reports, ETA accuracy, and learned time on site
-- Recurring stops
-- Public booking form (BKG-1, BKG-2)
-- SMS provider failover
-- SSO
-- Bring-your-own provider credentials
-- SOC 2
+- Routing:
+  - Self-hosted optimizer for routes over the Mapbox limit (100+ stops)
+  - Automatic re-optimization when stops change
+  - Pinned stops
+  - Planned routes for future days
+  - Recurring stops
+- Driver app:
+  - 60-second undo for a wrong tap
+  - Offline marking
+  - Owner-operators can create their own stops and turn off the stop-by-stop reveal
+  - Web driver link for occasional drivers
+  - Battery-aware tracking
+- Customer experience:
+  - Access instructions from the customer
+  - Driver-waiting reminders
+  - Web push opt-in
+  - High-contrast and text-only views
+- Channels: email, web push, and native push
+- API and SDKs:
+  - Native customer and driver SDKs
+  - Masked numbers through the API
+  - Notifications-only mode
+  - Bring-your-own provider credentials
+  - Custom domains for hosted tracking pages
+  - Location streaming for large fleets
+- ETA quality: GPS cleanup, offline location buffering, learned time on site, fallback ETA, ETA accuracy tracking
+- Reports for the operator
+- Public booking page with approve or decline (BKG-1, BKG-2)
+- Platform:
+  - SMS provider failover
+  - Quiet hours and rate limits
+  - Abuse controls
+  - Driver start-point obfuscation
+  - SSO
+  - SOC 2
+  - Multi-AZ deployment
+  - Internal support tool
+  - Scale targets
 
 **Phase 3 (P2)**
 - Multi-driver stop distribution and capacity limits
