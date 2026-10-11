@@ -1,6 +1,6 @@
 # Arrively — Design Direction
 
-> Status: Draft v0.1 · Applies to: driver app, operator console, customer tracking page
+> Status: Draft v0.2 · Applies to: driver app, operator console, customer tracking page
 
 The visual direction comes from an earlier concept ([reference board](design/concept-reference.webp)). Use it **for styling only**. Its flows and features are superseded by [REQUIREMENTS.md](REQUIREMENTS.md). For example, the concept shows the whole route and a "Directions" button for any job, but the requirements reveal one stop at a time.
 
@@ -19,24 +19,21 @@ The screen should read at a glance from a driver's seat or a customer's doorstep
 
 ## 2. Color
 
-Sampled from the concept. Exact values can be tuned when building the token set.
+The source of truth is the **Arrively design system** (https://claude.ai/artifact/T7kZL7eYuvc7eZNurmjuSx). The concept's bright blue is kept as the identity color. Text and button fills were darkened slightly so they meet WCAG 2.2 AA.
 
 | Token | Value | Use |
 |---|---|---|
-| `primary` | `#009DFE` | Primary buttons, links ("Directions", "Change", "From Current Location"), route line, location dot, toggles, selected date |
-| `primary-tint` | `#D2ECFF` | Circular icon buttons (call, message), small pill buttons ("Change"), secondary filled buttons, tiles |
-| `surface` | `#FFFFFF` | Screens, cards, bottom sheets |
-| `surface-muted` | `#F4F5F7` | Input fields, list backgrounds |
-| `text-primary` | near-black `#1A1A1A` | Titles, names, big numbers |
-| `text-secondary` | mid gray `#8A8F98` | Labels, dates, metadata ("10 mi · 10:35 am") |
-| `divider` | light gray `#E6E8EB` | Hairline separators, sheet drag handle |
-| `danger` | red `#FF3B30` | Destructive text actions ("Cancel") |
-| `map-label` | dark gray pill `#3C4043` with white text | Address callout on the map |
-
-- Blue is the only accent. Avoid adding other brand colors.
-- `danger` appears only as text, never as a large filled area.
-- Text and controls must still meet WCAG 2.2 AA contrast (A11Y-1). White text on `#009DFE` is borderline for small text. Use bold weight or a slightly darker blue (around `#0080D6`) for small button labels if testing shows it falls short.
-- A dark mode isn't defined yet.
+| `brand` | `#009DFE` | Identity blue for graphics only: route line, driver marker, toggles, cover. Never text or under white text (2.9:1). |
+| `action` | `#0077CC` | Primary button fill, selected date. White text 4.66:1. |
+| `action-ink` | `#0072C6` | Blue text and text buttons ("Directions"). 4.97:1 on white. |
+| `brand-tint` / `on-tint` | `#D2ECFF` / `#005FA8` | Tinted icon buttons, info pills, secondary buttons. 5.37:1. |
+| `ink` / `ink-muted` | `#1A1A1A` / `#6B717B` | Text / secondary text (4.91:1 on white). |
+| `surface` / `surface-muted` | `#FFFFFF` / `#F4F5F7` | Screens and sheets / inputs and desktop canvas. |
+| `divider` / `control-border` | `#E6E8EB` / `#8A9099` | Hairlines / outlines of off toggles and empty radios. |
+| `danger` | `#D92D20` | Destructive text actions only. |
+| `warning` / `warning-tint` | `#B54708` / `#FEF3E2` | Stale location, delays, flagged marks. |
+| `success` | `#067647` | Completed stops. |
+| `map-ground` / `map-block` / `map-road` / `map-label` | `#ECEDEF` / `#E1E3E6` / `#FFFFFF` / `#3C4043` | Desaturated base map, and the dark pill behind address labels and the customer's pin. |
 
 ## 3. Typography
 
@@ -87,9 +84,14 @@ Sampled from the concept. Exact values can be tuned when building the token set.
 - **Customer tracking page (mobile web)**: the same map and bottom-sheet pattern, with the stat row adapted to the customer's view (ETA and stops ahead). The Arrively wordmark is small, and the business name is prominent (CUS-9).
 - **Operator console (desktop web)**: the same tokens and components on a wider layout. A job list or table on the left, map on the right, and forms in side panels.
 
-## 8. Open items
+## 8. Artifacts
 
-- Confirm the typeface and exact color values from the source Figma file.
+- Design system: https://claude.ai/artifact/T7kZL7eYuvc7eZNurmjuSx
+- v1 mockups: https://claude.ai/artifact/5mmHXHCsGABBr21jRFTZSY
+
+## 9. Open items
+
+- Confirm the typeface against the source Figma file.
 - Arrively logo and wordmark.
 - Dark mode.
 - Visual states for stale location, delay, and "You're next".
