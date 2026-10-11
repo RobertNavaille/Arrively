@@ -367,6 +367,7 @@ For companies with existing apps. **Not part of v1.** The core of this section s
 ### 7.7 Accessibility and localization
 
 - A11Y-1 (P0): Customer tracking page, operator console, and driver app meet **WCAG 2.2 AA**. ETA, stop position, and status are exposed as text and through screen-reader live regions, not only on the map.
+- UI-1 (P0): All three v1 surfaces (driver app, operator console, customer tracking page) follow the shared design direction in [DESIGN.md](DESIGN.md).
 - A11Y-2 (P1): A high-contrast map theme and a "no-map" text-only view.
 - L10N-1 (P0): All customer-facing text can be localized. Launch with US English and Spanish. Imperial units (miles, feet), 12-hour times, all US time zones (including Alaska and Hawaii), and US address formats.
 - L10N-2 (P2): More languages and non-US formats when expanding beyond the US.
