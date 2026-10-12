@@ -2,7 +2,7 @@
 
 > Status: Draft v0.2 · Applies to: driver app, operator console, customer tracking page
 
-The visual direction comes from an earlier concept ([reference board](design/concept-reference.webp)). Use it **for styling only**. Its flows and features are superseded by [REQUIREMENTS.md](REQUIREMENTS.md). For example, the concept shows the whole route and a "Directions" button for any job, but the requirements reveal one stop at a time.
+The visual direction comes from an earlier concept ([reference board](design/concept-reference.webp)). Use it **for styling only**. Its flows and features are superseded by [REQUIREMENTS.md](REQUIREMENTS.md). For example, the concept lets the driver complete a job before arriving, but the requirements make the driver mark each stop on site before the next trip starts.
 
 ![Concept reference](design/concept-reference.webp)
 
