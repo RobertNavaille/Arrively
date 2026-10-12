@@ -226,7 +226,7 @@ For operators without their own software.
 | DRV-9 | Battery-aware tracking. Typical battery use on a 1-hour shift under 8%. | P1 |
 | DRV-10 | A lightweight "web driver link" fallback for occasional drivers, with documented limitations (foreground only). | P1 |
 | DRV-13 | **Fully native driver apps** (Swift for iOS, Kotlin for Android) replace the cross-platform app once the product is validated, for better battery use, location reliability, and platform features. The native driver SDKs (SDK-4) share this code. | P2 |
-| DRV-12 | Owner-operators can create their own stops in the driver app, with no console needed. | P1 |
+| DRV-12 | Owner-operators can run their whole business from the driver app (add stops, edit customers, manage the route), with no console needed. | P1 |
 | DRV-11 | Call or text the customer through a masked number from the stop screen. | P0 |
 
 #### 5.2.1 Marking every stop
@@ -239,6 +239,7 @@ The goal is that every stop is marked consistently and reliably. The driver can 
 | DRV-15 | **One trip at a time.** The driver works on one current stop. Start trip for the next stop is available only after the current stop is marked Completed, No-show, or Skipped or deferred. | P0 |
 | DRV-16 | **Enforced on the server.** The platform refuses to start a trip while the driver's current stop is unmarked, whatever the app shows. In v2, the driver SDK and public API follow the same rule. | P0 |
 | DRV-23 | **Address correction.** The driver can correct a stop's address or move its pin (for example to a side entrance) from the stop's details. The change is saved with who made it and when, the operator admin is notified, and the customer's ETA and tracking page update. | P0 |
+| DRV-24 | **Add a stop from the day view.** A search bar above the map autocompletes addresses (Mapbox Search). Picking one adds the stop to the day being viewed and prompts to re-optimize. Customer name, phone and texting consent can be added after; the customer gets no texts until a phone number and consent are recorded (CMP-2). The operator admin is notified and can turn off driver-added stops in settings. | P0 |
 | DRV-17 | **Skip and defer need a reason.** The driver can skip the current stop (it's removed from today's route) or defer it (it moves to the end), choosing from a short reason list (for example "Customer not home", "Access blocked", "Out of time"). The operator admin is notified. | P0 |
 | DRV-18 | **Location check when marking.** Completed and No-show must be marked inside the stop's geofence (STP-4). Marking from outside needs a reason and is flagged to the operator admin. | P0 |
 | DRV-19 | **Unmarked-stop reminder.** If the driver arrives at a stop and then leaves its geofence without marking it, the app sends a notification and keeps prompting until the stop is marked. | P0 |
@@ -429,7 +430,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - SMS notifications, including stops ahead ("2 stops before you", "You're next")
 - Arrively-branded customer tracking page with live driver location, stops ahead, and privacy rules
 - Operator console (manual and CSV stops, assigning to drivers, live map, drivers, notification settings, billing)
-- Cross-platform driver app with a swipeable day view (map and list), route optimization, address correction, one trip at a time, location check when marking, and background location
+- Cross-platform driver app with a swipeable day view (map and list), adding stops by address search, route optimization, address correction, one trip at a time, location check when marking, and background location
 - Masked calling and texting between customer and driver
 - Industry presets for both delivery/field services and rideshare-type pickups
 - Mapbox for maps, routing, ETAs, and optimization
