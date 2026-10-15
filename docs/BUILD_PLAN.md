@@ -51,7 +51,8 @@ Every app talks to Supabase only through its API, realtime channels and edge fun
 5. **Owner console**
    - Add stops (form and CSV), assign drivers, a live map of drivers, notification settings, stop history.
 6. **Routing**
-   - Mapbox Optimization for stop order (capped at its stop limit), and Mapbox Directions for ETAs to each stop, including time on site.
+   - Stop order from Arrively's own solver on Mapbox Matrix drive times, respecting arrival windows (up to 24 stops left per optimization). The driver and the owner see the proposed order, time saved and any missed windows before accepting.
+   - Traffic-aware ETAs from Mapbox Directions for every stop left, including time on site, refreshed after each change and at most once a minute while driving.
 7. **Chat**
    - Customer ↔ driver chat over Supabase Realtime, a push notification to the driver, and a fallback text for an unread message.
 8. **In-app calls**
@@ -64,6 +65,7 @@ Each milestone ends with something you can try. Milestones 1–4 together alread
 ## Notes and limits
 
 - **Mapbox in the driver app:** `@rnmapbox/maps` needs a custom Expo dev build, so the app won't run in the Expo Go preview app. Testers install it from TestFlight.
+- **Shared solver:** the route solver lives in `supabase/functions/_shared/solver.ts` and both apps import it for their offline demos. On Vercel, keep "Include files outside the root directory" on (the default) when the root is `apps/web`.
 - **Background location:** iOS asks the driver for "Always" location permission. The App Store reviewer needs a clear reason for it, which we'll write.
 - **Text costs:** each stop costs about three texts by default. Chat replaces two-way texting.
 - **Calls:** the driver's phone rings even when the app is closed (CallKit). The customer's browser rings only while the tracking page is open, so otherwise a "tap to call back" text goes out instead.

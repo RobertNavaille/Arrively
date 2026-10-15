@@ -16,11 +16,15 @@
    ```sh
    npx supabase@2 secrets set TEXTMAGIC_USERNAME=... TEXTMAGIC_API_KEY=... TEXTMAGIC_FROM=+1... \
      NOTIFY_SECRET=$(openssl rand -hex 24) SMS_WEBHOOK_SECRET=$(openssl rand -hex 24) \
-     TRACKING_BASE_URL=https://<your-vercel-app>/t/ SEND_SMS_HOOK_SECRET='v1,whsec_...'
+     TRACKING_BASE_URL=https://<your-vercel-app>/t/ SEND_SMS_HOOK_SECRET='v1,whsec_...' \
+     MAPBOX_TOKEN=sk.or.pk...
    npx supabase@2 functions deploy notify --no-verify-jwt
    npx supabase@2 functions deploy sms-inbound --no-verify-jwt
    npx supabase@2 functions deploy send-sms-hook --no-verify-jwt
+   npx supabase@2 functions deploy route-plan
+   npx supabase@2 functions deploy route-etas
    ```
+   `MAPBOX_TOKEN` is used only on the server, for drive times and ETAs. Use a token without a URL restriction (the apps' public tokens are usually restricted). `route-plan` and `route-etas` check the caller's sign-in, so they keep JWT verification on.
 4. **Driver sign-in by text:**
    - Under Authentication → Providers, enable Phone.
    - Under Authentication → Hooks, add a "Send SMS" hook that points to `send-sms-hook`.
@@ -48,4 +52,10 @@ The schema and the stop rules are tested against plain Postgres 16. A stub stand
 
 ```sh
 PGHOST=/tmp PGPORT=5432 PGUSER=postgres supabase/tests/run_tests.sh
+```
+
+The route solver and the routing functions have Deno tests (Mapbox is mocked):
+
+```sh
+cd supabase/functions && npx deno@2.1.4 test --allow-env _shared/
 ```

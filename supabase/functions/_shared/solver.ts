@@ -209,3 +209,68 @@ export function straightLineMatrix(points: Point[]): number[][] {
   return points.map((a) => points.map((b) => (distanceM(a, b) * 1.3) / 11.176));
 }
 
+
+// ---------------------------------------------------------------------------
+// Whole-route planning on straight-line times, for the offline demos (driver
+// app and console). Mirrors remaining()/plan() in routing.ts, in the device's
+// time zone.
+// ---------------------------------------------------------------------------
+export interface PlanStop {
+  id: string; position: number | null; status: string; lat: number; lng: number; service_minutes: number;
+  window_start: string | null; window_end: string | null; arrived_at: string | null;
+}
+export interface PlanSummary { order: string[]; drive_s: number; distance_m: number; late: string[]; finish: string }
+export interface RoutePlan extends PlanSummary { etas: Record<string, string>; current: PlanSummary; approximate: boolean }
+
+const UPCOMING = ["scheduled", "queued", "en_route", "arrived"];
+const isoOf = (t: number) => new Date(t * 1000).toISOString();
+const secOf = (s: string | null) => (s ? Date.parse(s) / 1000 : null);
+
+function localProblem(stops: PlanStop[], day: string, from: Point | null, now: number) {
+  const left = stops.filter((s) => UPCOMING.includes(s.status)).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const at = left.find((s) => s.status === "arrived");
+  const heading = left.find((s) => s.status === "en_route");
+  const rest = left.filter((s) => s !== at && s !== heading);
+  const seq = heading ? [heading, ...rest] : rest;
+  const morning = new Date(`${day}T08:00:00`);
+  const future = morning.toDateString() !== new Date(now * 1000).toDateString() && morning.getTime() / 1000 > now;
+  let start: Point | null = future ? null : from;
+  let t0 = future ? morning.getTime() / 1000 : now;
+  if (at) { start = at; t0 = Math.max(now, (secOf(at.arrived_at) ?? now) + at.service_minutes * 60); }
+  const solverStops: SolverStop[] = seq.map((s) => ({
+    id: s.id, serviceS: s.service_minutes * 60, windowStart: secOf(s.window_start), windowEnd: secOf(s.window_end), fixed: s === heading,
+  }));
+  const pts = start ? [start, ...seq] : seq;
+  let m = straightLineMatrix(pts);
+  if (!start) m = [new Array(m.length + 1).fill(0), ...m.map((r) => [0, ...r])];
+  const dist = m.map((r) => r.map((v) => v * 11.176)); // back to meters at 25 mph
+  return { solverStops, m, dist, t0 };
+}
+
+function distanceAlong(dist: number[][], order: number[]) {
+  let d = 0, prev = 0;
+  for (const i of order) { d += dist[prev][i + 1]; prev = i + 1; }
+  return Math.round(d);
+}
+
+export function straightLinePlan(stops: PlanStop[], day: string, from: Point | null, now = Date.now() / 1000): RoutePlan {
+  const { solverStops, m, dist, t0 } = localProblem(stops, day, from, now);
+  const all = solverStops.map((_, i) => i);
+  const cur = evaluate(solverStops, m, t0, all);
+  const best = solve(solverStops, m, t0);
+  const idx = new Map(solverStops.map((s, i) => [s.id, i]));
+  return {
+    order: best.order, late: best.late, drive_s: Math.round(best.driveS), finish: isoOf(best.finish),
+    distance_m: distanceAlong(dist, best.order.map((id) => idx.get(id)!)),
+    etas: Object.fromEntries(Object.entries(best.etas).map(([k, v]) => [k, isoOf(v)])),
+    current: { order: cur.order, late: cur.late, drive_s: Math.round(cur.driveS), finish: isoOf(cur.finish), distance_m: distanceAlong(dist, all) },
+    approximate: true,
+  };
+}
+
+/** ETAs for the stops left, in route order. */
+export function straightLineEtas(stops: PlanStop[], day: string, from: Point | null, now = Date.now() / 1000) {
+  const { solverStops, m, t0 } = localProblem(stops, day, from, now);
+  const s = evaluate(solverStops, m, t0, solverStops.map((_, i) => i));
+  return { etas: Object.fromEntries(Object.entries(s.etas).map(([k, v]) => [k, isoOf(v)])), drive_s: Math.round(s.driveS) };
+}

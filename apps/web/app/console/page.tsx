@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PointsMap, type MapPoint } from '@/components/PointsMap';
-import { api, e164, searchAddress, type ConsoleRoute, type ConsoleStop, type Driver, type DriverLocation, type Invite, type NewStop, type Org, type Place } from '@/lib/console';
+import { api, e164, searchAddress, type ConsoleRoute, type ConsoleStop, type Driver, type DriverLocation, type Invite, type NewStop, type Org, type Place, type RoutePlan } from '@/lib/console';
 import { OFFLINE_DEMO } from '@/lib/config';
 import { fmtTime } from '@/lib/tracking';
 
@@ -89,13 +89,17 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
       {err ? <p className="body" style={{ color: 'var(--danger)', padding: '12px 32px', margin: 0 }}>{err}</p> : null}
       <main className="console-main">
         {tab === 'live' ? <Live routes={routes} drivers={drivers} locations={locations} /> : null}
-        {tab === 'stops' && org ? <Stops org={org} day={day} setDay={setDay} routes={routes} drivers={drivers} reload={load} /> : null}
+        {tab === 'stops' && org ? <Stops org={org} day={day} setDay={setDay} routes={routes} drivers={drivers} locations={locations} reload={load} /> : null}
         {tab === 'drivers' && org ? <Drivers org={org} drivers={drivers} invites={invites} reload={load} /> : null}
         {tab === 'settings' && org ? <Settings org={org} reload={load} /> : null}
       </main>
     </div>
   );
 }
+
+const etaText = (s: ConsoleStop) => `ETA ${s.eta_approx ? '~' : ''}${fmtTime(s.eta)}`;
+const isLate = (s: ConsoleStop) => !!s.eta && !!s.window_end && Date.parse(s.eta) > Date.parse(s.window_end);
+const minutes = (sec: number) => { const m = Math.max(1, Math.round(sec / 60)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`; };
 
 function progress(r: ConsoleRoute) {
   const stops = r.stops.filter((s) => s.status !== 'cancelled');
@@ -142,6 +146,7 @@ function Live({ routes, drivers, locations }: { routes: ConsoleRoute[]; drivers:
                 <div className="body">
                   {current.status === 'en_route' ? 'Heading to ' : current.status === 'arrived' ? 'At ' : 'Next: '}
                   <b>{current.customer_name}</b> <span className="caption">· {current.address}</span>
+                  {current.eta && current.status !== 'arrived' ? <span className="caption"> · {etaText(current)}</span> : null}
                 </div>
               ) : null}
             </div>
@@ -187,9 +192,22 @@ function AddressInput({ value, onPick }: { value: string; onPick: (p: Place) => 
   );
 }
 
-function Stops({ org, day, setDay, routes, drivers, reload }: {
-  org: Org; day: string; setDay: (d: string) => void; routes: ConsoleRoute[]; drivers: Driver[]; reload: () => Promise<void>;
+function Stops({ org, day, setDay, routes, drivers, locations, reload }: {
+  org: Org; day: string; setDay: (d: string) => void; routes: ConsoleRoute[]; drivers: Driver[]; locations: DriverLocation[]; reload: () => Promise<void>;
 }) {
+  const [plans, setPlans] = useState<Record<string, RoutePlan | 'loading' | { error: string }>>({});
+  async function optimize(r: ConsoleRoute) {
+    setPlans((p) => ({ ...p, [r.id]: 'loading' }));
+    try {
+      const plan = await api.plan(r, locations.find((l) => l.driver_id === r.driver_id) ?? null);
+      setPlans((p) => ({ ...p, [r.id]: plan }));
+    } catch (x) { setPlans((p) => ({ ...p, [r.id]: { error: x instanceof Error ? x.message : String(x) } })); }
+  }
+  const closePlan = (id: string) => setPlans((p) => { const n = { ...p }; delete n[id]; return n; });
+  async function usePlan(r: ConsoleRoute, order: string[]) {
+    try { await api.applyPlan(r.id, order); closePlan(r.id); await reload(); }
+    catch (x) { setPlans((p) => ({ ...p, [r.id]: { error: x instanceof Error ? x.message : String(x) } })); }
+  }
   const drivable = drivers.filter((d) => d.role === 'driver' || d.role === 'admin');
   const blank = { name: '', phone: '', place: null as Place | null, from: '', to: '', minutes: '20', notes: '', driver: drivable[0]?.id ?? '', consent: true };
   const [f, setF] = useState(blank);
@@ -300,20 +318,93 @@ function Stops({ org, day, setDay, routes, drivers, reload }: {
         {routes.map((r) => {
           const stops = r.stops.filter((s) => s.status !== 'cancelled');
           const cur = progress(r).current;
+          const canOptimize = r.status !== 'completed' && stops.filter((s) => s.status === 'scheduled' || s.status === 'queued').length >= 2;
+          const plan = plans[r.id];
           return (
             <div key={r.id} className="card">
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
                 <div style={{ flex: 1 }}>
                   <div className="heading">{drivers.find((d) => d.id === r.driver_id)?.name ?? 'Unassigned'}</div>
-                  <div className="caption">{stops.length} stops · {r.status === 'active' ? 'on route' : r.status === 'completed' ? 'finished' : 'not started'}</div>
+                  <div className="caption">
+                    {stops.length} stops · {r.status === 'active' ? 'on route' : r.status === 'completed' ? 'finished' : 'not started'}
+                    {r.drive_s != null && r.status !== 'completed' ? ` · ${minutes(r.drive_s)} of driving left` : ''}
+                  </div>
                 </div>
+                {canOptimize && !plan ? <button className="btn btn-text" onClick={() => optimize(r)}>Optimize order</button> : null}
               </div>
+              {plan === 'loading' ? <p className="caption">Finding the best order…</p> : null}
+              {plan && plan !== 'loading' && 'error' in plan ? (
+                <p className="body" style={{ color: 'var(--danger)' }}>{plan.error} <button className="mini" onClick={() => closePlan(r.id)}>Dismiss</button></p>
+              ) : null}
+              {plan && plan !== 'loading' && !('error' in plan) ? (
+                <PlanPanel route={r} plan={plan} onUse={() => usePlan(r, plan.order)} onClose={() => closePlan(r.id)} />
+              ) : null}
               {stops.map((s, i) => <StopRow key={s.id} s={s} n={i + 1} isCurrent={s.id === cur?.id}
                 onUp={() => move(r, i, -1)} onDown={() => move(r, i, 1)} onCancel={async () => { await api.cancelStop(s.id); await reload(); }} />)}
             </div>
           );
         })}
       </section>
+    </div>
+  );
+}
+
+const windowText = (s: Pick<ConsoleStop, 'window_start' | 'window_end'>) =>
+  s.window_start ? `${fmtTime(s.window_start)} – ${fmtTime(s.window_end)}` : 'Any time';
+
+/** The proposed order next to the current one (RTE-4). */
+function PlanPanel({ route, plan, onUse, onClose }: { route: ConsoleRoute; plan: RoutePlan; onUse: () => void; onClose: () => void }) {
+  const byId = new Map(route.stops.map((s) => [s.id, s]));
+  const live = route.stops.filter((s) => s.status !== 'cancelled');
+  const before = new Map(live.map((s, i) => [s.id, i + 1]));
+  // Numbers after applying: upcoming stops take the slots upcoming stops hold.
+  const slots = plan.order.filter((id) => ['scheduled', 'queued'].includes(byId.get(id)?.status ?? '')).map((id) => before.get(id)!).sort((a, b) => a - b);
+  const after = new Map(before);
+  plan.order.filter((id) => ['scheduled', 'queued'].includes(byId.get(id)?.status ?? '')).forEach((id, i) => after.set(id, slots[i]));
+  const same = plan.order.join() === plan.current.order.join();
+  const saved = plan.current.drive_s - plan.drive_s;
+  const fewerLate = plan.current.late.length - plan.late.length;
+  const headline = same ? 'This order is already the best'
+    : saved >= 60 ? `Saves ${minutes(saved)} of driving`
+    : fewerLate > 0 ? `${fewerLate} fewer late ${fewerLate === 1 ? 'arrival' : 'arrivals'}` : 'About the same drive time';
+  return (
+    <div style={{ margin: '8px 0 12px', padding: 16, borderRadius: 12, background: 'var(--surface-muted)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 24px' }}>
+        <div className="heading" style={{ flex: '1 1 220px' }}>{headline}</div>
+        <span className="caption"><b style={{ color: 'var(--ink)' }}>{minutes(plan.drive_s)}</b> driving (now {minutes(plan.current.drive_s)})</span>
+        <span className="caption"><b style={{ color: 'var(--ink)' }}>{(plan.distance_m / 1609.34).toFixed(1)} mi</b></span>
+        <span className="caption">Finish <b style={{ color: 'var(--ink)' }}>{fmtTime(plan.finish)}</b></span>
+      </div>
+      {plan.late.length ? (
+        <div className="caption" style={{ color: 'var(--warning)', fontWeight: 600 }}>
+          Can&apos;t make the window: {plan.late.map((id) => byId.get(id)?.customer_name).join(', ')}
+        </div>
+      ) : null}
+      <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+        {plan.order.map((id) => {
+          const s = byId.get(id); if (!s) return null;
+          const n = after.get(id)!, was = before.get(id)!;
+          const late = plan.late.includes(id);
+          return (
+            <li key={id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0' }}>
+              <span className={`num ${s.status === 'en_route' ? 'next' : ''}`}>{n}</span>
+              <span className="body" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <b>{s.customer_name}</b> <span className="caption">· {s.status === 'en_route' ? 'on the way now · ' : n !== was ? `was ${was} · ` : ''}{windowText(s)}</span>
+              </span>
+              <span className="caption" style={{ fontWeight: 600, color: late ? 'var(--warning)' : 'var(--ink)' }}>{fmtTime(plan.etas[id])}{late ? ' · late' : ''}</span>
+            </li>
+          );
+        })}
+      </ol>
+      {plan.approximate ? <div className="caption">Drive times are estimates.</div> : null}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        {same ? <button className="btn btn-secondary" onClick={onClose}>Close</button> : (
+          <>
+            <button className="btn btn-primary" onClick={onUse}>Use this order</button>
+            <button className="btn btn-text" onClick={onClose}>Keep current order</button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -330,7 +421,12 @@ function StopRow({ s, n, isCurrent, onUp, onDown, onCancel }: { s: ConsoleStop; 
           {s.address}{s.notes ? ` · ${s.notes}` : ''}{!s.sms_consent_at ? ' · no texts' : ''}
         </div>
       </div>
-      <div className="caption" style={{ textAlign: 'right' }}>{done ? fmtTime(s.marked_at) : s.window_start ? `${fmtTime(s.window_start)} – ${fmtTime(s.window_end)}` : 'Any time'}</div>
+      <div style={{ textAlign: 'right' }}>
+        {!done && s.eta && s.status !== 'arrived'
+          ? <div className="caption" style={{ fontWeight: 600, color: isLate(s) ? 'var(--warning)' : 'var(--ink)' }}>{etaText(s)}{isLate(s) ? ' · late' : ''}</div>
+          : null}
+        <div className="caption">{done ? fmtTime(s.marked_at) : windowText(s)}</div>
+      </div>
       <span className={`pill ${done ? (s.status === 'completed' ? 'pill-success' : 'pill-neutral') : 'pill-info'}`} style={{ alignSelf: 'center' }}>{label}</span>
       {!done && s.status !== 'en_route' && s.status !== 'arrived' ? (
         <span style={{ display: 'flex' }}>

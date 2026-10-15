@@ -13,7 +13,7 @@ export interface Tracking {
   business: { name: string; phone: string | null; logo_url: string | null };
   stop: {
     status: TrackStatus; address: string; lat: number; lng: number;
-    window_start: string | null; window_end: string | null; eta: string | null;
+    window_start: string | null; window_end: string | null; eta: string | null; eta_approx?: boolean;
     arrived_at: string | null; marked_at: string | null; notes: string | null;
   };
   stops_ahead: number;

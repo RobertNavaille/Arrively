@@ -1,3 +1,4 @@
+import { straightLineEtas, straightLinePlan, type RoutePlan } from '../../../supabase/functions/_shared/solver';
 import { MAPBOX_TOKEN, OFFLINE_DEMO } from './config';
 import { supabase } from './supabase';
 
@@ -9,8 +10,23 @@ export interface ConsoleStop {
   customer_phone: string | null; sms_consent_at: string | null; address: string; lat: number; lng: number;
   window_start: string | null; window_end: string | null; service_minutes: number; notes: string | null;
   marked_at: string | null; mark_reason: string | null; marked_outside: boolean; tracking_token: string;
+  eta: string | null; eta_approx: boolean; arrived_at: string | null;
 }
-export interface ConsoleRoute { id: string; day: string; status: string; driver_id: string | null; stops: ConsoleStop[] }
+export interface ConsoleRoute { id: string; day: string; status: string; driver_id: string | null; drive_s: number | null; stops: ConsoleStop[] }
+export type { RoutePlan } from '../../../supabase/functions/_shared/solver';
+
+/** Calls an edge function and surfaces its { error } message. */
+async function invoke<T>(name: string, body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase().functions.invoke(name, { body });
+  if (error) {
+    const ctx = (error as { context?: Response }).context;
+    const msg = ctx ? await ctx.json().then((j) => j?.error).catch(() => null) : null;
+    throw new Error(msg ?? error.message);
+  }
+  return data as T;
+}
+// After the console changes a route, its customers' ETAs are refreshed.
+const refreshEtas = (routeId: string) => { invoke('route-etas', { route_id: routeId, force: true }).catch((e) => console.warn('ETA refresh failed', e)); };
 export interface DriverLocation { driver_id: string; lat: number; lng: number; recorded_at: string }
 export interface Place { id: string; name: string; detail: string; lat: number; lng: number }
 export interface NewStop {
@@ -73,8 +89,8 @@ export const api = {
     if (error) throw new Error(error.message);
   },
   async routes(day: string): Promise<ConsoleRoute[]> {
-    if (OFFLINE_DEMO) return demo.routes.filter((r) => r.day === day);
-    const { data, error } = await supabase().from('routes').select('id,day,status,driver_id,stops(*)').eq('day', day);
+    if (OFFLINE_DEMO) return demo.withEtas(demo.routes.filter((r) => r.day === day));
+    const { data, error } = await supabase().from('routes').select('id,day,status,driver_id,drive_s,stops(*)').eq('day', day);
     if (error) throw new Error(error.message);
     return ((data ?? []) as ConsoleRoute[]).map((r) => ({ ...r, stops: [...r.stops].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)) }));
   },
@@ -103,16 +119,28 @@ export const api = {
       service_minutes: s.service_minutes, notes: s.notes || null,
     });
     if (error) throw new Error(error.message);
+    refreshEtas(route!.id);
   },
   async cancelStop(id: string) {
     if (OFFLINE_DEMO) { demo.cancel(id); return; }
-    const { error } = await supabase().from('stops').update({ status: 'cancelled' }).eq('id', id);
+    const { data, error } = await supabase().from('stops').update({ status: 'cancelled' }).eq('id', id).select('route_id').single();
     if (error) throw new Error(error.message);
+    if (data?.route_id) refreshEtas(data.route_id);
   },
   async reorder(routeId: string, ids: string[]) {
     if (OFFLINE_DEMO) { demo.reorder(routeId, ids); return; }
     const { error } = await supabase().rpc('reorder_route', { p_route: routeId, p_stop_ids: ids });
     if (error) throw new Error(error.message);
+    refreshEtas(routeId);
+  },
+  /** The best order for a route's stops left, next to the current order (RTE-4). */
+  async plan(route: ConsoleRoute, driverAt: DriverLocation | null): Promise<RoutePlan> {
+    if (OFFLINE_DEMO) return straightLinePlan(route.stops, route.day, driverAt);
+    return invoke<RoutePlan>('route-plan', { route_id: route.id });
+  },
+  async applyPlan(routeId: string, order: string[]) {
+    if (OFFLINE_DEMO) { demo.applyPlan(routeId, order); return; }
+    await invoke('route-plan', { route_id: routeId, apply: order });
   },
   async saveOrg(org: Org) {
     if (OFFLINE_DEMO) { demo.org = org; return; }
@@ -160,10 +188,11 @@ function demoStops(routeId: string, base: { lat: number; lng: number }, names: s
       status: i < done ? 'completed' : i === done ? 'en_route' : 'queued',
       customer_name: name, customer_phone: '+1401555' + String(1000 + i), sms_consent_at: i % 3 ? today.toISOString() : null,
       address: ['150 Union St', '9 Planet St', '77 Hope St', '18 Wickenden St', '42 Benefit St', '3 Arnold St', '110 Ives St', '27 Governor St'][i % 8],
-      lat: base.lat + Math.cos(i) * 0.01, lng: base.lng + Math.sin(i) * 0.012,
-      window_start: start.toISOString(), window_end: new Date(start.getTime() + 7200000).toISOString(), service_minutes: 20,
+      lat: base.lat + Math.cos(i * 2.4) * 0.01 * (1 + (i % 3) / 2), lng: base.lng + Math.sin(i * 2.4) * 0.012 * (1 + (i % 3) / 2), // scattered, so Optimize has work
+      window_start: i % 3 === 2 ? null : start.toISOString(), window_end: i % 3 === 2 ? null : new Date(start.getTime() + 3 * 3600000).toISOString(), service_minutes: 20,
       notes: ['New key', 'Leak repair', 'Thermostat', 'Drop-off', 'Water heater'][i % 5],
       marked_at: i < done ? start.toISOString() : null, mark_reason: null, marked_outside: false, tracking_token: `demo-${i}`,
+      eta: null, eta_approx: true, arrived_at: null,
     };
   });
 }
@@ -186,12 +215,13 @@ const demo = {
   },
   addStop(s: NewStop) {
     let r = this.routes.find((x) => x.driver_id === s.driver_id && x.day === s.day);
-    if (!r) { r = { id: `r${n++}`, day: s.day, status: 'planned', driver_id: s.driver_id, stops: [] }; this.routes.push(r); }
+    if (!r) { r = { id: `r${n++}`, day: s.day, status: 'planned', driver_id: s.driver_id, drive_s: null, stops: [] }; this.routes.push(r); }
     r.stops.push({
       id: `d${n++}`, route_id: r.id, position: r.stops.length + 1, status: 'scheduled', customer_name: s.customer_name || 'Customer',
       customer_phone: s.customer_phone ? e164(s.customer_phone) : null, sms_consent_at: s.consent ? new Date().toISOString() : null,
       address: s.address, lat: s.lat, lng: s.lng, window_start: s.window_start, window_end: s.window_end, service_minutes: s.service_minutes,
       notes: s.notes || null, marked_at: null, mark_reason: null, marked_outside: false, tracking_token: `demo-x${n}`,
+      eta: null, eta_approx: true, arrived_at: null,
     });
   },
   cancel(id: string) { for (const r of this.routes) { const s = r.stops.find((x) => x.id === id); if (s) s.status = 'cancelled'; } },
@@ -199,10 +229,30 @@ const demo = {
     const r = this.routes.find((x) => x.id === routeId); if (!r) return;
     r.stops.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)).forEach((s, i) => { s.position = i + 1; });
   },
+  applyPlan(routeId: string, order: string[]) {
+    const r = this.routes.find((x) => x.id === routeId); if (!r) return;
+    // Same rule as reorder_route: upcoming stops take the slots upcoming stops hold.
+    const movable = order.map((id) => r.stops.find((s) => s.id === id)).filter((s): s is ConsoleStop => !!s && (s.status === 'scheduled' || s.status === 'queued'));
+    const slots = movable.map((s) => s.position ?? 0).sort((a, b) => a - b);
+    movable.forEach((s, i) => { s.position = slots[i]; });
+    r.stops.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  },
+  /** Straight-line ETAs, recomputed whenever the console reads routes. */
+  withEtas(routes: ConsoleRoute[]) {
+    const locs = this.locations();
+    for (const r of routes) {
+      if (r.status === 'completed') continue;
+      const at = locs.find((l) => l.driver_id === r.driver_id) ?? null;
+      const { etas, drive_s } = straightLineEtas(r.stops, r.day, at);
+      r.drive_s = drive_s;
+      for (const s of r.stops) s.eta = etas[s.id] ?? null;
+    }
+    return routes;
+  },
 };
 demo.routes = [
-  { id: 'rb', day: dk(today), status: 'active', driver_id: 'bill', stops: demoStops('rb', { lat: 41.826, lng: -71.41 }, ['Michael B', 'Grace L', 'Dev P', 'Ana R', 'Sam K', 'Jo F', 'Max D', 'Nia H'], 3) },
-  { id: 'rj', day: dk(today), status: 'active', driver_id: 'jada', stops: demoStops('rj', { lat: 41.834, lng: -71.398 }, ['Lena O', 'Chris T', 'Priya N', 'Owen M', 'Rosa G'], 1) },
+  { id: 'rb', day: dk(today), status: 'active', driver_id: 'bill', drive_s: null, stops: demoStops('rb', { lat: 41.826, lng: -71.41 }, ['Michael B', 'Grace L', 'Dev P', 'Ana R', 'Sam K', 'Jo F', 'Max D', 'Nia H'], 3) },
+  { id: 'rj', day: dk(today), status: 'active', driver_id: 'jada', drive_s: null, stops: demoStops('rj', { lat: 41.834, lng: -71.398 }, ['Lena O', 'Chris T', 'Priya N', 'Owen M', 'Rosa G'], 1) },
 ];
 demo.routes[0].stops[1].marked_outside = true;
 demo.routes[0].stops[1].mark_reason = 'Marked away from the stop';

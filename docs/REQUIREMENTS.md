@@ -1,6 +1,6 @@
 # Arrively — Product Requirements
 
-> Status: Draft v0.12 · Owner: TBD · Last updated: 2026-10-10
+> Status: Draft v0.13 · Owner: TBD · Last updated: 2026-10-15
 
 ## 1. Overview
 
@@ -112,7 +112,7 @@ Both forms run on the same core platform. In v1, the standalone app is built ent
 | RTE-4 | Show the result before it's accepted: the ordered stop list, the route on a map, total drive time and distance, per-stop ETAs, time saved, and any windows that can't be met. The operator admin sees it in the console and the driver in the day view (DRV-3). | P0 |
 | RTE-5 | The operator admin can reorder stops by hand in the console, and the driver can in the app before starting the route. Once the route has started, the driver can skip or defer the current stop (DRV-17). All affected customers' positions and ETAs update. | P0 |
 | RTE-6 | **Re-optimize** when a stop is added, cancelled, or running late. The next stop the driver is heading to and any stop whose customer got an "on the way" message stay in place, so customers aren't told one thing and then shown another. | P1 |
-| RTE-7 | **MVP:** routes are capped at the Mapbox Optimization API's per-request limit (v1 allows 12 coordinates including start and end; confirm the current limit before building). The app says so clearly when a driver tries to add more. **P1:** a self-hosted optimizer (VROOM or OR-Tools on Mapbox Matrix travel times) raises the cap to at least 100 stops, returning in under 10 s for 50 stops. | P0 / P1 |
+| RTE-7 | **MVP:** Arrively sequences stops itself, using drive times from one Mapbox Matrix request. Matrix takes 25 coordinates on the `driving` profile (checked 2026-10), so one optimization covers up to 24 stops left plus the driver's position. The app says so clearly when a route has more. (Mapbox's Optimization API v1 was ruled out: it caps at 12 coordinates and ignores arrival windows; v2 handles windows but is a sign-up beta.) **P1:** split larger routes across several Matrix requests, or a self-hosted optimizer (VROOM or OR-Tools) on Matrix travel times, to reach at least 100 stops in under 10 s for 50. | P0 / P1 |
 | RTE-8 | Planned routes for a future day, so customers can be told their window ahead of time. | P1 |
 | RTE-9 | Driver breaks and shift end time as route constraints. | P2 |
 | RTE-10 | Distribute a pool of stops across several drivers (vehicle routing), with optional capacity limits. | P2 |
@@ -354,7 +354,7 @@ For companies with existing apps. **Not part of v1.** The core of this section s
 - PERF-2 (P0): Notification trigger to SMS hand-off to the provider at p95 ≤ 5 s.
 - PERF-3 (P0): Tracking page first meaningful paint ≤ 2 s on mid-range mobile over 4G. JS bundle ≤ 200 KB gzipped, excluding map tiles.
 - PERF-4 (P0): Internal API (public API from v2) p95 latency ≤ 200 ms for reads, ≤ 300 ms for writes, excluding external routing and optimization calls.
-- PERF-5: Route optimization returns in under 5 s for MVP routes within the Mapbox limit (P0). With the self-hosted optimizer, under 10 s for 50 stops and under 30 s for 100 stops (P1).
+- PERF-5: Route optimization returns in under 5 s for MVP routes of up to 24 stops (P0). With the self-hosted optimizer, under 10 s for 50 stops and under 30 s for 100 stops (P1).
 - PERF-6 (P1): Scale horizontally to 10k concurrently active routes, 200k active stops, and 20k location pings/s at launch, and to 10× without re-architecture.
 
 ### 7.6 Reliability
@@ -389,7 +389,7 @@ For companies with existing apps. **Not part of v1.** The core of this section s
 | Area | Candidates |
 |---|---|
 | Maps, geocoding, routing, traffic ETA | **Mapbox (decided)**: Maps SDKs and GL JS for the map, Search/Geocoding, Directions with traffic, and Matrix for travel times between stops. |
-| Route optimization | **Mapbox Optimization API** where its stop limits allow. The MVP caps routes at Mapbox's per-request limit (RTE-7). In P1, larger routes use a self-hosted solver (VROOM or Google OR-Tools) fed by Mapbox Matrix travel times. Confirm current limits and pricing before building. |
+| Route optimization | **Arrively's own solver on Mapbox Matrix drive times.** It respects arrival windows and time on site, and keeps the stop the driver is heading to first. Exact for up to 8 stops; local search above that (within 1% of optimal in tests). MVP cap: 24 stops left per optimization (RTE-7). In P1, larger routes use several Matrix requests or a self-hosted solver (VROOM or Google OR-Tools). ETAs use Mapbox Directions with traffic. |
 | In-app chat and voice | **Supabase Realtime** for chat; **LiveKit** (WebRTC, cloud or self-hosted) for voice, with CallKit and VoIP push on iOS. |
 | SMS | **TextMagic (decided)**: notification texts, inbound replies and STOP handling via its API and webhooks, and the one-time sign-in codes for drivers (through Supabase's custom SMS hook). US 10DLC registration through TextMagic. A second provider for failover is P1. |
 | Email | SendGrid, Postmark, Amazon SES |
@@ -435,12 +435,12 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - Cross-platform driver app with a swipeable day view (map and list), adding stops by address search, route optimization, address correction, one trip at a time, location check when marking, and background location
 - In-app chat and voice calls between customer and driver
 - Industry presets for both delivery/field services and rideshare-type pickups
-- Mapbox for maps, routing, ETAs, and optimization
+- Mapbox for maps, routing and traffic-aware ETAs, with Arrively's own window-aware stop ordering
 - The future public API, used only by Arrively's own apps for now (ARC-1 to ARC-5)
 
 **Phase 2 (P1)**
 - Routing:
-  - Self-hosted optimizer for routes over the Mapbox limit (100+ stops)
+  - Routes over 24 stops per optimization (100+ stops)
   - Automatic re-optimization when stops change
   - Pinned stops
   - Planned routes for future days
@@ -516,7 +516,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 | Driver app | React Native for the MVP while validating the product. Fully native (Swift/Kotlin) later. |
 | Backend and hosting | Supabase (Postgres, auth, realtime, edge functions). Customer page and console on Vercel. |
 | Default customer texts | Three per stop: scheduled (with link), You're next (with link), Arrived. |
-| Map and routing provider | Mapbox. MVP routes are capped at the Mapbox Optimization API's stop limit. A self-hosted optimizer for bigger routes comes in P1. |
+| Map and routing provider | Mapbox for maps, drive times (Matrix) and traffic ETAs (Directions). Arrively orders the stops itself so arrival windows are respected, which the Optimization API v1 can't do. One optimization covers up to 24 stops left; bigger routes come in P1. |
 | Driver at another stop | The marker just appears stopped, with no label. The stops-ahead count drops only when the driver leaves that stop and heads to the next. |
 | Customer–driver contact | In-app chat and in-app voice calls (LiveKit). No masked phone numbers. The tracking page also offers a button to call the business. |
 | Which vertical to set up first | Both. Each ships with its own preset, and onboarding asks which fits. |
