@@ -442,14 +442,21 @@ end $$;
 -- Set the order of a route's stops (after optimization or a manual reorder).
 create or replace function public.reorder_route(p_route uuid, p_stop_ids uuid[]) returns void
 language plpgsql security definer set search_path = public as $$
-declare v_route public.routes; i int;
+declare v_route public.routes; v_ids uuid[]; v_slots int[]; i int;
 begin
   select * into v_route from public.routes where id = p_route;
   if not found or not (v_route.driver_id = auth.uid() or (public.is_admin() and v_route.org_id = public.my_org())) then
     raise exception 'not your route' using errcode = '42501';
   end if;
-  for i in 1 .. coalesce(array_length(p_stop_ids, 1), 0) loop
-    update public.stops set position = i where id = p_stop_ids[i] and route_id = p_route;
+  -- Only upcoming stops move. They take the slots upcoming stops already hold,
+  -- so finished and in-progress stops keep their place.
+  select array_agg(x.id order by x.ord) into v_ids
+    from unnest(p_stop_ids) with ordinality as x(id, ord)
+    join public.stops s on s.id = x.id and s.route_id = p_route and s.status in ('scheduled', 'queued');
+  select array_agg(position order by position) into v_slots
+    from public.stops where id = any(v_ids);
+  for i in 1 .. coalesce(array_length(v_ids, 1), 0) loop
+    update public.stops set position = v_slots[i] where id = v_ids[i];
   end loop;
 end $$;
 

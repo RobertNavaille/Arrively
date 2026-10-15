@@ -136,3 +136,18 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d
 select pg_temp.expect(public.my_route_for(current_date + 3) = public.my_route_for(current_date + 3), 'my_route_for is stable');
 reset role;
 select 'ROUTE_FOR PASSED' as result;
+
+-- ---- Reorder keeps finished stops in place ---------------------------------
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d', false);
+select id as rt from routes where driver_id = auth.uid() and day = current_date \gset
+select public.start_route(:'rt');
+select public.start_trip((select id from stops where route_id = :'rt' order by position limit 1));
+select public.mark_stop((select id from stops where route_id = :'rt' order by position limit 1), 'completed', null, null, null);
+select id as first_done from stops where route_id = :'rt' and status = 'completed' \gset
+-- Ask for the reverse order; the finished stop must stay first.
+select public.reorder_route(:'rt', (select array_agg(id order by position desc) from stops where route_id = :'rt'));
+select pg_temp.expect((select id from stops where route_id = :'rt' order by position limit 1) = :'first_done', 'finished stop keeps its place on reorder');
+select pg_temp.expect((select count(distinct position) from stops where route_id = :'rt') = 6, 'positions stay unique after reorder');
+reset role;
+select 'REORDER PASSED' as result;
