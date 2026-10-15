@@ -17,6 +17,7 @@ export interface Stop {
   service_minutes: number;
   notes: string | null;
   eta: string | null;
+  eta_approx?: boolean;
   arrived_at: string | null;
   marked_at: string | null;
   departed_at: string | null;
@@ -26,6 +27,7 @@ export interface Route {
   id: string;
   day: string; // YYYY-MM-DD
   status: 'planned' | 'active' | 'completed';
+  drive_s?: number | null; // remaining drive time at the last ETA refresh
   stops: Stop[];
 }
 
