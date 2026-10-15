@@ -705,3 +705,17 @@ begin
   end loop;
   return v_route;
 end $$;
+
+-- A driver's route for a day, created if it doesn't exist yet (so a driver
+-- can add a stop to a day with nothing planned).
+create or replace function public.my_route_for(p_day date) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v uuid; v_org uuid := public.my_org();
+begin
+  if v_org is null then raise exception 'sign in first' using errcode = '42501'; end if;
+  select id into v from public.routes where driver_id = auth.uid() and day = p_day;
+  if v is null then
+    insert into public.routes (org_id, driver_id, day) values (v_org, auth.uid(), p_day) returning id into v;
+  end if;
+  return v;
+end $$;

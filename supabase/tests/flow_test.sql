@@ -131,3 +131,8 @@ select public.create_demo_day(41.82, -71.41, 6) is not null as made;
 select pg_temp.expect((select count(*) from stops s join routes r on r.id = s.route_id where r.day = current_date and r.driver_id = auth.uid()) = 6, 'demo day has 6 stops');
 reset role;
 select 'DEMO PASSED' as result;
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d', false);
+select pg_temp.expect(public.my_route_for(current_date + 3) = public.my_route_for(current_date + 3), 'my_route_for is stable');
+reset role;
+select 'ROUTE_FOR PASSED' as result;

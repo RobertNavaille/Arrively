@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Arrively Driver",
+    "slug": "arrively-driver",
+    "scheme": "arrively",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.arrively.driver",
+      "infoPlist": {
+        "UIBackgroundModes": ["location"],
+        "NSLocationWhenInUseUsageDescription": "Arrively shares your location with the customer you're driving to, so they know when you'll arrive.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Arrively keeps sharing your location while you're on a route, even when the app is in the background, so customers see an accurate ETA and stops are marked when you arrive and leave. Sharing stops when you end your shift."
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "isIosBackgroundLocationEnabled": true,
+          "locationAlwaysAndWhenInUsePermission": "Arrively keeps sharing your location while you're on a route, even when the app is in the background, so customers see an accurate ETA and stops are marked when you arrive and leave. Sharing stops when you end your shift.",
+          "locationWhenInUsePermission": "Arrively shares your location with the customer you're driving to, so they know when you'll arrive."
+        }
+      ],
+      [
+        "@rnmapbox/maps",
+        { "RNMapboxMapsImpl": "mapbox" }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
