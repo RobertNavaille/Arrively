@@ -4,3 +4,4 @@ Route optimization, live driver tracking, ETAs, and arrival notifications for cu
 
 - [Product requirements](docs/REQUIREMENTS.md)
 - [Design direction](docs/DESIGN.md)
+- [Build plan](docs/BUILD_PLAN.md)

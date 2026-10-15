@@ -1,6 +1,6 @@
 # Arrively — Product Requirements
 
-> Status: Draft v0.11 · Owner: TBD · Last updated: 2026-10-10
+> Status: Draft v0.12 · Owner: TBD · Last updated: 2026-10-10
 
 ## 1. Overview
 
@@ -48,7 +48,6 @@ Both forms run on the same core platform. In v1, the standalone app is built ent
 - Markets outside the United States.
 - Healthcare and medical transport (HIPAA) use cases.
 - Turn-by-turn navigation for drivers. The driver app shows the whole day and deep-links the current stop to Google Maps, Apple Maps, or Waze (section 5.2.1).
-- In-app customer–driver chat. Customers and drivers reach each other by masked phone call and text instead (CUS-10, DRV-11).
 
 ### 1.4 Priority key
 
@@ -147,7 +146,7 @@ Both forms run on the same core platform. In v1, the standalone app is built ent
 | ID | Requirement | Pri |
 |---|---|---|
 | NTF-1 | Channels: **SMS** (P0), **email** (P1), **web push** from the tracking page (P1), **native push** through the integrator's app (API customers, P1), **WhatsApp** (P2), **automated voice call** (P2, for accessibility). | — |
-| NTF-2 | Default triggers: stop scheduled (window and tracking link), route started ("There are 3 stops before yours"), **"N stops before you"** (configurable, default 2), **"You're next"** (sent when the driver leaves the previous stop, STP-10), **"X minutes away"** (configurable, default 10 min), **arriving now** (default 2 min), **driver has arrived**, significant delay, driver changed, stop cancelled or rescheduled. | P0 |
+| NTF-2 | Default texts (three per stop): **stop scheduled** (arrival window and tracking link), **"You're next"** (sent when the driver leaves the previous stop, STP-10, and includes the tracking link), and **driver has arrived**. Everything else (stops ahead, minutes away, delays) updates live on the tracking page. Operators can turn on extra texts: route started, "N stops before you", "X minutes away", arriving now, significant delay, driver changed, cancelled or rescheduled. | P0 |
 | NTF-3 | Operators can turn each trigger on or off, set thresholds, and choose channels per trigger. | P0 |
 | NTF-4 | Message templates with variables (`{{driver_first_name}}`, `{{vehicle}}`, `{{eta_minutes}}`, `{{arrival_window}}`, `{{stops_ahead}}`, `{{tracking_url}}`, `{{company_name}}`), with English and Spanish versions. | P0 |
 | NTF-5 | Each notification fires at most once per stop, guarded against ETA oscillation and route reordering. Notifications that are no longer relevant are suppressed (for example, skip "2 stops before you" if the customer is already next). | P0 |
@@ -156,18 +155,21 @@ Both forms run on the same core platform. In v1, the standalone app is built ent
 | NTF-8 | Handle opt-out and opt-in (STOP/HELP/START keywords for SMS) and honor them as the law requires. | P0 |
 | NTF-9 | Quiet hours and rate limits so a customer never gets spammed, even on long routes with many reorderings. | P1 |
 | NTF-10 | Standalone messages come from Arrively's numbers and email domain and always name the business ("Acme Plumbing via Arrively"). In v2, API customers can use their own sender numbers and email domain (API-11). | P0 / P2 |
-| NTF-11 | Two-way SMS. A customer reply (for example "Running 5 min late") is forwarded to the driver and the operator. | P2 |
+| NTF-11 | A customer who replies to a text gets an automatic answer pointing them to the chat on their tracking page, and the reply is shown to the driver and the operator. | P1 |
 
-### 4.6 Masked calling and texting
+### 4.6 In-app chat and calling
+
+Customers and drivers reach each other inside Arrively, not through phone numbers. This keeps both sides' numbers private and avoids per-text and per-minute phone costs. Masked phone numbers were dropped from v1.
 
 | ID | Requirement | Pri |
 |---|---|---|
-| MSK-1 | Each active stop gets a masked phone number. When the customer calls or texts it, the call or text goes to the driver, and the reverse. Neither sees the other's real number. | P0 |
-| MSK-2 | Masked numbers work only while the stop is active (route started through completed, plus a short grace period, default 30 min). After that, calls and texts get a short automated reply with the business's main number. | P0 |
-| MSK-3 | Reuse numbers from a per-tenant pool, so a few numbers can serve many stops at once. | P0 |
-| MSK-4 | Log call and text metadata (time, duration, direction) for each stop, but no call recordings and no message content in the console by default. | P0 |
-| MSK-5 | Masked texting falls under the same SMS consent and opt-out rules as notifications (CMP-1, CMP-2). | P0 |
-| MSK-6 | Through the API, integrators can request a masked number for a stop and use it in their own app. | P2 |
+| MSG-1 | **Chat** between the customer (on the tracking page) and the driver (in the app) for each active stop, delivered in real time. The operator admin can read the thread in the console. | P0 |
+| MSG-2 | Chat is open only while the stop is active (route started through completed, plus 30 min). After that the thread is read-only and the page shows the business's phone number. | P0 |
+| MSG-3 | The driver gets a push notification for each new customer message. The customer sees new messages while the page is open; if a driver message is unread for 2 minutes, one text with the link is sent (it counts toward the operator's text usage). | P0 |
+| CALL-1 | **In-app voice calls** over the internet (WebRTC, LiveKit). The customer taps Call on the tracking page and the driver's phone rings through the iOS call screen (CallKit), even in the background. | P0 |
+| CALL-2 | The driver can call the customer from the stop screen. It rings on the tracking page if it's open; otherwise the customer gets one text: "Bill tried to call you. Tap to call back." | P0 |
+| CALL-3 | Log call metadata (time, duration, who called) per stop. No recordings. | P0 |
+| CALL-4 | The tracking page always offers "Call Acme Plumbing", which dials the business's main number with the phone app. | P0 |
 
 ### 4.7 Customer tracking experience (web, no install)
 
@@ -182,7 +184,7 @@ Both forms run on the same core platform. In v1, the standalone app is built ent
 | CUS-7 | Live updates over WebSocket or SSE, with a polling fallback. The page recovers automatically after network loss. | P0 |
 | CUS-8 | Clear views for stale location, reassignment, delay, cancellation, and the "completed" state. | P0 |
 | CUS-9 | Standalone tracking pages are Arrively-branded and served from Arrively's domain. They show the business's name, optional logo, and support phone inside Arrively's design. No custom colors or domains. | P0 |
-| CUS-10 | Contact actions: call or text the driver through a **masked number**, so neither side sees the other's real phone number. The business's phone number is also shown. | P0 |
+| CUS-10 | Contact actions: chat with the driver and call the driver in the app (MSG-1, CALL-1), plus a button to call the business. No phone numbers are exchanged. | P0 |
 | CUS-11 | The customer can add access instructions ("Leave at side door", "Dog in yard") before the driver arrives. | P1 |
 | CUS-12 | Ask the customer to enable web push so they get later updates without SMS. | P1 |
 | CUS-13 | The customer can say they're not available, and the driver and operator are alerted to skip or reschedule. | P2 |
@@ -227,7 +229,7 @@ For operators without their own software.
 | DRV-10 | A lightweight "web driver link" fallback for occasional drivers, with documented limitations (foreground only). | P1 |
 | DRV-13 | **Fully native driver apps** (Swift for iOS, Kotlin for Android) replace the cross-platform app once the product is validated, for better battery use, location reliability, and platform features. The native driver SDKs (SDK-4) share this code. | P2 |
 | DRV-12 | Owner-operators can run their whole business from the driver app (add stops, edit customers, manage the route), with no console needed. | P1 |
-| DRV-11 | Call or text the customer through a masked number from the stop screen. | P0 |
+| DRV-11 | Chat with and call the customer in the app from the stop screen (MSG-1, CALL-2). | P0 |
 
 #### 5.2.1 Marking every stop
 
@@ -272,7 +274,7 @@ For companies with existing apps. **Not part of v1.** The core of this section s
 | ARC-2 | **Every app action is an API operation.** Anything a driver or operator can do in v1 (create a stop, optimize, mark a stop, skip with a reason, record consent) is a documented API operation, even before the documentation is public. | P0 |
 | ARC-3 | **Rules live on the server.** Stop states, departure detection, the one-trip-at-a-time rule, notification triggers, and privacy rules are enforced by the platform, not by the apps. API customers in v2 then get the same behavior automatically. | P0 |
 | ARC-4 | **Free to change during v1.** Until the public launch, the API can change without a deprecation policy, because Arrively's own apps are its only clients. Every change is recorded so the v2 docs and changelog start accurate. | P0 |
-| ARC-5 | **Measure the behavior being validated**: notification timing vs. actual arrival, ETA accuracy, how often drivers skip, defer, or mark from outside the stop, unmarked-stop reminders, tracking-link opens, and customer contact through masked numbers. | P0 |
+| ARC-5 | **Measure the behavior being validated**: notification timing vs. actual arrival, ETA accuracy, how often drivers skip, defer, or mark from outside the stop, unmarked-stop reminders, tracking-link opens, and customer use of chat and in-app calls. | P0 |
 | ARC-6 | **Release gate for v2.** The API and SDKs are released only when: (a) the stop state machine and notification rules have gone 8+ weeks without a breaking change, (b) the v1 success metrics (section 10) are being met, and (c) at least one pilot API customer has built on it in test mode. The exact thresholds can be set later. | P0 |
 
 ### 6.1 Public API
@@ -388,8 +390,8 @@ For companies with existing apps. **Not part of v1.** The core of this section s
 |---|---|
 | Maps, geocoding, routing, traffic ETA | **Mapbox (decided)**: Maps SDKs and GL JS for the map, Search/Geocoding, Directions with traffic, and Matrix for travel times between stops. |
 | Route optimization | **Mapbox Optimization API** where its stop limits allow. The MVP caps routes at Mapbox's per-request limit (RTE-7). In P1, larger routes use a self-hosted solver (VROOM or Google OR-Tools) fed by Mapbox Matrix travel times. Confirm current limits and pricing before building. |
-| Masked calling and texting | Twilio, Vonage, Telnyx, Bandwidth (number pools with call and SMS forwarding). |
-| SMS / voice / WhatsApp | Twilio, Vonage, Bird, Telnyx. Use at least two for failover. |
+| In-app chat and voice | **Supabase Realtime** for chat; **LiveKit** (WebRTC, cloud or self-hosted) for voice, with CallKit and VoIP push on iOS. |
+| SMS | **TextMagic (decided)**: notification texts, inbound replies and STOP handling via its API and webhooks, and the one-time sign-in codes for drivers (through Supabase's custom SMS hook). US 10DLC registration through TextMagic. A second provider for failover is P1. |
 | Email | SendGrid, Postmark, Amazon SES |
 | Push | APNs, FCM, Web Push (VAPID) |
 | Billing | Stripe Billing (subscriptions and metered usage) |
@@ -402,7 +404,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 
 - **Standalone**: tiers per active driver per month, with included SMS and overage billing. Free trial.
 - **API (v2)**: usage-based pricing per tracked stop, per optimization run, and per notification. Free developer tier in test mode.
-- Both products share metering. Requirement BIL-1 (P0): accurate per-tenant metering of stops, optimizations, location pings, routing calls, messages, and masked call minutes.
+- Both products share metering. Requirement BIL-1 (P0): accurate per-tenant metering of stops, optimizations, location pings, routing calls, text messages, and voice call minutes.
 
 ---
 
@@ -431,7 +433,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 - Arrively-branded customer tracking page with live driver location, stops ahead, and privacy rules
 - Operator console (manual and CSV stops, assigning to drivers, live map, drivers, notification settings, billing)
 - Cross-platform driver app with a swipeable day view (map and list), adding stops by address search, route optimization, address correction, one trip at a time, location check when marking, and background location
-- Masked calling and texting between customer and driver
+- In-app chat and voice calls between customer and driver
 - Industry presets for both delivery/field services and rideshare-type pickups
 - Mapbox for maps, routing, ETAs, and optimization
 - The future public API, used only by Arrively's own apps for now (ARC-1 to ARC-5)
@@ -481,7 +483,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 **Phase 3 (P2)**
 - API extras:
   - Native customer and driver SDKs
-  - Masked numbers through the API
+  - Chat and calls through the API
   - Notifications-only mode
   - Bring-your-own provider credentials
   - Custom domains
@@ -512,9 +514,11 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 | Stop count shown to customers | Only the stops ahead of them. Never the route total. |
 | Map before the customer is next | Show the driver's live location and the stops ahead. Never show where other stops are. |
 | Driver app | React Native for the MVP while validating the product. Fully native (Swift/Kotlin) later. |
+| Backend and hosting | Supabase (Postgres, auth, realtime, edge functions). Customer page and console on Vercel. |
+| Default customer texts | Three per stop: scheduled (with link), You're next (with link), Arrived. |
 | Map and routing provider | Mapbox. MVP routes are capped at the Mapbox Optimization API's stop limit. A self-hosted optimizer for bigger routes comes in P1. |
 | Driver at another stop | The marker just appears stopped, with no label. The stops-ahead count drops only when the driver leaves that stop and heads to the next. |
-| Customer–driver contact | Masked call and text to the driver in the MVP. |
+| Customer–driver contact | In-app chat and in-app voice calls (LiveKit). No masked phone numbers. The tracking page also offers a button to call the business. |
 | Which vertical to set up first | Both. Each ships with its own preset, and onboarding asks which fits. |
 | Product order | v1 is the standalone app only. It runs on the same API that becomes public in v2, and is used to validate UX and behavior before the API and SDKs launch. API extras follow in Phase 3. |
 | Standalone branding | One Arrively-branded, multi-tenant product. Not white-label, no per-business instances. Custom branding is for API customers only, from v2. |
