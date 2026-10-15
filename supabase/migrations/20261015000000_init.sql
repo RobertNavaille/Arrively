@@ -55,6 +55,8 @@ create table public.routes (
   day date not null,
   status public.route_status not null default 'planned',
   optimized_at timestamptz,
+  etas_at timestamptz,               -- last ETA refresh (throttles routing calls, ETA-2)
+  drive_s int,                       -- remaining drive time at the last refresh
   started_at timestamptz,
   completed_at timestamptz,
   created_at timestamptz not null default now(),
@@ -81,6 +83,7 @@ create table public.stops (
   notes text,
   tracking_token text not null unique default encode(gen_random_bytes(18), 'base64'),
   eta timestamptz,
+  eta_approx boolean not null default false, -- straight-line estimate, routing was unavailable (ETA-8)
   trip_started_at timestamptz,
   arrived_at timestamptz,
   marked_at timestamptz,
@@ -460,6 +463,23 @@ begin
   end loop;
 end $$;
 
+-- Write ETAs computed by the route-etas edge function (service role only).
+-- p_etas maps stop id to time. Moves under a minute are ignored so the
+-- customer's ETA doesn't flicker (ETA-3).
+create or replace function public.set_etas(p_route uuid, p_etas jsonb, p_approx boolean, p_drive_s int)
+returns int language plpgsql security definer set search_path = public as $$
+declare v_n int;
+begin
+  update public.stops s set eta = (e.value #>> '{}')::timestamptz, eta_approx = p_approx
+    from jsonb_each(p_etas) e
+   where s.id = e.key::uuid and s.route_id = p_route
+     and (s.eta is null or s.eta_approx <> p_approx
+          or abs(extract(epoch from (e.value #>> '{}')::timestamptz - s.eta)) >= 60);
+  get diagnostics v_n = row_count;
+  update public.routes set etas_at = now(), drive_s = p_drive_s where id = p_route;
+  return v_n;
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- Location: the app sends pings; arrival and departure are detected here.
 -- ---------------------------------------------------------------------------
@@ -546,7 +566,7 @@ begin
     'business', jsonb_build_object('name', o.name, 'phone', o.phone, 'logo_url', o.logo_url),
     'stop', jsonb_build_object(
       'status', s.status, 'address', s.address, 'lat', s.lat, 'lng', s.lng,
-      'window_start', s.window_start, 'window_end', s.window_end, 'eta', s.eta,
+      'window_start', s.window_start, 'window_end', s.window_end, 'eta', s.eta, 'eta_approx', s.eta_approx,
       'arrived_at', s.arrived_at, 'marked_at', s.marked_at, 'notes', s.notes),
     'stops_ahead', case when s.status in ('queued') then v_ahead else 0 end,
     'driver', case when d.id is null then null else jsonb_build_object(
@@ -643,6 +663,8 @@ grant execute on function public.get_tracking(text), public.customer_messages(te
   public.customer_send_message(text, text) to anon, authenticated;
 revoke execute on function public.queue_text(public.stops, public.notification_kind) from public, anon, authenticated;
 revoke execute on function public.log_event(uuid, text, jsonb) from public, anon, authenticated;
+revoke execute on function public.set_etas(uuid, jsonb, boolean, int) from public, anon, authenticated;
+grant execute on function public.set_etas(uuid, jsonb, boolean, int) to service_role;
 revoke execute on function public.assert_driver_of(uuid) from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------

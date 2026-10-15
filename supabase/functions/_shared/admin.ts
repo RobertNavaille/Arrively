@@ -13,3 +13,14 @@ export function json(data: unknown, status = 200) {
     headers: { "Content-Type": "application/json" },
   });
 }
+
+// For functions the web console calls from the browser.
+export const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+export function withCors(res: Response) {
+  for (const [k, v] of Object.entries(cors)) res.headers.set(k, v);
+  return res;
+}

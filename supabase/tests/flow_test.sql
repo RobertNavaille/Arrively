@@ -151,3 +151,22 @@ select pg_temp.expect((select id from stops where route_id = :'rt' order by posi
 select pg_temp.expect((select count(distinct position) from stops where route_id = :'rt') = 6, 'positions stay unique after reorder');
 reset role;
 select 'REORDER PASSED' as result;
+
+-- ---- ETAs: service role only, small moves ignored -------------------------
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d', false);
+do $$ begin
+  perform public.set_etas(gen_random_uuid(), '{}'::jsonb, false, 0);
+  raise exception 'FAILED: drivers must not write ETAs directly';
+exception when insufficient_privilege then raise notice 'ok: set_etas is service-only';
+end $$;
+reset role;
+select id as rt2 from routes where driver_id = '00000000-0000-0000-0000-00000000000d' and day = current_date \gset
+select id as s_eta from stops where route_id = :'rt2' and status = 'queued' order by position limit 1 \gset
+set role service_role;
+select public.set_etas(:'rt2', jsonb_build_object(:'s_eta', now() + interval '20 minutes'), false, 1200) = 1 as first_write;
+select pg_temp.expect(public.set_etas(:'rt2', jsonb_build_object(:'s_eta', now() + interval '20 minutes 30 seconds'), false, 1200) = 0, 'ETA moves under a minute are ignored');
+select pg_temp.expect(public.set_etas(:'rt2', jsonb_build_object(:'s_eta', now() + interval '25 minutes'), false, 1500) = 1, 'bigger ETA moves are written');
+reset role;
+select pg_temp.expect((select (public.get_tracking(tracking_token) -> 'stop' ->> 'eta') is not null from stops where id = :'s_eta'), 'tracking shows the ETA');
+select 'ETAS PASSED' as result;
