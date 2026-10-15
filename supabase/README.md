@@ -5,7 +5,7 @@
 1. Create a Supabase project. Then link and push the schema:
    ```sh
    npx supabase@2 login
-   npx supabase@2 link --project-ref <project-ref>
+   npx supabase@2 link --project-ref plbdslinaqlnuacfrcds
    npx supabase@2 db push
    ```
 2. Set the tracking page address used in texts. Run this in the SQL editor:
@@ -34,7 +34,7 @@
    - Point it at the `notify` function, with the header `x-arrively-secret: <NOTIFY_SECRET>`.
    - Optional: add a cron job (Integrations → Cron) that calls `notify` every minute with the same header, so failed sends are retried.
 6. **TextMagic:**
-   - Set both the inbound message URL and the delivery receipt URL to `https://<project-ref>.supabase.co/functions/v1/sms-inbound?secret=<SMS_WEBHOOK_SECRET>`.
+   - Set both the inbound message URL and the delivery receipt URL to `https://plbdslinaqlnuacfrcds.supabase.co/functions/v1/sms-inbound?secret=<SMS_WEBHOOK_SECRET>`.
    - Register for US 10DLC through TextMagic before texting real customers.
 7. **Realtime:** enable Realtime on `driver_locations`, `stops` and `messages`.
 8. **Create the first business and invite yourself.** Use the SQL editor:

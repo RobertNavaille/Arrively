@@ -2,7 +2,9 @@
 -- Business rules (stop states, one trip at a time, arrival/departure detection,
 -- which texts go out) live here so every client gets the same behavior (ARC-3).
 
-create extension if not exists pgcrypto;
+-- Supabase keeps extensions in their own schema; refer to them by name there.
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
 
 -- ---------------------------------------------------------------------------
 -- Types
@@ -81,7 +83,7 @@ create table public.stops (
   window_end timestamptz,
   service_minutes int not null default 20,
   notes text,
-  tracking_token text not null unique default encode(gen_random_bytes(18), 'base64'),
+  tracking_token text not null unique default encode(extensions.gen_random_bytes(18), 'base64'),
   eta timestamptz,
   eta_approx boolean not null default false, -- straight-line estimate, routing was unavailable (ETA-8)
   trip_started_at timestamptz,
@@ -100,7 +102,7 @@ create index on public.stops (org_id, status);
 
 -- Tracking tokens must be URL-safe.
 create or replace function public.url_token() returns text language sql volatile as $$
-  select translate(encode(gen_random_bytes(18), 'base64'), '+/=', '-_')
+  select translate(encode(extensions.gen_random_bytes(18), 'base64'), '+/=', '-_')
 $$;
 alter table public.stops alter column tracking_token set default public.url_token();
 
