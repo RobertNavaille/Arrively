@@ -1,0 +1,84 @@
+import Mapbox from '@rnmapbox/maps';
+import { useMemo } from 'react';
+import { Text, View } from 'react-native';
+import { MAPBOX_TOKEN } from '../lib/config';
+import { color, font, shadow } from './theme';
+import type { RouteMapProps } from './RouteMap.types';
+
+if (MAPBOX_TOKEN) Mapbox.setAccessToken(MAPBOX_TOKEN);
+
+// Mapbox map in the Arrively style: light base map, blue route and driver,
+// numbered stops, a dark pin for a single destination.
+export function RouteMap({ height, stops = [], pin, pinLabel, driver, line }: RouteMapProps) {
+  const points = useMemo(() => {
+    const all = [...stops, ...(pin ? [pin] : []), ...(driver ? [driver] : [])];
+    return all.length ? all : [{ lat: 41.824, lng: -71.4128 }];
+  }, [stops, pin, driver]);
+
+  const bounds = useMemo(() => {
+    const lats = points.map((p) => p.lat);
+    const lngs = points.map((p) => p.lng);
+    return {
+      ne: [Math.max(...lngs), Math.max(...lats)] as [number, number],
+      sw: [Math.min(...lngs), Math.min(...lats)] as [number, number],
+    };
+  }, [points]);
+
+  const lineShape = line && line.length > 1 ? {
+    type: 'Feature' as const, properties: {},
+    geometry: { type: 'LineString' as const, coordinates: line.map((p) => [p.lng, p.lat]) },
+  } : null;
+
+  return (
+    <View style={{ height, backgroundColor: color.mapGround, overflow: 'hidden' }}>
+      <Mapbox.MapView style={{ flex: 1 }} styleURL={Mapbox.StyleURL.Light} scaleBarEnabled={false}
+        logoPosition={{ bottom: 6, left: 6 }} attributionPosition={{ bottom: 6, right: 6 }}>
+        <Mapbox.Camera
+          bounds={{ ...bounds, paddingTop: 48, paddingBottom: 32, paddingLeft: 32, paddingRight: 32 }}
+          maxZoomLevel={16}
+          animationDuration={600}
+        />
+        {lineShape ? (
+          <Mapbox.ShapeSource id="route" shape={lineShape}>
+            <Mapbox.LineLayer id="route-casing" style={{ lineColor: color.surface, lineWidth: 8, lineCap: 'round', lineJoin: 'round' }} />
+            <Mapbox.LineLayer id="route-line" aboveLayerID="route-casing" style={{ lineColor: color.brand, lineWidth: 4.5, lineCap: 'round', lineJoin: 'round' }} />
+          </Mapbox.ShapeSource>
+        ) : null}
+        {stops.map((s) => (
+          <Mapbox.MarkerView key={s.id} coordinate={[s.lng, s.lat]} allowOverlap>
+            <View style={{
+              width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5,
+              backgroundColor: s.state === 'next' ? color.action : s.state === 'done' ? color.inkMuted : color.surface,
+              borderColor: s.state === 'upcoming' ? color.action : color.surface,
+            }}>
+              <Text style={{ fontFamily: font.semibold, fontSize: 11, color: s.state === 'upcoming' ? color.actionInk : color.onAction }}>{s.n}</Text>
+            </View>
+          </Mapbox.MarkerView>
+        ))}
+        {pin ? (
+          <Mapbox.MarkerView coordinate={[pin.lng, pin.lat]} anchor={{ x: 0.5, y: 1 }} allowOverlap>
+            <View style={{ alignItems: 'center' }}>
+              {pinLabel ? (
+                <View style={[{ backgroundColor: color.mapLabel, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, marginBottom: 4 }, shadow.float]}>
+                  <Text style={{ color: color.onAction, fontFamily: font.medium, fontSize: 11 }}>{pinLabel}</Text>
+                </View>
+              ) : null}
+              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: color.mapLabel, borderWidth: 2, borderColor: color.surface, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color.surface }} />
+              </View>
+            </View>
+          </Mapbox.MarkerView>
+        ) : null}
+        {driver ? (
+          <Mapbox.MarkerView coordinate={[driver.lng, driver.lat]} allowOverlap>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,157,254,0.18)', alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ width: 13, height: 13, borderRadius: 6.5, backgroundColor: color.brand }} />
+              </View>
+            </View>
+          </Mapbox.MarkerView>
+        ) : null}
+      </Mapbox.MapView>
+    </View>
+  );
+}
