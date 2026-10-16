@@ -1,0 +1,19 @@
+# Supabase CLI settings for deploying the edge functions.
+project_id = "plbdslinaqlnuacfrcds"
+
+# Called by Supabase webhooks/hooks and TextMagic with their own secrets, not by signed-in users.
+[functions.notify]
+verify_jwt = false
+
+[functions.sms-inbound]
+verify_jwt = false
+
+[functions.send-sms-hook]
+verify_jwt = false
+
+# Called by signed-in drivers and admins.
+[functions.route-plan]
+verify_jwt = true
+
+[functions.route-etas]
+verify_jwt = true

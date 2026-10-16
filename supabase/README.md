@@ -8,6 +8,10 @@
    npx supabase@2 link --project-ref plbdslinaqlnuacfrcds
    npx supabase@2 db push
    ```
+   If you created the schema by pasting `migrations/20261015000000_init.sql` into the SQL editor instead, don't run `db push`; mark it as applied so later migrations start from there:
+   ```sh
+   npx supabase@2 migration repair --status applied 20261015000000
+   ```
 2. Set the tracking page address used in texts. Run this in the SQL editor:
    ```sql
    alter database postgres set app.tracking_base_url = 'https://<your-vercel-app>/t/';
