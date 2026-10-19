@@ -18,4 +18,5 @@ The owner asked to go one step at a time, in plain language.
 ## After Supabase
 
 - [x] Console and tracking page on Vercel: https://arrively-cyan.vercel.app (Grass Geeks team, project `arrively`, root `apps/web`, deploys from `main`). `TRACKING_BASE_URL` function secret and `app_settings.tracking_base_url` set to `https://arrively-cyan.vercel.app/t/`.
+- [ ] Driver app as a website on Vercel (second project, root `apps/driver`, settings in `apps/driver/vercel.json`, env EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY / EXPO_PUBLIC_MAPBOX_TOKEN). Owner's Apple Developer account has issues, so TestFlight waits.
 - [ ] Driver app on TestFlight.
