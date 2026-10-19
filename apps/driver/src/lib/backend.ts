@@ -176,19 +176,16 @@ const JOBS = ['New key', 'Leak repair', 'Thermostat', 'Drop-off', 'Water heater'
 function makeDay(day: Date, center: LatLng, count: number, done: boolean): Route {
   const id = `r${seq++}`;
   const stops: Stop[] = Array.from({ length: count }, (_, i) => {
-    // Zig-zag around town so "Optimize order" has something to fix; every
-    // third stop can be done any time.
+    // Zig-zag around town so "Optimize order" has something to fix.
     const k = (i * 3) % count;
     const a = (k / count) * Math.PI * 2;
     const km = 0.8 + k * 0.35;
-    const anyTime = i % 3 === 2;
     const start = new Date(day); start.setHours(9 + i, 0, 0, 0);
-    const end = new Date(start); end.setHours(start.getHours() + 3);
     return {
       id: `s${seq++}`, route_id: id, position: i + 1, status: done ? 'completed' : 'scheduled',
       customer_name: NAMES[i % NAMES.length], customer_phone: null, address: STREETS[i % STREETS.length],
       lat: center.lat + (km / 111) * Math.cos(a), lng: center.lng + (km / (111 * Math.cos((center.lat * Math.PI) / 180))) * Math.sin(a),
-      window_start: anyTime ? null : start.toISOString(), window_end: anyTime ? null : end.toISOString(), service_minutes: 20,
+      window_start: null, window_end: null, service_minutes: 20,
       notes: JOBS[i % JOBS.length], eta: null, arrived_at: null,
       marked_at: done ? start.toISOString() : null, departed_at: done ? start.toISOString() : null,
     };

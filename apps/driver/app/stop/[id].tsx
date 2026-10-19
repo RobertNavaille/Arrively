@@ -101,7 +101,7 @@ export default function StopScreen() {
                 <Button variant="text" size="sm" label="Wrong address? Edit it" onPress={() => router.push(`/edit/${stop.id}`)} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
               </View>
               <View style={{ gap: space[3] }}>
-                <DetailRow icon="clock" primary={fmtWindow(stop)} secondary="Window promised to the customer" />
+                {stop.window_start ? <DetailRow icon="clock" primary={fmtWindow(stop)} secondary="Window promised to the customer" /> : null}
                 {stop.notes ? <DetailRow icon="notes" primary={stop.notes} /> : null}
               </View>
             </View>

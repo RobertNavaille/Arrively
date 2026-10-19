@@ -175,3 +175,12 @@ select 'ETAS PASSED' as result;
 insert into public.app_settings values ('tracking_base_url', 'https://example.vercel.app/t/');
 select pg_temp.expect(public.tracking_url('abc') = 'https://example.vercel.app/t/abc', 'tracking links use app_settings');
 select 'SETTINGS PASSED' as result;
+
+-- ---- Scheduled text names the day when there's no window ------------------
+select id as org1 from orgs order by created_at limit 1 \gset
+select id as drv from profiles where org_id = :'org1' order by created_at limit 1 \gset
+insert into routes (org_id, driver_id, day) values (:'org1', :'drv', current_date + 3) returning id as fut \gset
+insert into stops (org_id, route_id, position, customer_name, customer_phone, sms_consent_at, address, lat, lng)
+values (:'org1', :'fut', 1, 'Future Customer', '+14015557777', now(), '1 Future St', 41.8, -71.4) returning id as fs \gset
+select pg_temp.expect((select body like '%scheduled for ' || to_char(current_date + 3, 'FMDay, Mon FMDD') || '.%' from notifications where stop_id = :'fs' and kind = 'scheduled'), 'scheduled text names the future day');
+select 'SCHEDULED DAY PASSED' as result;

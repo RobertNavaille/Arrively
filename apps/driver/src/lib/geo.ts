@@ -41,7 +41,7 @@ export function fmtTime(d: Date | string | null | undefined): string {
 }
 
 export function fmtWindow(s: Pick<Stop, 'window_start' | 'window_end'>): string {
-  if (!s.window_start) return 'Any time';
+  if (!s.window_start) return '';
   if (!s.window_end) return fmtTime(s.window_start);
   return `${fmtTime(s.window_start)} – ${fmtTime(s.window_end)}`;
 }

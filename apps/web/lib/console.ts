@@ -31,7 +31,7 @@ export interface DriverLocation { driver_id: string; lat: number; lng: number; r
 export interface Place { id: string; name: string; detail: string; lat: number; lng: number }
 export interface NewStop {
   day: string; driver_id: string; customer_name: string; customer_phone: string; address: string; lat: number; lng: number;
-  window_start: string | null; window_end: string | null; service_minutes: number; notes: string; consent: boolean;
+  notes: string; consent: boolean;
 }
 
 export function e164(input: string): string {
@@ -115,8 +115,7 @@ export const api = {
       customer_name: s.customer_name || 'Customer', customer_phone: s.customer_phone ? e164(s.customer_phone) : null,
       sms_consent_at: s.consent && s.customer_phone ? new Date().toISOString() : null,
       sms_consent_source: s.consent ? 'console' : null,
-      address: s.address, lat: s.lat, lng: s.lng, window_start: s.window_start, window_end: s.window_end,
-      service_minutes: s.service_minutes, notes: s.notes || null,
+      address: s.address, lat: s.lat, lng: s.lng, notes: s.notes || null,
     });
     if (error) throw new Error(error.message);
     refreshEtas(route!.id);
@@ -154,9 +153,11 @@ export const api = {
 export async function searchAddress(q: string): Promise<Place[]> {
   if (!q.trim()) return [];
   if (!MAPBOX_TOKEN) {
+    if (!OFFLINE_DEMO) throw new Error('Address search needs NEXT_PUBLIC_MAPBOX_TOKEN.');
     return SAMPLE_PLACES.filter((p) => `${p.name} ${p.detail}`.toLowerCase().includes(q.toLowerCase())).slice(0, 5);
   }
-  const params = new URLSearchParams({ q, access_token: MAPBOX_TOKEN, autocomplete: 'true', country: 'us', limit: '5', types: 'address,poi' });
+  // Geocoding v6 has no POIs ("poi" makes it reject the request); bias results toward the user.
+  const params = new URLSearchParams({ q, access_token: MAPBOX_TOKEN, autocomplete: 'true', country: 'us', limit: '5', types: 'address', proximity: 'ip' });
   const res = await fetch(`https://api.mapbox.com/search/geocode/v6/forward?${params}`);
   if (!res.ok) throw new Error(`Address search failed (${res.status})`);
   const json = await res.json();
@@ -189,7 +190,7 @@ function demoStops(routeId: string, base: { lat: number; lng: number }, names: s
       customer_name: name, customer_phone: '+1401555' + String(1000 + i), sms_consent_at: i % 3 ? today.toISOString() : null,
       address: ['150 Union St', '9 Planet St', '77 Hope St', '18 Wickenden St', '42 Benefit St', '3 Arnold St', '110 Ives St', '27 Governor St'][i % 8],
       lat: base.lat + Math.cos(i * 2.4) * 0.01 * (1 + (i % 3) / 2), lng: base.lng + Math.sin(i * 2.4) * 0.012 * (1 + (i % 3) / 2), // scattered, so Optimize has work
-      window_start: i % 3 === 2 ? null : start.toISOString(), window_end: i % 3 === 2 ? null : new Date(start.getTime() + 3 * 3600000).toISOString(), service_minutes: 20,
+      window_start: null, window_end: null, service_minutes: 20,
       notes: ['New key', 'Leak repair', 'Thermostat', 'Drop-off', 'Water heater'][i % 5],
       marked_at: i < done ? start.toISOString() : null, mark_reason: null, marked_outside: false, tracking_token: `demo-${i}`,
       eta: null, eta_approx: true, arrived_at: null,
@@ -219,7 +220,7 @@ const demo = {
     r.stops.push({
       id: `d${n++}`, route_id: r.id, position: r.stops.length + 1, status: 'scheduled', customer_name: s.customer_name || 'Customer',
       customer_phone: s.customer_phone ? e164(s.customer_phone) : null, sms_consent_at: s.consent ? new Date().toISOString() : null,
-      address: s.address, lat: s.lat, lng: s.lng, window_start: s.window_start, window_end: s.window_end, service_minutes: s.service_minutes,
+      address: s.address, lat: s.lat, lng: s.lng, window_start: null, window_end: null, service_minutes: 20,
       notes: s.notes || null, marked_at: null, mark_reason: null, marked_outside: false, tracking_token: `demo-x${n}`,
       eta: null, eta_approx: true, arrived_at: null,
     });

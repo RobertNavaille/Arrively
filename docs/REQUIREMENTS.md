@@ -1,6 +1,6 @@
 # Arrively — Product Requirements
 
-> Status: Draft v0.13 · Owner: TBD · Last updated: 2026-10-15
+> Status: Draft v0.14 · Owner: TBD · Last updated: 2026-10-19
 
 ## 1. Overview
 
@@ -91,7 +91,7 @@ Both forms run on the same core platform. In v1, the standalone app is built ent
 
 | ID | Requirement | Pri |
 |---|---|---|
-| STP-1 | Create, read, update, and cancel stops with customer contact info, address or coordinates, optional exact time or arrival window, estimated time on site, notes, and tenant-defined metadata or external ID. | P0 |
+| STP-1 | Create, read, update, and cancel stops with customer contact info, address or coordinates, notes, and tenant-defined metadata or external ID. Arrival windows and time on site are **not** entered in v1 (owner decision, 2026-10-19); ETAs assume 20 minutes per stop. | P0 |
 | STP-2 | Assign, reassign, or unassign a stop to a driver or route. Reassignment updates the customer's view and notifies the customer. | P0 |
 | STP-3 | Enforce the stop state machine. Reject or flag invalid transitions. | P0 |
 | STP-4 | Detect `arrived` automatically with a geofence around the stop (configurable radius, default 250 ft, plus a dwell time). Drivers can also mark it manually. | P0 |
@@ -523,6 +523,7 @@ Requirement DEP-1 (P0): Wrap every provider behind an internal adapter so it can
 | Product order | v1 is the standalone app only. It runs on the same API that becomes public in v2, and is used to validate UX and behavior before the API and SDKs launch. API extras follow in Phase 3. |
 | Standalone branding | One Arrively-branded, multi-tenant product. Not white-label, no per-business instances. Custom branding is for API customers only, from v2. |
 | Who optimizes routes | The driver runs optimization and can reorder before starting. The operator admin adds, assigns, and can reorder stops. No dispatcher role for now. |
+| Arrival windows and time on site | Not part of v1: the stop form and CSV import don't ask for them, and customers are told the day, not a window. ETAs assume 20 minutes on site per stop. The data model and the route solver still support windows if they come back. |
 | Driver navigation | Deep-link to Google Maps, Apple Maps, or Waze for the current stop. The driver sees the whole day (swipeable day view with map and list) and can correct addresses. The earlier one-address-at-a-time rule was dropped; reliable marking now comes from one trip at a time (DRV-15). |
 
 ## 13. Open questions

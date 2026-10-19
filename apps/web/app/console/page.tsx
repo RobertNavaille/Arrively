@@ -169,10 +169,15 @@ function Live({ routes, drivers, locations }: { routes: ConsoleRoute[]; drivers:
 function AddressInput({ value, onPick }: { value: string; onPick: (p: Place) => void }) {
   const [q, setQ] = useState(value);
   const [results, setResults] = useState<Place[]>([]);
+  const [err, setErr] = useState<string | null>(null);
   useEffect(() => { setQ(value); }, [value]);
   useEffect(() => {
-    if (!q.trim() || q === value) { setResults([]); return; }
-    const t = setTimeout(() => { searchAddress(q).then(setResults).catch(() => setResults([])); }, 250);
+    if (!q.trim() || q === value) { setResults([]); setErr(null); return; }
+    const t = setTimeout(() => {
+      searchAddress(q)
+        .then((r) => { setResults(r); setErr(r.length ? null : 'No matching addresses'); })
+        .catch((e) => { setResults([]); setErr(e instanceof Error ? e.message : String(e)); });
+    }, 250);
     return () => clearTimeout(t);
   }, [q, value]);
   return (
@@ -188,6 +193,7 @@ function AddressInput({ value, onPick }: { value: string; onPick: (p: Place) => 
           ))}
         </div>
       ) : null}
+      {err ? <p className="caption" style={{ margin: '4px 0 0', color: 'var(--ink-muted)' }}>{err}</p> : null}
     </div>
   );
 }
@@ -209,11 +215,10 @@ function Stops({ org, day, setDay, routes, drivers, locations, reload }: {
     catch (x) { setPlans((p) => ({ ...p, [r.id]: { error: x instanceof Error ? x.message : String(x) } })); }
   }
   const drivable = drivers.filter((d) => d.role === 'driver' || d.role === 'admin');
-  const blank = { name: '', phone: '', place: null as Place | null, from: '', to: '', minutes: '20', notes: '', driver: drivable[0]?.id ?? '', consent: true };
+  const blank = { name: '', phone: '', place: null as Place | null, notes: '', driver: drivable[0]?.id ?? '', consent: true };
   const [f, setF] = useState(blank);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const toIso = (t: string) => (t ? new Date(`${day}T${t}`).toISOString() : null);
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -223,8 +228,7 @@ function Stops({ org, day, setDay, routes, drivers, locations, reload }: {
     try {
       const s: NewStop = {
         day, driver_id: f.driver, customer_name: f.name, customer_phone: f.phone, address: `${f.place.name}, ${f.place.detail}`,
-        lat: f.place.lat, lng: f.place.lng, window_start: toIso(f.from), window_end: toIso(f.to),
-        service_minutes: Number(f.minutes) || 20, notes: f.notes, consent: f.consent,
+        lat: f.place.lat, lng: f.place.lng, notes: f.notes, consent: f.consent,
       };
       await api.addStop(org.id, s);
       setF({ ...blank, driver: f.driver });
@@ -250,8 +254,7 @@ function Stops({ org, day, setDay, routes, drivers, locations, reload }: {
         const driver = drivers.find((d) => d.name.toLowerCase() === at(row, 'driver').toLowerCase())?.id ?? f.driver;
         await api.addStop(org.id, {
           day, driver_id: driver, customer_name: at(row, 'name'), customer_phone: at(row, 'phone'), address: `${p.name}, ${p.detail}`,
-          lat: p.lat, lng: p.lng, window_start: toIso(at(row, 'from')), window_end: toIso(at(row, 'to')),
-          service_minutes: Number(at(row, 'minutes')) || 20, notes: at(row, 'notes'), consent: at(row, 'consent').toLowerCase() === 'yes',
+          lat: p.lat, lng: p.lng, notes: at(row, 'notes'), consent: at(row, 'consent').toLowerCase() === 'yes',
         });
         ok++;
       } catch (x) { failed.push(`${addr || '(blank)'}: ${x instanceof Error ? x.message : x}`); }
@@ -284,11 +287,6 @@ function Stops({ org, day, setDay, routes, drivers, locations, reload }: {
           <label className="field"><span className="label">Mobile number</span><input className="input" type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="(401) 555-0100" /></label>
         </div>
         <div className="field"><span className="label">Address</span><AddressInput value={f.place ? `${f.place.name}, ${f.place.detail}` : ''} onPick={(p) => setF({ ...f, place: p })} /></div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
-          <label className="field"><span className="label">Window from</span><input className="input" type="time" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} /></label>
-          <label className="field"><span className="label">Window to</span><input className="input" type="time" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} /></label>
-          <label className="field"><span className="label">Minutes on site</span><input className="input" type="number" min={5} value={f.minutes} onChange={(e) => setF({ ...f, minutes: e.target.value })} /></label>
-        </div>
         <label className="field"><span className="label">Notes for the driver</span><textarea className="input" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="Gate code, parking, pets" /></label>
         <label className="field"><span className="label">Assign to</span>
           <select className="input" value={f.driver} onChange={(e) => setF({ ...f, driver: e.target.value })}>
@@ -310,7 +308,7 @@ function Stops({ org, day, setDay, routes, drivers, locations, reload }: {
             <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; if (file) importCsv(file); e.target.value = ''; }} />
           </label>
         </div>
-        <p className="caption" style={{ margin: 0 }}>CSV columns: name, phone, address, from, to, minutes, notes, consent (yes/no), driver.</p>
+        <p className="caption" style={{ margin: 0 }}>CSV columns: name, phone, address, notes, consent (yes/no), driver.</p>
       </form>
 
       <section style={{ flex: '999 1 420px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -350,7 +348,7 @@ function Stops({ org, day, setDay, routes, drivers, locations, reload }: {
 }
 
 const windowText = (s: Pick<ConsoleStop, 'window_start' | 'window_end'>) =>
-  s.window_start ? `${fmtTime(s.window_start)} – ${fmtTime(s.window_end)}` : 'Any time';
+  s.window_start ? `${fmtTime(s.window_start)} – ${fmtTime(s.window_end)}` : '';
 
 /** The proposed order next to the current one (RTE-4). */
 function PlanPanel({ route, plan, onUse, onClose }: { route: ConsoleRoute; plan: RoutePlan; onUse: () => void; onClose: () => void }) {
@@ -389,7 +387,7 @@ function PlanPanel({ route, plan, onUse, onClose }: { route: ConsoleRoute; plan:
             <li key={id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0' }}>
               <span className={`num ${s.status === 'en_route' ? 'next' : ''}`}>{n}</span>
               <span className="body" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                <b>{s.customer_name}</b> <span className="caption">· {s.status === 'en_route' ? 'on the way now · ' : n !== was ? `was ${was} · ` : ''}{windowText(s)}</span>
+                <b>{s.customer_name}</b> <span className="caption">{[s.status === 'en_route' ? 'on the way now' : n !== was ? `was ${was}` : '', windowText(s)].filter(Boolean).map((t) => ` · ${t}`).join('')}</span>
               </span>
               <span className="caption" style={{ fontWeight: 600, color: late ? 'var(--warning)' : 'var(--ink)' }}>{fmtTime(plan.etas[id])}{late ? ' · late' : ''}</span>
             </li>

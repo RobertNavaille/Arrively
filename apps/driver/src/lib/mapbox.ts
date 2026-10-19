@@ -1,4 +1,4 @@
-import { MAPBOX_TOKEN } from './config';
+import { MAPBOX_TOKEN, OFFLINE_DEMO } from './config';
 import type { LatLng } from './types';
 
 export interface Place { id: string; name: string; detail: string; lat: number; lng: number }
@@ -17,12 +17,14 @@ export async function searchAddress(query: string, near: LatLng | null, signal?:
   const q = query.trim();
   if (!q) return [];
   if (!MAPBOX_TOKEN) {
+    if (!OFFLINE_DEMO) throw new Error('Address search needs EXPO_PUBLIC_MAPBOX_TOKEN.');
     return SAMPLE.filter((p) => `${p.name} ${p.detail}`.toLowerCase().includes(q.toLowerCase())).slice(0, 5);
   }
   const params = new URLSearchParams({
-    q, access_token: MAPBOX_TOKEN, autocomplete: 'true', country: 'us', limit: '5', types: 'address,poi',
+    q, access_token: MAPBOX_TOKEN, autocomplete: 'true', country: 'us', limit: '5', types: 'address',
   });
-  if (near) params.set('proximity', `${near.lng},${near.lat}`);
+  // Geocoding v6 has no POIs ("poi" makes it reject the request).
+  params.set('proximity', near ? `${near.lng},${near.lat}` : 'ip');
   const res = await fetch(`https://api.mapbox.com/search/geocode/v6/forward?${params}`, { signal });
   if (!res.ok) throw new Error(`Address search failed (${res.status})`);
   const json = await res.json();

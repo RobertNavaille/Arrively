@@ -86,8 +86,12 @@ function Visit({ data }: { data: Tracking }) {
           {stop.status === 'scheduled' ? (
             <>
               <span className="pill pill-neutral">Scheduled</span>
-              <div className="caption">Arriving between</div>
-              <div className="stat">{stop.window_start ? `${fmtTime(stop.window_start)} – ${fmtTime(stop.window_end)}` : 'Today'}</div>
+              {stop.window_start ? (
+                <>
+                  <div className="caption">Arriving between</div>
+                  <div className="stat">{fmtTime(stop.window_start)} – {fmtTime(stop.window_end)}</div>
+                </>
+              ) : <h2 className="title">Your visit is scheduled</h2>}
               <p className="body" style={{ color: 'var(--ink-muted)', margin: 0 }}>
                 We&apos;ll text you when you&apos;re next. This page updates live.
               </p>
