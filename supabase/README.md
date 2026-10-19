@@ -14,7 +14,8 @@
    ```
 2. Set the tracking page address used in texts. Run this in the SQL editor:
    ```sql
-   alter database postgres set app.tracking_base_url = 'https://<your-vercel-app>/t/';
+   insert into app_settings values ('tracking_base_url', 'https://<your-vercel-app>/t/')
+     on conflict (key) do update set value = excluded.value;
    ```
 3. Set the edge function secrets and deploy the functions:
    ```sh

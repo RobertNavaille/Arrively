@@ -170,3 +170,8 @@ select pg_temp.expect(public.set_etas(:'rt2', jsonb_build_object(:'s_eta', now()
 reset role;
 select pg_temp.expect((select (public.get_tracking(tracking_token) -> 'stop' ->> 'eta') is not null from stops where id = :'s_eta'), 'tracking shows the ETA');
 select 'ETAS PASSED' as result;
+
+-- ---- Tracking link base from app_settings --------------------------------
+insert into public.app_settings values ('tracking_base_url', 'https://example.vercel.app/t/');
+select pg_temp.expect(public.tracking_url('abc') = 'https://example.vercel.app/t/abc', 'tracking links use app_settings');
+select 'SETTINGS PASSED' as result;
