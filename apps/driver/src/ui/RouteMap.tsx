@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { MAPBOX_TOKEN } from '../lib/config';
 import { color, font, shadow } from './theme';
-import type { RouteMapProps } from './RouteMap.types';
+import { framePoints, type RouteMapProps } from './RouteMap.types';
 
 if (MAPBOX_TOKEN) Mapbox.setAccessToken(MAPBOX_TOKEN);
 
@@ -11,7 +11,7 @@ if (MAPBOX_TOKEN) Mapbox.setAccessToken(MAPBOX_TOKEN);
 // numbered stops, a dark pin for a single destination.
 export function RouteMap({ height, stops = [], pin, pinLabel, driver, line }: RouteMapProps) {
   const points = useMemo(() => {
-    const all = [...stops, ...(pin ? [pin] : []), ...(driver ? [driver] : [])];
+    const all = framePoints({ stops, pin, driver });
     return all.length ? all : [{ lat: 41.824, lng: -71.4128 }];
   }, [stops, pin, driver]);
 
@@ -24,9 +24,11 @@ export function RouteMap({ height, stops = [], pin, pinLabel, driver, line }: Ro
     };
   }, [points]);
 
-  const lineShape = line && line.length > 1 ? {
+  // A driver too far away to frame isn't connected to the route line.
+  const path = (line ?? []).filter((p) => p !== driver || points.includes(driver));
+  const lineShape = path.length > 1 ? {
     type: 'Feature' as const, properties: {},
-    geometry: { type: 'LineString' as const, coordinates: line.map((p) => [p.lng, p.lat]) },
+    geometry: { type: 'LineString' as const, coordinates: path.map((p) => [p.lng, p.lat]) },
   } : null;
 
   return (

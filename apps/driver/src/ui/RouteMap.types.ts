@@ -19,3 +19,18 @@ export interface RouteMapProps {
   /** Draws a line through these points in order. */
   line?: LatLng[];
 }
+
+// The driver is kept in view only when near the stops; a driver far away
+// (still at home, another city) would shrink the stops into a cluster.
+const NEAR_KM = 25;
+
+/** The points a map should frame: every stop, plus the pin and driver when they're near. */
+export function framePoints({ stops = [], pin, driver }: Pick<RouteMapProps, 'stops' | 'pin' | 'driver'>): LatLng[] {
+  const must: LatLng[] = [...stops, ...(pin ? [pin] : [])];
+  if (!driver) return must;
+  if (!must.length) return [driver];
+  const lat = must.reduce((a, p) => a + p.lat, 0) / must.length;
+  const lng = must.reduce((a, p) => a + p.lng, 0) / must.length;
+  const km = Math.hypot((driver.lat - lat) * 111, (driver.lng - lng) * 111 * Math.cos((lat * Math.PI) / 180));
+  return km <= NEAR_KM ? [...must, driver] : must;
+}
