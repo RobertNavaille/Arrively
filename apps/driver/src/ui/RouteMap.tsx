@@ -42,18 +42,19 @@ export function RouteMap({ height, stops = [], pin, pinLabel, driver, line }: Ro
         />
         {lineShape ? (
           <Mapbox.ShapeSource id="route" shape={lineShape}>
-            <Mapbox.LineLayer id="route-casing" style={{ lineColor: color.surface, lineWidth: 8, lineCap: 'round', lineJoin: 'round' }} />
-            <Mapbox.LineLayer id="route-line" aboveLayerID="route-casing" style={{ lineColor: color.brand, lineWidth: 4.5, lineCap: 'round', lineJoin: 'round' }} />
+            <Mapbox.LineLayer id="route-casing" style={{ lineColor: color.surface, lineWidth: 7, lineCap: 'round', lineJoin: 'round' }} />
+            <Mapbox.LineLayer id="route-line" aboveLayerID="route-casing" style={{ lineColor: color.brand, lineWidth: 3.5, lineOpacity: 0.85, lineCap: 'round', lineJoin: 'round' }} />
           </Mapbox.ShapeSource>
         ) : null}
         {stops.map((s) => (
           <Mapbox.MarkerView key={s.id} coordinate={[s.lng, s.lat]} allowOverlap>
             <View style={{
-              width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5,
+              width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 3,
               backgroundColor: s.state === 'next' ? color.action : s.state === 'done' ? color.inkMuted : color.surface,
               borderColor: s.state === 'upcoming' ? color.action : color.surface,
+              ...shadow.float,
             }}>
-              <Text style={{ fontFamily: font.semibold, fontSize: 11, color: s.state === 'upcoming' ? color.actionInk : color.onAction }}>{s.n}</Text>
+              <Text style={{ fontFamily: font.semibold, fontSize: 13, color: s.state === 'upcoming' ? color.actionInk : color.onAction }}>{s.n}</Text>
             </View>
           </Mapbox.MarkerView>
         ))}
