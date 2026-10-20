@@ -41,3 +41,50 @@ export function useRoadRoute(from: LatLng | null, to: LatLng | null): RoadRoute 
   }, [from?.lat, from?.lng, to?.lat, to?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
   return route;
 }
+
+// Directions takes at most 25 points per request; longer days are split into
+// legs that share their end points.
+const MAX_POINTS = 25;
+const pathCache = new Map<string, LatLng[]>();
+
+const keyOf = (pts: LatLng[]) => pts.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(';');
+
+export async function fetchRoadPath(points: LatLng[], signal?: AbortSignal): Promise<LatLng[] | null> {
+  if (!MAPBOX_TOKEN || points.length < 2) return null;
+  const key = keyOf(points);
+  const hit = pathCache.get(key);
+  if (hit) return hit;
+  const path: LatLng[] = [];
+  for (let i = 0; i < points.length - 1; i += MAX_POINTS - 1) {
+    const chunk = points.slice(i, i + MAX_POINTS);
+    const coords = chunk.map((p) => `${p.lng},${p.lat}`).join(';');
+    const params = new URLSearchParams({ access_token: MAPBOX_TOKEN, geometries: 'geojson', overview: 'full' });
+    const res = await fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?${params}`, { signal });
+    if (!res.ok) throw new Error(`Directions failed (${res.status})`);
+    const r = (await res.json()).routes?.[0];
+    if (!r) return null;
+    path.push(...(r.geometry.coordinates as [number, number][]).map(([lng, lat]) => ({ lat, lng })));
+  }
+  pathCache.set(key, path);
+  return path;
+}
+
+/** Road path through `stops` in order, starting at `start` when given; null until known or without a token. */
+export function useRoadPath(start: LatLng | null, stops: LatLng[]): LatLng[] | null {
+  const [path, setPath] = useState<LatLng[] | null>(null);
+  const asked = useRef<{ start: LatLng | null; key: string } | null>(null);
+  const key = keyOf(stops);
+  useEffect(() => {
+    if (!MAPBOX_TOKEN) return;
+    const last = asked.current;
+    const sameStart = last && (last.start && start ? distanceM(last.start, start) < REFETCH_AFTER_M : last.start === start);
+    if (last && last.key === key && sameStart) return;
+    asked.current = { start, key };
+    const pts = [...(start ? [start] : []), ...stops];
+    if (pts.length < 2) { setPath(null); return; }
+    const ctrl = new AbortController();
+    fetchRoadPath(pts, ctrl.signal).then(setPath).catch(() => { /* keep the last path, or the straight line */ });
+    return () => ctrl.abort();
+  }, [key, start?.lat, start?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+  return path;
+}

@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
+import { useRoadPath } from '../src/lib/directions';
 import { addDays, dayKey, fmtDuration, fmtTime, fmtWindow, routeTotals } from '../src/lib/geo';
 import { currentPosition, startSharing, stopSharing, useLivePosition } from '../src/lib/location';
 import { searchAddress, type Place } from '../src/lib/mapbox';
@@ -16,7 +17,7 @@ import { Avatar, Banner, Button, IconButton, StatRow, StatusPill, type PillTone 
 import { Icon } from '../src/ui/Icon';
 import { PlanSheet } from '../src/ui/PlanSheet';
 import { RouteMap } from '../src/ui/RouteMap';
-import type { MapStop } from '../src/ui/RouteMap.types';
+import { framePoints, type MapStop } from '../src/ui/RouteMap.types';
 import { bareInput, color, font, radius, shadow, space, type } from '../src/ui/theme';
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -302,7 +303,11 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, onOptimize, opt
     id: s.id, lat: s.lat, lng: s.lng, n: i + 1,
     state: isDone(s) ? 'done' : s.id === current?.id ? 'next' : 'upcoming',
   }));
-  const line = [...(isToday && driver ? [driver] : []), ...remaining];
+  // Follow real roads when Mapbox can route them; straight lines until then.
+  // A driver too far away to show on the map isn't routed from either.
+  const near = isToday && driver && framePoints({ stops: mapStops, driver }).includes(driver) ? driver : null;
+  const road = useRoadPath(near, remaining);
+  const line = road ? [...(near ? [near] : []), ...road] : [...(isToday && driver ? [driver] : []), ...remaining];
 
   let badge: { label: string; tone: PillTone } = { label: 'Planned', tone: 'info' };
   if (route?.status === 'completed') badge = { label: 'Done', tone: 'success' };
