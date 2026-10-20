@@ -99,6 +99,10 @@ export default function MyDay() {
   const isToday = dayK === dayKey(today);
   const route = routeFor(dayK);
   const [menu, setMenu] = useState(false);
+  // Address search for adding a stop; it sits at the top of each day page and closes when the day changes.
+  const [q, setQ] = useState('');
+  const found = useAddressSearch(q, pos);
+  useEffect(() => { setQ(''); }, [index]);
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<{ route: Route; plan: RoutePlan; from: LatLng | null } | null>(null);
   const [planning, setPlanning] = useState<string | null>(null); // route id being optimized
@@ -196,13 +200,8 @@ export default function MyDay() {
         </View>
       ) : null}
 
-      {/* Search + day pages */}
+      {/* Day pages: search, map, summary and stops scroll together */}
       <View style={{ flex: 1 }}>
-        <AddStopSearch dayLabel={isToday ? 'today' : day.toLocaleDateString('en-US', { weekday: 'long' })} near={pos}
-          onAdd={async (p) => {
-            // Picking an address opens New stop for the name, notes and a last check of the address.
-            router.push({ pathname: '/new-stop', params: { day: dayK, name: p.name, detail: p.detail, lat: String(p.lat), lng: String(p.lng) } });
-          }}>
           <FlatList
             ref={listRef}
             data={days}
@@ -224,16 +223,29 @@ export default function MyDay() {
               if (i !== index) setIndex(i);
             } : undefined}
             scrollEventThrottle={64}
-            renderItem={({ item }) => (
-              <View style={{ width, height: pagerH || undefined }}>
-                <DayPanel route={routeFor(dayKey(item))} isToday={dayKey(item) === dayKey(today)} driver={dayKey(item) === dayKey(today) ? pos : null}
-                  onOpenStop={(s) => router.push(`/stop/${s.id}`)} loading={loading}
-                  onOptimize={optimize} optimizing={planning === routeFor(dayKey(item))?.id} />
-              </View>
-            )}
+            renderItem={({ item }) => {
+              const k = dayKey(item);
+              const label = k === dayKey(today) ? 'today' : item.toLocaleDateString('en-US', { weekday: 'long' });
+              return (
+                <View style={{ width, height: pagerH || undefined }}>
+                  <DayPanel route={routeFor(k)} isToday={k === dayKey(today)} driver={k === dayKey(today) ? pos : null}
+                    onOpenStop={(s) => router.push(`/stop/${s.id}`)} loading={loading}
+                    onOptimize={optimize} optimizing={planning === routeFor(k)?.id}
+                    search={
+                      <SearchHeader label={label} q={k === dayK ? q : ''} setQ={setQ} {...found}
+                        onPick={(p) => {
+                          // Picking an address opens New stop for the name, notes and a last check of the address.
+                          setQ('');
+                          router.push({ pathname: '/new-stop', params: { day: k, name: p.name, detail: p.detail, lat: String(p.lat), lng: String(p.lng) } });
+                        }} />
+                    } />
+                </View>
+              );
+            }}
           />
       {/* Footer */}
           <View style={{ padding: space[4], paddingBottom: space[6], borderTopWidth: 1, borderTopColor: color.divider }}>
+            {q.trim() ? <Pressable accessibilityLabel="Close search" onPress={() => setQ('')} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: color.scrim, zIndex: 2 }} /> : null}
             {error ? <Text style={[type.caption, { color: color.danger, marginBottom: space[2] }]}>{error}</Text> : null}
             {isToday && current ? (
               <View style={{ flexDirection: 'row', gap: space[3] }}>
@@ -245,7 +257,6 @@ export default function MyDay() {
               </Text>
             )}
           </View>
-        </AddStopSearch>
       </View>
 
       {plan ? <PlanSheet route={plan.route} plan={plan.plan} busy={applying} onUse={usePlan} onClose={() => setPlan(null)} /> : null}
@@ -270,9 +281,9 @@ function footerText(route: Route | undefined, day: Date, today: Date) {
   return 'This route was not finished';
 }
 
-function DayPanel({ route, isToday, driver, onOpenStop, loading, onOptimize, optimizing }: {
+function DayPanel({ route, isToday, driver, onOpenStop, loading, onOptimize, optimizing, search }: {
   route: Route | undefined; isToday: boolean; driver: LatLng | null; onOpenStop: (s: Stop) => void; loading: boolean;
-  onOptimize: (r: Route) => void; optimizing: boolean;
+  onOptimize: (r: Route) => void; optimizing: boolean; search: React.ReactNode;
 }) {
   const stops = route?.stops ?? [];
   const current = currentStop(route);
@@ -299,17 +310,21 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, onOptimize, opt
 
   if (!stops.length) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: space[6], gap: space[2] }}>
-        <Icon name="route" size={28} color={color.inkMuted} />
-        <Text style={[type.body, { color: color.inkMuted, textAlign: 'center' }]}>
-          {loading ? 'Loading…' : 'No stops this day. Search above to add one.'}
-        </Text>
-      </View>
+      <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
+        {search}
+        <View style={{ alignItems: 'center', paddingVertical: space[8], paddingHorizontal: space[6], gap: space[2] }}>
+          <Icon name="route" size={28} color={color.inkMuted} />
+          <Text style={[type.body, { color: color.inkMuted, textAlign: 'center' }]}>
+            {loading ? 'Loading…' : 'No stops this day. Search above to add one.'}
+          </Text>
+        </View>
+      </ScrollView>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: space[4] }}>
+      {search}
       <View style={{ paddingHorizontal: space[4] }}>
         <View style={{ borderRadius: radius.md, overflow: 'hidden' }}>
           <RouteMap height={190} stops={mapStops} driver={isToday ? driver : null} line={line} />
@@ -325,7 +340,7 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, onOptimize, opt
           ]} />
         <StatusPill label={badge.label} tone={badge.tone} />
       </View>
-      <ScrollView style={{ flex: 1, borderTopWidth: 1, borderTopColor: color.divider }} contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: space[4] }}>
+      <View style={{ borderTopWidth: 1, borderTopColor: color.divider, paddingHorizontal: space[4] }}>
         {canOptimize ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: space[2] }}>
             <Text style={type.caption}>{route?.status === 'active' ? 'Stops left' : 'Stop order'}</Text>
@@ -336,8 +351,8 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, onOptimize, opt
           <StopListRow key={s.id} stop={s} isCurrent={s.id === current?.id} showEta={route?.status !== 'completed'} onPress={() => onOpenStop(s)} />
         ))}
         <Text style={[type.caption, { paddingTop: space[3] }]}>Tap a stop to see its details or fix its address.</Text>
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -369,16 +384,11 @@ function StopListRow({ stop, isCurrent, showEta, onPress }: { stop: Stop; isCurr
   );
 }
 
-function AddStopSearch({ dayLabel, near, onAdd, children }: {
-  dayLabel: string; near: LatLng | null; onAdd: (p: Place) => Promise<void>; children: React.ReactNode;
-}) {
-  const [q, setQ] = useState('');
+function useAddressSearch(q: string, near: LatLng | null) {
   const [results, setResults] = useState<Place[]>([]);
   const [err, setErr] = useState<string | null>(null);
-  const open = q.trim().length > 0;
-
   useEffect(() => {
-    if (!open) { setResults([]); return; }
+    if (!q.trim()) { setResults([]); setErr(null); return; }
     const ctrl = new AbortController();
     const t = setTimeout(() => {
       searchAddress(q, near, ctrl.signal).then((r) => { setResults(r); setErr(null); }).catch((e) => {
@@ -386,44 +396,47 @@ function AddStopSearch({ dayLabel, near, onAdd, children }: {
       });
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [q, open, near]);
+  }, [q, near]);
+  return { results, err };
+}
 
+/** The address search at the top of a day page. Results drop down over the page, which is dimmed. */
+function SearchHeader({ label, q, setQ, results, err, onPick }: {
+  label: string; q: string; setQ: (v: string) => void; results: Place[]; err: string | null; onPick: (p: Place) => void;
+}) {
+  const open = q.trim().length > 0;
   return (
-    <View style={{ flex: 1 }}>
-      <View style={{ padding: space[4], paddingTop: space[3], paddingBottom: space[3], backgroundColor: color.surface, zIndex: 5 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], height: 44, paddingHorizontal: space[3], borderRadius: radius.full, backgroundColor: color.surfaceMuted, borderWidth: 1, borderColor: color.divider }}>
-          <Icon name="search" size={20} color={color.inkMuted} />
-          <TextInput value={q} onChangeText={setQ} placeholder={`Add a stop to ${dayLabel}`} placeholderTextColor={color.inkMuted}
-            accessibilityLabel="Add a stop by address" autoCorrect={false}
-            style={[{ flex: 1, fontFamily: font.regular, fontSize: 14, color: color.ink, paddingVertical: 0 }, bareInput]} />
-          {open ? <Pressable onPress={() => setQ('')} accessibilityLabel="Clear search" hitSlop={8}><Icon name="close" size={16} color={color.inkMuted} /></Pressable> : null}
-        </View>
+    <View style={{ padding: space[4], paddingTop: space[3], paddingBottom: space[3], backgroundColor: color.surface, zIndex: 10 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], height: 44, paddingHorizontal: space[3], borderRadius: radius.full, backgroundColor: color.surfaceMuted, borderWidth: 1, borderColor: color.divider }}>
+        <Icon name="search" size={20} color={color.inkMuted} />
+        <TextInput value={q} onChangeText={setQ} placeholder={`Add a stop to ${label}`} placeholderTextColor={color.inkMuted}
+          accessibilityLabel={`Add a stop to ${label}`} autoCorrect={false}
+          style={[{ flex: 1, fontFamily: font.regular, fontSize: 14, color: color.ink, paddingVertical: 0 }, bareInput]} />
+        {open ? <Pressable onPress={() => setQ('')} accessibilityLabel="Clear search" hitSlop={8}><Icon name="close" size={16} color={color.inkMuted} /></Pressable> : null}
       </View>
-      <View style={{ flex: 1 }}>
-        {children}
-        {open ? (
-          <>
-            <Pressable accessibilityLabel="Close search" onPress={() => setQ('')} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: -200, backgroundColor: color.scrim }} />
-            <View style={[{ position: 'absolute', top: 0, left: space[4], right: space[4], backgroundColor: color.surface, borderRadius: radius.md, borderWidth: 1, borderColor: color.divider, overflow: 'hidden' }, shadow.float]}>
-              {results.map((p) => (
-                <Pressable key={p.id} accessibilityRole="button" onPress={async () => {
-                  try { await onAdd(p); setQ(''); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
-                }} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3], borderBottomWidth: 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
-                  <Icon name="pin" size={20} color={color.inkMuted} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={type.bodyStrong} numberOfLines={1}>{p.name}</Text>
-                    <Text style={type.caption} numberOfLines={1}>{p.detail}</Text>
-                  </View>
-                  <Text style={[type.caption, { fontFamily: font.semibold, color: color.actionInk }]}>Add to {dayLabel}</Text>
-                </Pressable>
-              ))}
-              {!results.length || err ? (
-                <Text style={[type.body, { color: err ? color.danger : color.inkMuted, padding: space[3] }]}>{err ?? 'No matching addresses'}</Text>
-              ) : null}
-            </View>
-          </>
-        ) : null}
-      </View>
+      {open ? (
+        <>
+          {/* Dims everything under the search bar; tapping it closes the search. */}
+          <Pressable accessibilityLabel="Close search" onPress={() => setQ('')}
+            style={{ position: 'absolute', top: '100%', left: 0, right: 0, height: 3000, backgroundColor: color.scrim }} />
+          <View style={[{ position: 'absolute', top: '100%', left: space[4], right: space[4], backgroundColor: color.surface, borderRadius: radius.md, borderWidth: 1, borderColor: color.divider, overflow: 'hidden' }, shadow.float]}>
+            {results.map((p) => (
+              <Pressable key={p.id} accessibilityRole="button" onPress={() => onPick(p)}
+                style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3], borderBottomWidth: 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
+                <Icon name="pin" size={20} color={color.inkMuted} />
+                <View style={{ flex: 1 }}>
+                  <Text style={type.bodyStrong} numberOfLines={1}>{p.name}</Text>
+                  <Text style={type.caption} numberOfLines={1}>{p.detail}</Text>
+                </View>
+                <Text style={[type.caption, { fontFamily: font.semibold, color: color.actionInk }]}>Add to {label}</Text>
+              </Pressable>
+            ))}
+            {!results.length || err ? (
+              <Text style={[type.body, { color: err ? color.danger : color.inkMuted, padding: space[3] }]}>{err ?? 'No matching addresses'}</Text>
+            ) : null}
+          </View>
+        </>
+      ) : null}
     </View>
   );
 }
