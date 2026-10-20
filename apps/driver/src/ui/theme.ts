@@ -46,3 +46,8 @@ export const shadow = {
   sheet: { shadowColor: '#1A1A1A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: -4 }, elevation: 8 },
   float: { shadowColor: '#1A1A1A', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
 } as const;
+
+// Inputs drawn inside a field box: the box already shows focus, so drop the
+// browser's own outline (web only; native ignores it), and let the input shrink
+// so icons beside it keep their size.
+export const bareInput = { outlineWidth: 0, minWidth: 0 } as unknown as Record<string, never>;

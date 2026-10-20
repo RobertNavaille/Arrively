@@ -8,7 +8,7 @@ import { searchAddress, type Place } from '../../src/lib/mapbox';
 import { useDriverData } from '../../src/lib/store';
 import { Button } from '../../src/ui/components';
 import { Icon } from '../../src/ui/Icon';
-import { color, font, radius, space, type } from '../../src/ui/theme';
+import { bareInput, color, font, radius, space, type } from '../../src/ui/theme';
 
 /** Correct a stop's address (DRV-23). */
 export default function EditAddress() {
@@ -54,7 +54,7 @@ export default function EditAddress() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], height: 44, paddingHorizontal: space[3], borderRadius: radius.full, backgroundColor: color.surfaceMuted, borderWidth: 1, borderColor: color.divider }}>
           <Icon name="search" size={20} color={color.inkMuted} />
           <TextInput value={q} onChangeText={setQ} autoFocus placeholder="Search the correct address" placeholderTextColor={color.inkMuted}
-            accessibilityLabel="Correct address" style={{ flex: 1, fontFamily: font.regular, fontSize: 14, color: color.ink }} />
+            accessibilityLabel="Correct address" style={[{ flex: 1, fontFamily: font.regular, fontSize: 14, color: color.ink }, bareInput]} />
         </View>
         <View style={{ borderRadius: radius.md, borderWidth: results.length ? 1 : 0, borderColor: color.divider, overflow: 'hidden' }}>
           {results.map((p) => (

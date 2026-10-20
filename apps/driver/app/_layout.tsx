@@ -49,6 +49,7 @@ export default function RootLayout() {
       <Stack.Screen name="stop/[id]" />
       <Stack.Screen name="skip/[id]" options={{ presentation: 'modal' }} />
       <Stack.Screen name="edit/[id]" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="new-stop" options={{ presentation: 'modal' }} />
     </Stack>
   );
 

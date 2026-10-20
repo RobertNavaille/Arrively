@@ -17,7 +17,7 @@ import { Icon } from '../src/ui/Icon';
 import { PlanSheet } from '../src/ui/PlanSheet';
 import { RouteMap } from '../src/ui/RouteMap';
 import type { MapStop } from '../src/ui/RouteMap.types';
-import { color, font, radius, shadow, space, type } from '../src/ui/theme';
+import { bareInput, color, font, radius, shadow, space, type } from '../src/ui/theme';
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -169,7 +169,10 @@ export default function MyDay() {
       {/* Search + day pages */}
       <View style={{ flex: 1 }}>
         <AddStopSearch dayLabel={isToday ? 'today' : day.toLocaleDateString('en-US', { weekday: 'long' })} near={pos}
-          onAdd={async (p) => { await backend.addStop(dayK, `${p.name}, ${p.detail}`, p); await refresh(); }}>
+          onAdd={async (p) => {
+            // Picking an address opens New stop for the name, notes and a last check of the address.
+            router.push({ pathname: '/new-stop', params: { day: dayK, name: p.name, detail: p.detail, lat: String(p.lat), lng: String(p.lng) } });
+          }}>
           <FlatList
             ref={listRef}
             data={days}
@@ -361,7 +364,7 @@ function AddStopSearch({ dayLabel, near, onAdd, children }: {
           <Icon name="search" size={20} color={color.inkMuted} />
           <TextInput value={q} onChangeText={setQ} placeholder={`Add a stop to ${dayLabel}`} placeholderTextColor={color.inkMuted}
             accessibilityLabel="Add a stop by address" autoCorrect={false}
-            style={{ flex: 1, fontFamily: font.regular, fontSize: 14, color: color.ink, paddingVertical: 0 }} />
+            style={[{ flex: 1, fontFamily: font.regular, fontSize: 14, color: color.ink, paddingVertical: 0 }, bareInput]} />
           {open ? <Pressable onPress={() => setQ('')} accessibilityLabel="Clear search" hitSlop={8}><Icon name="close" size={16} color={color.inkMuted} /></Pressable> : null}
         </View>
       </View>

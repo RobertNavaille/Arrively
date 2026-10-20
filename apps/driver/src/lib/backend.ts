@@ -7,6 +7,9 @@ import { localEtas, localPlan, type RoutePlan } from './routing';
 import type { LatLng, MarkOutcome, Profile, Route, Stop } from './types';
 
 /** Everything the app does against the server. Two implementations: Supabase and an offline demo. */
+/** What the driver fills in when adding a stop. */
+export interface StopDetails { name?: string; notes?: string }
+
 export interface Backend {
   offline: boolean;
   isSignedIn(): Promise<boolean>;
@@ -21,7 +24,7 @@ export interface Backend {
   startTrip(stopId: string): Promise<void>;
   markArrived(stopId: string): Promise<void>;
   markStop(stopId: string, outcome: MarkOutcome, reason: string | null, at: LatLng | null): Promise<void>;
-  addStop(day: string, address: string, at: LatLng): Promise<void>;
+  addStop(day: string, address: string, at: LatLng, details?: StopDetails): Promise<void>;
   updateAddress(stopId: string, address: string, at: LatLng): Promise<void>;
   /** Removes a stop that isn't in progress, finished or not (it's kept as cancelled). */
   removeStop(stopId: string): Promise<void>;
@@ -126,9 +129,12 @@ const supabaseBackend: Backend = {
     check(await supabase().rpc('mark_stop', { p_stop: stopId, p_outcome: outcome, p_reason: reason, p_lat: at?.lat ?? null, p_lng: at?.lng ?? null }));
     refreshEtas(true);
   },
-  async addStop(day, address, at) {
+  async addStop(day, address, at, details) {
     const routeId = check(await supabase().rpc('my_route_for', { p_day: day })) as string;
-    check(await supabase().rpc('add_stop', { p_route: routeId, p_address: address, p_lat: at.lat, p_lng: at.lng }));
+    check(await supabase().rpc('add_stop', {
+      p_route: routeId, p_address: address, p_lat: at.lat, p_lng: at.lng,
+      p_customer_name: details?.name?.trim() || null, p_notes: details?.notes?.trim() || null,
+    }));
     refreshEtas(true);
   },
   async updateAddress(stopId, address, at) {
@@ -256,14 +262,14 @@ const offlineBackend: Backend = {
     }
     finishIfDone(r); emit();
   },
-  async addStop(day, address, at) {
+  async addStop(day, address, at, details) {
     let r = ensureDemo().find((x) => x.day === day);
     if (!r) { r = { id: `r${seq++}`, day, status: 'planned', stops: [] }; ensureDemo().push(r); }
     if (r.status === 'completed') r.status = 'active';
     r.stops.push({
       id: `s${seq++}`, route_id: r.id, position: (Math.max(0, ...r.stops.map((x) => x.position))) + 1,
-      status: r.status === 'active' ? 'queued' : 'scheduled', customer_name: 'New stop', customer_phone: null,
-      address, lat: at.lat, lng: at.lng, window_start: null, window_end: null, service_minutes: 20, notes: null,
+      status: r.status === 'active' ? 'queued' : 'scheduled', customer_name: details?.name?.trim() || 'New stop', customer_phone: null,
+      address, lat: at.lat, lng: at.lng, window_start: null, window_end: null, service_minutes: 20, notes: details?.notes?.trim() || null,
       eta: null, arrived_at: null, marked_at: null, departed_at: null,
     });
     emit();
