@@ -34,17 +34,23 @@ export default function MyDay() {
   );
   const [index, setIndex] = useState(DAY_RANGE.before);
   const listRef = useRef<FlatList<Date>>(null);
-  // Scroll events are ignored until the pager has been placed on the selected
-  // day, so a layout scroll can't move the selection (seen in browsers).
-  const placed = useRef(false);
+  // Only the driver's own swipe or tap changes the day. Scrolling the browser
+  // does by itself (Safari restores the pager's old position after a reload,
+  // layout can nudge it) is undone, so the app opens on today.
+  const touched = useRef(false);
   useEffect(() => {
-    placed.current = false;
-    const t = setTimeout(() => {
-      listRef.current?.scrollToOffset({ offset: width * index, animated: false });
-      placed.current = true;
-    }, 0);
+    const t = setTimeout(() => listRef.current?.scrollToOffset({ offset: width * index, animated: false }), 0);
     return () => clearTimeout(t);
   }, [width]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const node = (listRef.current as unknown as { getScrollableNode?: () => HTMLElement | null })?.getScrollableNode?.();
+    if (!node) return;
+    const mark = () => { touched.current = true; };
+    const events = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const;
+    events.forEach((e) => node.addEventListener(e, mark, { passive: true }));
+    return () => events.forEach((e) => node.removeEventListener(e, mark));
+  }, []);
 
   // Back on the app on a new day: select the new today.
   useEffect(() => {
@@ -53,8 +59,8 @@ export default function MyDay() {
       setToday(new Date());
       setIndex(DAY_RANGE.before);
       refresh();
-      placed.current = false;
-      setTimeout(() => { listRef.current?.scrollToOffset({ offset: width * DAY_RANGE.before, animated: false }); placed.current = true; }, 0);
+      touched.current = false;
+      setTimeout(() => listRef.current?.scrollToOffset({ offset: width * DAY_RANGE.before, animated: false }), 0);
     };
     const sub = AppState.addEventListener('change', (st) => { if (st === 'active') check(); });
     const timer = setInterval(check, 60_000);
@@ -89,6 +95,7 @@ export default function MyDay() {
   }
 
   function goTo(i: number) {
+    touched.current = true;
     setIndex(i);
     listRef.current?.scrollToIndex({ index: i, animated: true });
   }
@@ -174,8 +181,12 @@ export default function MyDay() {
             keyExtractor={(d) => dayKey(d)}
             onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
             onScroll={Platform.OS === 'web' ? (e) => {
-              if (!placed.current) return;
               const i = Math.round(e.nativeEvent.contentOffset.x / width);
+              if (!touched.current) {
+                // Not the driver: put the pager back on the selected day.
+                if (i !== index) listRef.current?.scrollToOffset({ offset: width * index, animated: false });
+                return;
+              }
               if (i !== index) setIndex(i);
             } : undefined}
             scrollEventThrottle={64}
