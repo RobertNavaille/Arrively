@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { MAPBOX_TOKEN } from '../lib/config';
 import { color, font, shadow } from './theme';
-import { framePoints, type RouteMapProps } from './RouteMap.types';
+import { MARKER, byDrawOrder, framePoints, type RouteMapProps } from './RouteMap.types';
 
 if (MAPBOX_TOKEN) Mapbox.setAccessToken(MAPBOX_TOKEN);
 
@@ -46,16 +46,15 @@ export function RouteMap({ height, stops = [], pin, pinLabel, driver, line }: Ro
             <Mapbox.LineLayer id="route-line" aboveLayerID="route-casing" style={{ lineColor: color.brand, lineWidth: 3.5, lineOpacity: 0.85, lineCap: 'round', lineJoin: 'round' }} />
           </Mapbox.ShapeSource>
         ) : null}
-        {stops.map((s) => (
+        {byDrawOrder(stops).map((s) => (
           <Mapbox.MarkerView key={s.id} coordinate={[s.lng, s.lat]} allowOverlap>
             <View style={{
-              width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 3,
+              width: MARKER[s.state].size, height: MARKER[s.state].size, borderRadius: MARKER[s.state].size / 2,
+              borderWidth: MARKER[s.state].ring,
               backgroundColor: s.state === 'next' ? color.action : s.state === 'done' ? color.inkMuted : color.surface,
               borderColor: s.state === 'upcoming' ? color.action : color.surface,
               ...shadow.float,
-            }}>
-              <Text style={{ fontFamily: font.semibold, fontSize: 13, color: s.state === 'upcoming' ? color.actionInk : color.onAction }}>{s.n}</Text>
-            </View>
+            }} />
           </Mapbox.MarkerView>
         ))}
         {pin ? (

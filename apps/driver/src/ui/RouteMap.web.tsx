@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import Svg, { Circle, G, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { MAPBOX_TOKEN } from '../lib/config';
 import { color, font } from './theme';
-import { framePoints, type MapStop, type RouteMapProps } from './RouteMap.types';
+import { MARKER, byDrawOrder, framePoints, type MapStop, type RouteMapProps } from './RouteMap.types';
 
 // Browser map: real Mapbox GL when a token is set, otherwise a drawn stand-in
 // (offline demo, screenshots).
@@ -12,17 +12,13 @@ export function RouteMap(props: RouteMapProps) {
   return MAPBOX_TOKEN ? <MapboxWeb {...props} /> : <Drawn {...props} />;
 }
 
-const MARKER = 28;
-
 function stopEl(s: MapStop) {
   const el = document.createElement('div');
+  const { size, ring } = MARKER[s.state];
   const fill = s.state === 'next' ? color.action : s.state === 'done' ? color.inkMuted : color.surface;
-  const ring = s.state === 'upcoming' ? color.action : color.surface;
-  const ink = s.state === 'upcoming' ? color.actionInk : color.onAction;
-  el.style.cssText = `width:${MARKER}px;height:${MARKER}px;border-radius:50%;box-sizing:border-box;display:grid;place-items:center;`
-    + `background:${fill};border:3px solid ${ring};color:${ink};font:600 13px Poppins_600SemiBold,Poppins,sans-serif;`
-    + 'box-shadow:0 2px 6px rgba(26,26,26,.25);';
-  el.textContent = String(s.n);
+  const edge = s.state === 'upcoming' ? color.action : color.surface;
+  el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;box-sizing:border-box;`
+    + `background:${fill};border:${ring}px solid ${edge};box-shadow:0 1px 4px rgba(26,26,26,.25);`;
   return el;
 }
 
@@ -82,7 +78,7 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line }: RouteMap
       const m = map.current!;
       markers.current.forEach((x) => x.remove());
       markers.current = [
-        ...stops.map((s) => new mapboxgl.Marker({ element: stopEl(s) }).setLngLat([s.lng, s.lat])),
+        ...byDrawOrder(stops).map((s) => new mapboxgl.Marker({ element: stopEl(s) }).setLngLat([s.lng, s.lat])),
         ...(pin ? [new mapboxgl.Marker({ element: pinEl(pinLabel), anchor: 'bottom' }).setLngLat([pin.lng, pin.lat])] : []),
         ...(driver && showDriver ? [new mapboxgl.Marker({ element: driverEl() }).setLngLat([driver.lng, driver.lat])] : []),
       ].map((mk) => mk.addTo(m));
@@ -139,7 +135,6 @@ function Drawn({ height, stops = [], pin, pinLabel, driver, line }: RouteMapProp
   const showDriver = !!driver && pts.includes(driver);
   const path = (line ?? []).filter((p) => p !== driver || showDriver);
   const d = path.length > 1 ? path.map((p, i) => `${i ? 'L' : 'M'}${X(p.lng)} ${Y(p.lat)}`).join(' ') : null;
-  const r = MARKER / 2;
 
   return (
     <View style={{ height, backgroundColor: color.mapGround, overflow: 'hidden' }}
@@ -158,16 +153,17 @@ function Drawn({ height, stops = [], pin, pinLabel, driver, line }: RouteMapProp
         </G>
         {d ? <Path d={d} stroke={color.surface} strokeWidth={7} fill="none" strokeLinecap="round" strokeLinejoin="round" /> : null}
         {d ? <Path d={d} stroke={color.brand} strokeWidth={3.5} strokeOpacity={0.85} fill="none" strokeLinecap="round" strokeLinejoin="round" /> : null}
-        {stops.map((st) => (
-          <G key={st.id} transform={`translate(${X(st.lng)} ${Y(st.lat)})`}>
-            <Circle r={r + 1} cy={1.5} fill="rgba(26,26,26,0.18)" />
-            <Circle r={r - 1.5} strokeWidth={3}
-              fill={st.state === 'next' ? color.action : st.state === 'done' ? color.inkMuted : color.surface}
-              stroke={st.state === 'upcoming' ? color.action : color.surface} />
-            <SvgText y={4.5} textAnchor="middle" fontSize={13} fontWeight="600" fontFamily={font.semibold}
-              fill={st.state === 'upcoming' ? color.actionInk : color.onAction}>{String(st.n)}</SvgText>
-          </G>
-        ))}
+        {byDrawOrder(stops).map((st) => {
+          const { size, ring } = MARKER[st.state];
+          return (
+            <G key={st.id} transform={`translate(${X(st.lng)} ${Y(st.lat)})`}>
+              <Circle r={size / 2 + 1} cy={1.5} fill="rgba(26,26,26,0.18)" />
+              <Circle r={(size - ring) / 2} strokeWidth={ring}
+                fill={st.state === 'next' ? color.action : st.state === 'done' ? color.inkMuted : color.surface}
+                stroke={st.state === 'upcoming' ? color.action : color.surface} />
+            </G>
+          );
+        })}
         {pin ? (
           <G transform={`translate(${X(pin.lng)} ${Y(pin.lat)})`}>
             <Path d="M0 0 C-3 -6 -11 -12 -11 -20 A11 11 0 0 1 11 -20 C11 -12 3 -6 0 0 Z" fill={color.mapLabel} stroke={color.surface} strokeWidth={2} />

@@ -2,21 +2,8 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { fmtDuration, fmtTime, fmtWindow, miles } from '../lib/geo';
 import type { RoutePlan } from '../lib/routing';
 import type { Route, Stop } from '../lib/types';
-import { Banner, Button, StatRow, StatusPill } from './components';
+import { Banner, Button, StatRow, StatusPill, StopDot } from './components';
 import { color, font, radius, space, type } from './theme';
-
-/** Stop numbers as the day list will show them once the plan is applied (same rule as reorder_route). */
-function numbersAfter(route: Route, order: string[]) {
-  const pos = new Map(route.stops.map((s) => [s.id, s.position]));
-  const movable = order.filter((id) => {
-    const s = route.stops.find((x) => x.id === id);
-    return s && (s.status === 'scheduled' || s.status === 'queued');
-  });
-  const slots = movable.map((id) => pos.get(id)!).sort((a, b) => a - b);
-  movable.forEach((id, i) => pos.set(id, slots[i]));
-  const sorted = [...route.stops].sort((a, b) => pos.get(a.id)! - pos.get(b.id)!);
-  return new Map(sorted.map((s, i) => [s.id, i + 1]));
-}
 
 const START = {
   location: ' · from your location',
@@ -28,8 +15,8 @@ const START = {
 export function PlanSheet({ route, plan, busy, onUse, onClose }: {
   route: Route; plan: RoutePlan; busy: boolean; onUse: () => void; onClose: () => void;
 }) {
-  const before = new Map(route.stops.map((s, i) => [s.id, i + 1]));
-  const after = numbersAfter(route, plan.order);
+  // Earlier or later than in the current order of the stops left.
+  const was = new Map(plan.current.order.map((id, i) => [id, i]));
   const same = plan.order.join() === plan.current.order.join();
   const savedMin = Math.round((plan.current.drive_s - plan.drive_s) / 60);
   const fewerLate = plan.current.late.length - plan.late.length;
@@ -65,12 +52,12 @@ export function PlanSheet({ route, plan, busy, onUse, onClose }: {
           </View>
 
           <ScrollView contentContainerStyle={{ paddingHorizontal: space[4] }}>
-            {plan.order.map((id) => {
+            {plan.order.map((id, i) => {
               const s = byId.get(id);
               if (!s) return null;
-              const n = after.get(id)!, was = before.get(id)!;
-              const late = plan.late.includes(id);
-              return <PlanRow key={id} stop={s} n={n} was={n !== was ? was : null} eta={plan.etas[id]} late={late} />;
+              const before = was.get(id) ?? i;
+              const moved = before === i ? null : before > i ? 'earlier' : 'later';
+              return <PlanRow key={id} stop={s} moved={moved} eta={plan.etas[id]} late={plan.late.includes(id)} />;
             })}
           </ScrollView>
 
@@ -88,19 +75,16 @@ export function PlanSheet({ route, plan, busy, onUse, onClose }: {
   );
 }
 
-function PlanRow({ stop, n, was, eta, late }: { stop: Stop; n: number; was: number | null; eta?: string; late: boolean }) {
+function PlanRow({ stop, moved, eta, late }: { stop: Stop; moved: 'earlier' | 'later' | null; eta?: string; late: boolean }) {
   const fixed = stop.status === 'en_route';
+  const note = fixed ? 'On the way now' : moved ? `Moved ${moved}` : '';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: color.divider }}
-      accessible accessibilityLabel={`Stop ${n}${was ? `, was ${was}` : ''}, ${stop.customer_name}, around ${fmtTime(eta)}${late ? ', late for the window' : ''}`}>
-      <View style={{ width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: color.action, backgroundColor: fixed ? color.action : color.surface }}>
-        <Text style={{ fontFamily: font.semibold, fontSize: 11, color: fixed ? color.onAction : color.actionInk }}>{n}</Text>
-      </View>
+      accessible accessibilityLabel={`${stop.customer_name}${note ? `, ${note.toLowerCase()}` : ''}, around ${fmtTime(eta)}${late ? ', late for the window' : ''}`}>
+      <StopDot state={fixed ? 'next' : 'upcoming'} />
       <View style={{ flex: 1 }}>
         <Text style={type.bodyStrong} numberOfLines={1}>{stop.customer_name}</Text>
-        <Text style={type.caption} numberOfLines={1}>
-          {fixed ? 'On the way now · ' : was ? `Was ${was} · ` : ''}{stop.address}
-        </Text>
+        <Text style={type.caption} numberOfLines={1}>{note ? `${note} · ` : ''}{stop.address}</Text>
       </View>
       <View style={{ alignItems: 'flex-end', gap: 4 }}>
         <Text style={[type.bodyStrong, late && { color: color.warning }]}>{fmtTime(eta)}</Text>

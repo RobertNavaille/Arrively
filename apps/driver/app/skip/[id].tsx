@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { backend } from '../../src/lib/backend';
 import { showMessage } from '../../src/lib/dialog';
 import { currentPosition } from '../../src/lib/location';
-import { stopNumber, useDriverData } from '../../src/lib/store';
+import { useDriverData } from '../../src/lib/store';
 import { Button } from '../../src/ui/components';
 import { color, radius, space, type } from '../../src/ui/theme';
 
@@ -58,7 +58,7 @@ export default function SkipScreen() {
       <ScrollView contentContainerStyle={{ padding: space[4], gap: space[4] }}>
         <View style={{ gap: 4 }}>
           <Text style={type.title}>Skip or defer this stop</Text>
-          <Text style={type.caption}>Stop {stopNumber(route, stop)} of {route.stops.length} · {stop.customer_name} · {stop.address}</Text>
+          <Text style={type.caption}>{stop.customer_name} · {stop.address}</Text>
         </View>
         <View style={{ gap: space[2] }}>
           <Text style={[type.label, { textTransform: 'uppercase' }]}>What should happen</Text>

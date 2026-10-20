@@ -10,9 +10,9 @@ import { addDays, dayKey, fmtDuration, fmtTime, fmtWindow, routeTotals } from '.
 import { currentPosition, startSharing, stopSharing, useLivePosition } from '../src/lib/location';
 import { searchAddress, type Place } from '../src/lib/mapbox';
 import type { RoutePlan } from '../src/lib/routing';
-import { DAY_RANGE, currentStop, lastMarked, stopNumber, useDriverData } from '../src/lib/store';
+import { DAY_RANGE, currentStop, lastMarked, useDriverData } from '../src/lib/store';
 import { isDone, type LatLng, type Route, type Stop } from '../src/lib/types';
-import { Avatar, Banner, Button, IconButton, StatRow, StatusPill, type PillTone } from '../src/ui/components';
+import { Avatar, Banner, Button, IconButton, StatRow, StatusPill, StopDot, type PillTone } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
 import { PlanSheet } from '../src/ui/PlanSheet';
 import { RouteMap } from '../src/ui/RouteMap';
@@ -89,8 +89,9 @@ export default function MyDay() {
   }
 
   const ctaLabel = !current ? '' : route?.status === 'planned' ? 'Start route'
-    : current.status === 'en_route' || current.status === 'arrived' ? `Continue stop ${stopNumber(route!, current)}`
-    : `Start trip to stop ${stopNumber(route!, current)}`;
+    : current.status === 'en_route' ? `Continue to ${current.customer_name}`
+    : current.status === 'arrived' ? `Back to ${current.customer_name}`
+    : `Start trip to ${current.customer_name}`;
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: color.surface }}>
@@ -124,7 +125,7 @@ export default function MyDay() {
 
       {showBanner && marked ? (
         <View style={{ paddingHorizontal: space[4], paddingTop: space[3] }}>
-          <Banner title={`Stop ${stopNumber(route!, marked)} ${marked.status === 'completed' ? 'complete' : marked.status === 'no_show' ? 'marked no-show' : 'skipped'}`}
+          <Banner title={marked.status === 'completed' ? 'Stop complete' : marked.status === 'no_show' ? 'Marked no-show' : 'Stop skipped'}
             meta={`${marked.customer_name} · ${fmtTime(marked.marked_at)}`} />
         </View>
       ) : null}
@@ -257,7 +258,7 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, onOptimize, opt
           </View>
         ) : null}
         {stops.map((s, i) => (
-          <StopListRow key={s.id} n={i + 1} stop={s} isCurrent={s.id === current?.id} showEta={route?.status !== 'completed'} onPress={() => onOpenStop(s)} />
+          <StopListRow key={s.id} stop={s} isCurrent={s.id === current?.id} showEta={route?.status !== 'completed'} onPress={() => onOpenStop(s)} />
         ))}
         <Text style={[type.caption, { paddingTop: space[3] }]}>Tap a stop to see its details or fix its address.</Text>
       </ScrollView>
@@ -265,22 +266,17 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, onOptimize, opt
   );
 }
 
-function StopListRow({ n, stop, isCurrent, showEta, onPress }: { n: number; stop: Stop; isCurrent: boolean; showEta: boolean; onPress: () => void }) {
+function StopListRow({ stop, isCurrent, showEta, onPress }: { stop: Stop; isCurrent: boolean; showEta: boolean; onPress: () => void }) {
   const done = isDone(stop);
   const eta = showEta && !done && stop.status !== 'arrived' ? stop.eta : null;
   const late = !!eta && !!stop.window_end && Date.parse(eta) > Date.parse(stop.window_end);
-  const numStyle = done ? { bg: color.inkMuted, fg: color.onAction, ring: color.inkMuted }
-    : isCurrent ? { bg: color.action, fg: color.onAction, ring: color.action }
-    : { bg: color.surface, fg: color.actionInk, ring: color.action };
   const status = stop.status === 'completed' ? ['Done', 'success'] : stop.status === 'no_show' ? ['No-show', 'warning']
     : stop.status === 'skipped' ? ['Skipped', 'neutral'] : stop.status === 'arrived' ? ['Arrived', 'info']
     : stop.status === 'en_route' ? ['On the way', 'info'] : isCurrent ? ['Next', 'info'] : null;
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Stop ${n}, ${stop.customer_name}, ${stop.address}`}
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${stop.customer_name}, ${stop.address}${done ? ', done' : isCurrent ? ', next' : ''}`}
       style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
-      <View style={{ width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: numStyle.bg, borderWidth: 2, borderColor: numStyle.ring }}>
-        <Text style={{ fontFamily: font.semibold, fontSize: 11, color: numStyle.fg }}>{n}</Text>
-      </View>
+      <StopDot state={done ? 'done' : isCurrent ? 'next' : 'upcoming'} />
       <View style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: done ? color.divider : color.brand }} />
       <View style={{ flex: 1 }}>
         <Text style={type.bodyStrong}>{stop.customer_name}</Text>

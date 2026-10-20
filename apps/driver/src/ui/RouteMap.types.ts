@@ -34,3 +34,15 @@ export function framePoints({ stops = [], pin, driver }: Pick<RouteMapProps, 'st
   const km = Math.hypot((driver.lat - lat) * 111, (driver.lng - lng) * 111 * Math.cos((lat * Math.PI) / 180));
   return km <= NEAR_KM ? [...must, driver] : must;
 }
+
+/**
+ * Stop markers carry no numbers; size and fill show the state. Finished stops
+ * are drawn first so upcoming and next stops sit on top.
+ */
+export const MARKER = {
+  next: { size: 24, ring: 3 },
+  upcoming: { size: 18, ring: 3 },
+  done: { size: 12, ring: 2 },
+} as const;
+const ORDER = { done: 0, upcoming: 1, next: 2 } as const;
+export const byDrawOrder = (stops: MapStop[]) => [...stops].sort((a, b) => ORDER[a.state] - ORDER[b.state]);
