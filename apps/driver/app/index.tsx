@@ -168,7 +168,7 @@ export default function MyDay() {
 
       {/* Search + day pages */}
       <View style={{ flex: 1 }}>
-        <AddStopSearch dayLabel={day.toLocaleDateString('en-US', { weekday: 'long' })} near={pos}
+        <AddStopSearch dayLabel={isToday ? 'today' : day.toLocaleDateString('en-US', { weekday: 'long' })} near={pos}
           onAdd={async (p) => { await backend.addStop(dayK, `${p.name}, ${p.detail}`, p); await refresh(); }}>
           <FlatList
             ref={listRef}
