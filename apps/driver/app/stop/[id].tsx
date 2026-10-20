@@ -57,7 +57,6 @@ export default function StopScreen() {
   // Drive time and distance by road when the route is known; a straight-line estimate until then.
   const roadMeters = road ? road.distanceM : meters;
   const driveMin = road ? Math.max(1, Math.round(road.durationS / 60)) : meters != null ? estimateDriveMin(meters) : null;
-  const eta = driveMin != null ? new Date(Date.now() + driveMin * 60000) : null;
   const farFromArrived = stop.status === 'arrived' && meters != null && meters > RADIUS_M * 2;
   const roadLine = pos ? (road ? [pos, ...road.path, stop] : [pos, stop]) : undefined;
 
@@ -161,7 +160,7 @@ export default function StopScreen() {
             {driveMin != null ? (
               <View>
                 <Text style={[type.title, { fontSize: 20, lineHeight: 26 }]}>{driveMin} min</Text>
-                <Text style={type.caption}>{miles(roadMeters!).toFixed(1)} mi · {fmtTime(eta)}</Text>
+                <Text style={type.caption}>{miles(roadMeters!).toFixed(1)} mi</Text>
               </View>
             ) : null}
             <Button label="Start trip" style={{ flex: 1 }} loading={busy === 'start'}
@@ -180,7 +179,6 @@ export default function StopScreen() {
                 <StatRow items={[
                   { value: driveMin != null ? String(driveMin) : '–', label: 'minutes' },
                   { value: roadMeters != null ? miles(roadMeters).toFixed(1) : '–', label: 'miles' },
-                  { value: eta ? fmtTime(eta).replace(/ (am|pm)/, '') : '–', label: 'eta' },
                 ]} />
                 <PersonRow name={stop.customer_name} subtitle={stop.address}
                   onMessage={() => showMessage('Coming soon', 'Chat with customers arrives in the next build.')} />

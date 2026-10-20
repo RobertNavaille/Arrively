@@ -29,6 +29,7 @@ export interface Route {
   id: string;
   day: string; // YYYY-MM-DD
   status: 'planned' | 'active' | 'completed';
+  optimized_at?: string | null; // set once the driver uses a suggested order
   drive_s?: number | null; // remaining drive time at the last ETA refresh
   stops: Stop[];
 }

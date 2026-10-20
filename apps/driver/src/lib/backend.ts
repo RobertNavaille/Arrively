@@ -108,7 +108,7 @@ const supabaseBackend: Backend = {
   },
   async routes(fromDay, toDay) {
     const { data: u } = await supabase().auth.getUser();
-    const rows = check(await supabase().from('routes').select('id,day,status,drive_s,stops(*)')
+    const rows = check(await supabase().from('routes').select('id,day,status,optimized_at,drive_s,stops(*)')
       .eq('driver_id', u.user?.id ?? '').gte('day', fromDay).lte('day', toDay).order('day'));
     return (rows ?? []).map((r) => ({
       ...(r as unknown as Route),
@@ -309,6 +309,7 @@ const offlineBackend: Backend = {
     const movable = order.map((id) => r.stops.find((s) => s.id === id)).filter((s): s is Stop => !!s && (s.status === 'scheduled' || s.status === 'queued'));
     const slots = movable.map((s) => s.position).sort((a, b) => a - b);
     movable.forEach((s, i) => { s.position = slots[i]; });
+    r.optimized_at = new Date().toISOString();
     emit();
   },
 };

@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
 import { useRoadPath } from '../src/lib/directions';
-import { addDays, dayKey, fmtDuration, fmtTime, fmtWindow, routeTotals } from '../src/lib/geo';
+import { addDays, dayKey, fmtDuration, fmtTime, routeTotals } from '../src/lib/geo';
 import { currentPosition, startSharing, stopSharing, useLivePosition } from '../src/lib/location';
 import { searchAddress, type Place } from '../src/lib/mapbox';
 import type { RoutePlan } from '../src/lib/routing';
@@ -119,6 +119,14 @@ export default function MyDay() {
     catch (e) { showMessage('Could not optimize', e instanceof Error ? e.message : String(e)); }
     finally { setPlanning(null); }
   }
+  // Today and later, with at least two stops still to visit. After the first
+  // optimize the button shrinks to its icon.
+  const optimizable = !!route && route.status !== 'completed' && dayK >= dayKey(today)
+    && route.stops.filter((s) => s.status === 'scheduled' || s.status === 'queued').length >= 2;
+  const optimizeButton = route ? (
+    <Button variant="secondary" icon="route" label={route.optimized_at ? 'Optimize again' : 'Optimize'}
+      iconOnly={!!route.optimized_at} loading={planning === route.id} onPress={() => optimize(route)} />
+  ) : null;
   async function usePlan() {
     if (!plan) return;
     setApplying(true);
@@ -231,7 +239,6 @@ export default function MyDay() {
                 <View style={{ width, height: pagerH || undefined }}>
                   <DayPanel route={routeFor(k)} isToday={k === dayKey(today)} driver={k === dayKey(today) ? pos : null}
                     onOpenStop={(s) => router.push(`/stop/${s.id}`)} loading={loading}
-                    onOptimize={optimize} optimizing={planning === routeFor(k)?.id}
                     search={
                       <SearchHeader label={label} q={k === dayK ? q : ''} setQ={setQ} {...found}
                         onPick={(p) => {
@@ -251,6 +258,12 @@ export default function MyDay() {
             {isToday && current ? (
               <View style={{ flexDirection: 'row', gap: space[3] }}>
                 <Button label={ctaLabel} onPress={primaryAction} loading={busy} style={{ flex: 1 }} />
+                {optimizable ? optimizeButton : null}
+              </View>
+            ) : optimizable ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+                <Text style={[type.body, { flex: 1, color: color.inkMuted }]}>{footerText(route, day, today)}</Text>
+                {optimizeButton}
               </View>
             ) : (
               <Text style={[type.body, { color: color.inkMuted, textAlign: 'center', paddingVertical: space[3] }]}>
@@ -282,9 +295,9 @@ function footerText(route: Route | undefined, day: Date, today: Date) {
   return 'This route was not finished';
 }
 
-function DayPanel({ route, isToday, driver, onOpenStop, loading, onOptimize, optimizing, search }: {
+function DayPanel({ route, isToday, driver, onOpenStop, loading, search }: {
   route: Route | undefined; isToday: boolean; driver: LatLng | null; onOpenStop: (s: Stop) => void; loading: boolean;
-  onOptimize: (r: Route) => void; optimizing: boolean; search: React.ReactNode;
+  search: React.ReactNode;
 }) {
   const stops = route?.stops ?? [];
   const current = currentStop(route);
@@ -295,9 +308,6 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, onOptimize, opt
   const last = remaining[remaining.length - 1];
   const routed = route?.drive_s != null && !!last?.eta;
   const driveLabel = routed ? fmtDuration(Math.round(route!.drive_s! / 60)) : `~${fmtDuration(totals.driveMin)}`;
-  const finish = routed ? new Date(Date.parse(last.eta!) + last.service_minutes * 60000)
-    : new Date(Date.now() + (totals.driveMin + totals.serviceMin) * 60000);
-  const canOptimize = route && route.status !== 'completed' && remaining.filter((s) => s.status === 'scheduled' || s.status === 'queued').length >= 2;
 
   const mapStops: MapStop[] = stops.map((s, i) => ({
     id: s.id, lat: s.lat, lng: s.lng, n: i + 1,
@@ -341,19 +351,12 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, onOptimize, opt
           : [
             { value: String(remaining.length), label: done ? 'stops left' : 'stops' },
             { value: driveLabel, label: 'drive' },
-            { value: fmtTime(finish), label: 'finish' },
           ]} />
         <StatusPill label={badge.label} tone={badge.tone} />
       </View>
       <View style={{ borderTopWidth: 1, borderTopColor: color.divider, paddingHorizontal: space[4] }}>
-        {canOptimize ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: space[2] }}>
-            <Text style={type.caption}>{route?.status === 'active' ? 'Stops left' : 'Stop order'}</Text>
-            <Button size="sm" variant="text" icon="route" label="Optimize order" loading={optimizing} onPress={() => onOptimize(route!)} />
-          </View>
-        ) : null}
-        {stops.map((s, i) => (
-          <StopListRow key={s.id} stop={s} isCurrent={s.id === current?.id} showEta={route?.status !== 'completed'} onPress={() => onOpenStop(s)} />
+        {stops.map((s) => (
+          <StopListRow key={s.id} stop={s} isCurrent={s.id === current?.id} onPress={() => onOpenStop(s)} />
         ))}
         <Text style={[type.caption, { paddingTop: space[3] }]}>Tap a stop to see its details or fix its address.</Text>
       </View>
@@ -361,10 +364,8 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, onOptimize, opt
   );
 }
 
-function StopListRow({ stop, isCurrent, showEta, onPress }: { stop: Stop; isCurrent: boolean; showEta: boolean; onPress: () => void }) {
+function StopListRow({ stop, isCurrent, onPress }: { stop: Stop; isCurrent: boolean; onPress: () => void }) {
   const done = isDone(stop);
-  const eta = showEta && !done && stop.status !== 'arrived' ? stop.eta : null;
-  const late = !!eta && !!stop.window_end && Date.parse(eta) > Date.parse(stop.window_end);
   const status = stop.status === 'completed' ? ['Done', 'success'] : stop.status === 'no_show' ? ['No-show', 'warning']
     : stop.status === 'skipped' ? ['Skipped', 'neutral'] : stop.status === 'arrived' ? ['Arrived', 'info']
     : stop.status === 'en_route' ? ['On the way', 'info'] : isCurrent ? ['Next', 'info'] : null;
@@ -376,15 +377,7 @@ function StopListRow({ stop, isCurrent, showEta, onPress }: { stop: Stop; isCurr
         <Text style={type.bodyStrong}>{stop.customer_name}</Text>
         <Text style={type.caption} numberOfLines={1}>{stop.address}{stop.notes ? ` · ${stop.notes}` : ''}</Text>
       </View>
-      <View style={{ alignItems: 'flex-end', gap: 4 }}>
-        {eta ? (
-          <Text style={[type.caption, { fontFamily: font.semibold, color: late ? color.warning : color.ink }]}>
-            {stop.eta_approx ? '~' : ''}{fmtTime(eta)}{late ? ' · late' : ''}
-          </Text>
-        ) : <Text style={type.caption}>{done ? fmtTime(stop.marked_at) : fmtWindow(stop)}</Text>}
-        {status ? <StatusPill label={status[0]} tone={status[1] as PillTone} />
-          : eta ? <Text style={type.caption}>{fmtWindow(stop)}</Text> : null}
-      </View>
+      {status ? <StatusPill label={status[0]} tone={status[1] as PillTone} /> : null}
     </Pressable>
   );
 }

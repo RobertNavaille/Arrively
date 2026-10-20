@@ -1,5 +1,5 @@
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
-import { fmtDuration, fmtTime, fmtWindow, miles } from '../lib/geo';
+import { fmtDuration, miles } from '../lib/geo';
 import type { RoutePlan } from '../lib/routing';
 import type { Route, Stop } from '../lib/types';
 import { Banner, Button, StatRow, StatusPill, StopDot } from './components';
@@ -42,7 +42,6 @@ export function PlanSheet({ route, plan, busy, onUse, onClose }: {
             <StatRow compact items={[
               { value: fmtDuration(Math.max(1, Math.round(plan.drive_s / 60))), label: 'drive' },
               { value: miles(plan.distance_m).toFixed(1), label: 'miles' },
-              { value: fmtTime(plan.finish), label: 'finish' },
             ]} />
             {plan.late.length ? (
               <Banner tone="warning" icon="alert"
@@ -57,12 +56,12 @@ export function PlanSheet({ route, plan, busy, onUse, onClose }: {
               if (!s) return null;
               const before = was.get(id) ?? i;
               const moved = before === i ? null : before > i ? 'earlier' : 'later';
-              return <PlanRow key={id} stop={s} moved={moved} eta={plan.etas[id]} late={plan.late.includes(id)} />;
+              return <PlanRow key={id} stop={s} moved={moved} late={plan.late.includes(id)} />;
             })}
           </ScrollView>
 
           <View style={{ padding: space[4], paddingBottom: space[8], gap: space[2], borderTopWidth: 1, borderTopColor: color.divider }}>
-            {same ? <Button label="Done" onPress={onClose} /> : (
+            {same ? <Button label="Done" onPress={onUse} loading={busy} /> : (
               <>
                 <Button label="Use this order" onPress={onUse} loading={busy} />
                 <Button variant="text" label="Keep my order" onPress={onClose} />
@@ -75,21 +74,18 @@ export function PlanSheet({ route, plan, busy, onUse, onClose }: {
   );
 }
 
-function PlanRow({ stop, moved, eta, late }: { stop: Stop; moved: 'earlier' | 'later' | null; eta?: string; late: boolean }) {
+function PlanRow({ stop, moved, late }: { stop: Stop; moved: 'earlier' | 'later' | null; late: boolean }) {
   const fixed = stop.status === 'en_route';
   const note = fixed ? 'On the way now' : moved ? `Moved ${moved}` : '';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: color.divider }}
-      accessible accessibilityLabel={`${stop.customer_name}${note ? `, ${note.toLowerCase()}` : ''}, around ${fmtTime(eta)}${late ? ', late for the window' : ''}`}>
+      accessible accessibilityLabel={`${stop.customer_name}${note ? `, ${note.toLowerCase()}` : ''}${late ? ', late for the window' : ''}`}>
       <StopDot state={fixed ? 'next' : 'upcoming'} />
       <View style={{ flex: 1 }}>
         <Text style={type.bodyStrong} numberOfLines={1}>{stop.customer_name}</Text>
         <Text style={type.caption} numberOfLines={1}>{note ? `${note} · ` : ''}{stop.address}</Text>
       </View>
-      <View style={{ alignItems: 'flex-end', gap: 4 }}>
-        <Text style={[type.bodyStrong, late && { color: color.warning }]}>{fmtTime(eta)}</Text>
-        {late ? <StatusPill label="Late" tone="warning" /> : <Text style={type.caption}>{fmtWindow(stop)}</Text>}
-      </View>
+      {late ? <StatusPill label="Late" tone="warning" /> : null}
     </View>
   );
 }

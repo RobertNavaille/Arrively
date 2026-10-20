@@ -4,20 +4,23 @@ import { Icon, type IconName } from './Icon';
 
 type ButtonVariant = 'primary' | 'secondary' | 'text' | 'danger';
 
-export function Button({ label, onPress, variant = 'primary', icon, size = 'md', disabled, loading, style }: {
+export function Button({ label, onPress, variant = 'primary', icon, size = 'md', iconOnly, disabled, loading, style }: {
   label: string; onPress?: () => void; variant?: ButtonVariant; icon?: IconName; size?: 'md' | 'sm';
-  disabled?: boolean; loading?: boolean; style?: StyleProp<ViewStyle>;
+  /** Round button showing just the icon; the label is still read out. */
+  iconOnly?: boolean; disabled?: boolean; loading?: boolean; style?: StyleProp<ViewStyle>;
 }) {
   const fg = variant === 'primary' ? color.onAction : variant === 'secondary' ? color.onTint
     : variant === 'danger' ? color.danger : color.actionInk;
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={iconOnly ? label : undefined}
       accessibilityState={{ disabled: !!disabled, busy: !!loading }}
       onPress={disabled || loading ? undefined : onPress}
       style={({ pressed }) => [
         styles.btn,
         size === 'sm' && styles.btnSm,
+        iconOnly && { width: size === 'sm' ? 32 : 44, paddingHorizontal: 0 },
         variant === 'primary' && { backgroundColor: color.action },
         variant === 'secondary' && { backgroundColor: color.brandTint },
         (variant === 'text' || variant === 'danger') && styles.btnText,
@@ -28,7 +31,7 @@ export function Button({ label, onPress, variant = 'primary', icon, size = 'md',
       {loading ? <ActivityIndicator color={fg} /> : (
         <>
           {icon ? <Icon name={icon} size={size === 'sm' ? 16 : 18} color={fg} /> : null}
-          <Text style={[styles.btnLabel, size === 'sm' && { fontSize: 13 }, { color: fg }]} numberOfLines={1}>{label}</Text>
+          {iconOnly ? null : <Text style={[styles.btnLabel, size === 'sm' && { fontSize: 13 }, { color: fg }]} numberOfLines={1}>{label}</Text>}
         </>
       )}
     </Pressable>
