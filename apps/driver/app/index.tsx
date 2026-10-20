@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  FlatList, Modal, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions,
+  AppState, FlatList, Modal, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { backend } from '../src/lib/backend';
@@ -26,13 +26,40 @@ export default function MyDay() {
   const { width } = useWindowDimensions();
   const { profile, routeFor, loading, error, refresh } = useDriverData();
   const pos = useLivePosition();
-  const today = useMemo(() => new Date(), []);
+  // "Today" follows the clock, so an app left open overnight moves to the new day.
+  const [today, setToday] = useState(() => new Date());
   const days = useMemo(
     () => Array.from({ length: DAY_RANGE.before + DAY_RANGE.after + 1 }, (_, i) => addDays(today, i - DAY_RANGE.before)),
     [today],
   );
   const [index, setIndex] = useState(DAY_RANGE.before);
   const listRef = useRef<FlatList<Date>>(null);
+  // Scroll events are ignored until the pager has been placed on the selected
+  // day, so a layout scroll can't move the selection (seen in browsers).
+  const placed = useRef(false);
+  useEffect(() => {
+    placed.current = false;
+    const t = setTimeout(() => {
+      listRef.current?.scrollToOffset({ offset: width * index, animated: false });
+      placed.current = true;
+    }, 0);
+    return () => clearTimeout(t);
+  }, [width]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Back on the app on a new day: select the new today.
+  useEffect(() => {
+    const check = () => {
+      if (dayKey(new Date()) === dayKey(today)) return;
+      setToday(new Date());
+      setIndex(DAY_RANGE.before);
+      refresh();
+      placed.current = false;
+      setTimeout(() => { listRef.current?.scrollToOffset({ offset: width * DAY_RANGE.before, animated: false }); placed.current = true; }, 0);
+    };
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'active') check(); });
+    const timer = setInterval(check, 60_000);
+    return () => { sub.remove(); clearInterval(timer); };
+  }, [today, width, refresh]);
   const day = days[index];
   const dayK = dayKey(day);
   const isToday = dayK === dayKey(today);
@@ -111,12 +138,13 @@ export default function MyDay() {
           const sel = i === index;
           const has = (routeFor(dayKey(d))?.stops.length ?? 0) > 0;
           const past = dayKey(d) < dayKey(today);
+          const isTodayCell = dayKey(d) === dayKey(today);
           return (
             <Pressable key={i} onPress={() => goTo(i)} accessibilityRole="tab" accessibilityState={{ selected: sel }}
-              accessibilityLabel={d.toDateString()} style={{ alignItems: 'center', gap: 2, minWidth: 36 }}>
+              accessibilityLabel={`${d.toDateString()}${isTodayCell ? ', today' : ''}`} style={{ alignItems: 'center', gap: 2, minWidth: 36 }}>
               <Text style={[type.label, past && { color: color.controlBorder }]}>{DOW[d.getDay()]}</Text>
-              <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: sel ? (past ? color.inkMuted : color.action) : 'transparent' }}>
-                <Text style={[type.bodyStrong, { color: sel ? color.onAction : past ? color.controlBorder : color.ink }]}>{d.getDate()}</Text>
+              <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: sel ? (past ? color.inkMuted : color.action) : isTodayCell ? color.brandTint : 'transparent' }}>
+                <Text style={[type.bodyStrong, { color: sel ? color.onAction : isTodayCell ? color.onTint : past ? color.controlBorder : color.ink }]}>{d.getDate()}</Text>
               </View>
               <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: has ? (past ? color.divider : color.inkMuted) : 'transparent' }} />
             </Pressable>
@@ -146,6 +174,7 @@ export default function MyDay() {
             keyExtractor={(d) => dayKey(d)}
             onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
             onScroll={Platform.OS === 'web' ? (e) => {
+              if (!placed.current) return;
               const i = Math.round(e.nativeEvent.contentOffset.x / width);
               if (i !== index) setIndex(i);
             } : undefined}
