@@ -110,14 +110,15 @@ export default function MyDay() {
         {days.map((d, i) => {
           const sel = i === index;
           const has = (routeFor(dayKey(d))?.stops.length ?? 0) > 0;
+          const past = dayKey(d) < dayKey(today);
           return (
             <Pressable key={i} onPress={() => goTo(i)} accessibilityRole="tab" accessibilityState={{ selected: sel }}
               accessibilityLabel={d.toDateString()} style={{ alignItems: 'center', gap: 2, minWidth: 36 }}>
-              <Text style={type.label}>{DOW[d.getDay()]}</Text>
-              <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: sel ? color.action : 'transparent' }}>
-                <Text style={[type.bodyStrong, { color: sel ? color.onAction : color.ink }]}>{d.getDate()}</Text>
+              <Text style={[type.label, past && { color: color.controlBorder }]}>{DOW[d.getDay()]}</Text>
+              <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: sel ? (past ? color.inkMuted : color.action) : 'transparent' }}>
+                <Text style={[type.bodyStrong, { color: sel ? color.onAction : past ? color.controlBorder : color.ink }]}>{d.getDate()}</Text>
               </View>
-              <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: has ? color.inkMuted : 'transparent' }} />
+              <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: has ? (past ? color.divider : color.inkMuted) : 'transparent' }} />
             </Pressable>
           );
         })}
