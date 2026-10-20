@@ -23,7 +23,7 @@ export interface Backend {
   markStop(stopId: string, outcome: MarkOutcome, reason: string | null, at: LatLng | null): Promise<void>;
   addStop(day: string, address: string, at: LatLng): Promise<void>;
   updateAddress(stopId: string, address: string, at: LatLng): Promise<void>;
-  /** Removes a stop the driver hasn't started (it's kept as cancelled). */
+  /** Removes a stop that isn't in progress, finished or not (it's kept as cancelled). */
   removeStop(stopId: string): Promise<void>;
   reportLocation(p: LatLng & { heading?: number | null; speed?: number | null; accuracy?: number | null; at?: string }): Promise<void>;
   createDemoDay(at: LatLng, phone: string | null): Promise<void>;
@@ -271,7 +271,7 @@ const offlineBackend: Backend = {
   async updateAddress(stopId, address, at) { const [, s] = findStop(stopId); s.address = address; s.lat = at.lat; s.lng = at.lng; emit(); },
   async removeStop(stopId) {
     const [r, s] = findStop(stopId);
-    if (s.status !== 'scheduled' && s.status !== 'queued') throw new Error("Only stops you haven't started can be removed.");
+    if (s.status === 'en_route' || s.status === 'arrived') throw new Error('Mark this stop before removing it.');
     s.status = 'cancelled';
     if (r.status === 'active') finishIfDone(r);
     emit();

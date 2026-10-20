@@ -197,14 +197,26 @@ select id as done_stop from stops where route_id = (select id from routes where 
 select set_config('my.done_stop', :'done_stop', false);
 do $$ begin
   perform public.remove_stop(current_setting('my.done_stop')::uuid);
-  raise exception 'FAILED: a finished stop must not be removable';
-exception when sqlstate 'P0001' then raise notice 'ok: finished stops stay';
+  raise notice 'ok: finished stops can be removed';
 end $$;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000d2', false);
 do $$ begin
   perform public.remove_stop(current_setting('my.done_stop')::uuid);
   raise exception 'FAILED: outsider removed a stop';
 exception when sqlstate '42501' then raise notice 'ok: outsiders cannot remove stops';
+end $$;
+reset role;
+select pg_temp.expect((select status = 'cancelled' from stops where id = :'done_stop'), 'finished stop removed');
+select pg_temp.expect((select data ->> 'was' = 'completed' from stop_events where stop_id = :'done_stop' and type = 'removed'), 'removal records what the stop was');
+-- In progress: can't be removed.
+update stops set status = 'en_route' where id = (select id from stops where route_id = (select route_id from stops where id = :'done_stop') and status = 'queued' order by position limit 1) returning id as er \gset
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d', false);
+select set_config('my.er', :'er', false);
+do $$ begin
+  perform public.remove_stop(current_setting('my.er')::uuid);
+  raise exception 'FAILED: an en-route stop must not be removable';
+exception when sqlstate 'P0001' then raise notice 'ok: in-progress stops stay';
 end $$;
 reset role;
 select 'REMOVE PASSED' as result;

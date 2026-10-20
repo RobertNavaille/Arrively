@@ -73,8 +73,9 @@ export default function StopScreen() {
   }
 
   async function remove() {
-    const ok = await confirmAction(`Remove ${stop.customer_name}?`,
-      `${stop.address.split(',')[0]} comes off your route. The customer won't get any more texts about this visit.`, 'Remove');
+    const ok = await confirmAction(`Remove ${stop.customer_name}?`, isDone(stop)
+      ? `This job comes off your day. Your business keeps a record that it was removed.`
+      : `${stop.address.split(',')[0]} comes off your route. The customer won't get any more texts about this visit.`, 'Remove');
     if (!ok) return;
     await run('remove', async () => { await backend.removeStop(stop.id); router.replace('/'); });
   }
@@ -122,6 +123,7 @@ export default function StopScreen() {
               {stop.mark_reason && !stop.marked_outside ? <DetailRow icon="flag" primary={stop.mark_reason} secondary="Reason" /> : null}
               {stop.notes ? <DetailRow icon="notes" primary={stop.notes} /> : null}
             </View>
+            <Button variant="danger" size="sm" label="Remove job" loading={busy === 'remove'} onPress={remove} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
           </View>
         </ScrollView>
       ) : preview ? (
