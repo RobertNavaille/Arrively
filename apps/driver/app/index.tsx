@@ -12,7 +12,7 @@ import { searchAddress, type Place } from '../src/lib/mapbox';
 import type { RoutePlan } from '../src/lib/routing';
 import { DAY_RANGE, currentStop, lastMarked, useDriverData } from '../src/lib/store';
 import { isDone, type LatLng, type Route, type Stop } from '../src/lib/types';
-import { Avatar, Banner, Button, IconButton, StatRow, StatusPill, StopDot, type PillTone } from '../src/ui/components';
+import { Avatar, Banner, Button, IconButton, StatRow, StatusPill, type PillTone } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
 import { PlanSheet } from '../src/ui/PlanSheet';
 import { RouteMap } from '../src/ui/RouteMap';
@@ -276,7 +276,6 @@ function StopListRow({ stop, isCurrent, showEta, onPress }: { stop: Stop; isCurr
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${stop.customer_name}, ${stop.address}${done ? ', done' : isCurrent ? ', next' : ''}`}
       style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
-      <StopDot state={done ? 'done' : isCurrent ? 'next' : 'upcoming'} />
       <View style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: done ? color.divider : color.brand }} />
       <View style={{ flex: 1 }}>
         <Text style={type.bodyStrong}>{stop.customer_name}</Text>
