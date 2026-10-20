@@ -21,6 +21,8 @@ export interface Stop {
   arrived_at: string | null;
   marked_at: string | null;
   departed_at: string | null;
+  mark_reason?: string | null; // why it was skipped, or 'Marked away from the stop'
+  marked_outside?: boolean;
 }
 
 export interface Route {

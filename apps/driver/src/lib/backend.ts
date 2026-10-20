@@ -252,6 +252,7 @@ const offlineBackend: Backend = {
       s.status = 'queued'; s.position = Math.max(...r.stops.map((x) => x.position)) + 1; s.arrived_at = null;
     } else {
       s.status = outcome; s.marked_at = now; s.departed_at = now; // offline demo: no real departure, count it now
+      s.mark_reason = reason; s.marked_outside = outside;
     }
     finishIfDone(r); emit();
   },

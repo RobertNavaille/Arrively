@@ -1,10 +1,10 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, ScrollView, Text, View } from 'react-native';
 import { confirmAction, showMessage } from '../../src/lib/dialog';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { backend } from '../../src/lib/backend';
-import { distanceM, estimateDriveMin, fmtTime, fmtWindow, miles } from '../../src/lib/geo';
+import { distanceM, estimateDriveMin, fmtTime, fmtWindow, miles, parseDay } from '../../src/lib/geo';
 import { currentPosition, useLivePosition } from '../../src/lib/location';
 import { stopNumber, useDriverData } from '../../src/lib/store';
 import { isDone, type Stop } from '../../src/lib/types';
@@ -30,9 +30,12 @@ export default function StopScreen() {
   const pos = useLivePosition();
   const [busy, setBusy] = useState<string | null>(null);
 
-  // After the stop is marked, go back to My day (screen 5 = screen 1).
+  // Marking the stop here sends the driver back to My day (screen 5 = screen 1).
+  // A stop that was already finished when opened just shows its details.
+  const openedDone = useRef<boolean | null>(null);
+  if (found && openedDone.current === null) openedDone.current = isDone(found.stop);
   useEffect(() => {
-    if (found && isDone(found.stop)) router.replace('/');
+    if (found && isDone(found.stop) && openedDone.current === false) router.replace('/');
   }, [found, router]);
 
   if (!found) {
@@ -77,22 +80,51 @@ export default function StopScreen() {
   }
 
   const preview = stop.status === 'queued' || stop.status === 'scheduled';
-  const statusText = preview ? `${total - n} more after this` : stop.status === 'en_route' ? 'On route' : 'Arrived';
+  const done = isDone(stop);
+  const outcome = stop.status === 'completed' ? 'Done' : stop.status === 'no_show' ? 'No-show' : 'Skipped';
+  const statusText = done ? outcome : preview ? `${total - n} more after this` : stop.status === 'en_route' ? 'On route' : 'Arrived';
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: color.surface }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[3], paddingVertical: space[2] }}>
         <IconButton icon="back" label="Back to My day" variant="plain" onPress={() => router.replace('/')} />
         <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={type.heading}>{new Date().toLocaleDateString('en-US', { weekday: 'long' })}</Text>
-          <Text style={type.caption}>{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</Text>
+          <Text style={type.heading}>{parseDay(route.day).toLocaleDateString('en-US', { weekday: 'long' })}</Text>
+          <Text style={type.caption}>{parseDay(route.day).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
       <StopProgress current={n} total={total} status={farFromArrived ? 'Not marked yet' : statusText}
         statusColor={farFromArrived ? color.warning : undefined} />
 
-      {preview ? (
+      {done ? (
+        // ---- A finished stop: details only ----
+        <ScrollView contentContainerStyle={{ paddingBottom: space[6] }}>
+          <View style={{ paddingHorizontal: space[4] }}>
+            <View style={{ borderRadius: radius.md, overflow: 'hidden' }}>
+              <RouteMap height={200} pin={stop} pinLabel={stop.address.split(',')[0]} />
+            </View>
+          </View>
+          <View style={{ padding: space[4], gap: space[4] }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+              <View style={{ flex: 1 }}>
+                <Text style={type.title}>{stop.customer_name}</Text>
+                <Text style={type.caption}>{stop.address}</Text>
+              </View>
+              <StatusPill label={outcome} tone={stop.status === 'completed' ? 'success' : stop.status === 'no_show' ? 'warning' : 'neutral'} />
+            </View>
+            {stop.marked_outside ? (
+              <Banner tone="warning" icon="alert" title="Marked away from the stop" meta="Your business sees this flag." />
+            ) : null}
+            <View style={{ gap: space[3] }}>
+              <DetailRow icon="check" primary={`${outcome} at ${fmtTime(stop.marked_at)}`}
+                secondary={stop.arrived_at ? `Arrived at ${fmtTime(stop.arrived_at)}` : undefined} />
+              {stop.mark_reason && !stop.marked_outside ? <DetailRow icon="flag" primary={stop.mark_reason} secondary="Reason" /> : null}
+              {stop.notes ? <DetailRow icon="notes" primary={stop.notes} /> : null}
+            </View>
+          </View>
+        </ScrollView>
+      ) : preview ? (
         // ---- Screen 2: next stop ----
         <>
           <ScrollView contentContainerStyle={{ paddingBottom: space[4] }}>
