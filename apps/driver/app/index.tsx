@@ -33,6 +33,9 @@ export default function MyDay() {
     [today],
   );
   const [index, setIndex] = useState(DAY_RANGE.before);
+  // Each day page is exactly as tall as the pager, so its stop list scrolls
+  // inside it instead of running off the bottom (browsers don't stretch pages).
+  const [pagerH, setPagerH] = useState(0);
   const listRef = useRef<FlatList<Date>>(null);
   // Only the driver's own swipe or tap changes the day. Scrolling the browser
   // does by itself (Safari restores the pager's old position after a reload,
@@ -42,14 +45,39 @@ export default function MyDay() {
     const t = setTimeout(() => listRef.current?.scrollToOffset({ offset: width * index, animated: false }), 0);
     return () => clearTimeout(t);
   }, [width]); // eslint-disable-line react-hooks/exhaustive-deps
+  const indexRef = useRef(index);
+  indexRef.current = index;
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     const node = (listRef.current as unknown as { getScrollableNode?: () => HTMLElement | null })?.getScrollableNode?.();
     if (!node) return;
     const mark = () => { touched.current = true; };
-    const events = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const;
+    const events = ['touchstart', 'pointerdown', 'keydown'] as const;
     events.forEach((e) => node.addEventListener(e, mark, { passive: true }));
-    return () => events.forEach((e) => node.removeEventListener(e, mark));
+    // Trackpad and mouse wheel: a sideways swipe moves exactly one day. The
+    // browser's own snapping re-snaps after every small trackpad movement, so
+    // on wide screens a swipe never reached the next day. Vertical scrolling is
+    // left alone so the stop list scrolls normally.
+    let sum = 0, locked = false, idle: ReturnType<typeof setTimeout> | undefined;
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      touched.current = true;
+      clearTimeout(idle);
+      idle = setTimeout(() => { sum = 0; locked = false; }, 250); // the gesture (and its momentum) has ended
+      if (locked) return;
+      sum += e.deltaX;
+      if (Math.abs(sum) < 30) return;
+      locked = true;
+      const next = Math.min(Math.max(indexRef.current + (sum > 0 ? 1 : -1), 0), DAY_RANGE.before + DAY_RANGE.after);
+      goToRef.current(next);
+    };
+    node.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      events.forEach((e) => node.removeEventListener(e, mark));
+      node.removeEventListener('wheel', onWheel);
+      clearTimeout(idle);
+    };
   }, []);
 
   // Back on the app on a new day: select the new today.
@@ -99,6 +127,8 @@ export default function MyDay() {
     setIndex(i);
     listRef.current?.scrollToIndex({ index: i, animated: true });
   }
+  const goToRef = useRef(goTo);
+  goToRef.current = goTo;
 
   const current = currentStop(route);
   const marked = lastMarked(route);
@@ -179,6 +209,7 @@ export default function MyDay() {
             horizontal
             pagingEnabled
             initialScrollIndex={DAY_RANGE.before}
+            onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h && h !== pagerH) setPagerH(h); }}
             getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
             showsHorizontalScrollIndicator={false}
             keyExtractor={(d) => dayKey(d)}
@@ -194,7 +225,7 @@ export default function MyDay() {
             } : undefined}
             scrollEventThrottle={64}
             renderItem={({ item }) => (
-              <View style={{ width }}>
+              <View style={{ width, height: pagerH || undefined }}>
                 <DayPanel route={routeFor(dayKey(item))} isToday={dayKey(item) === dayKey(today)} driver={dayKey(item) === dayKey(today) ? pos : null}
                   onOpenStop={(s) => router.push(`/stop/${s.id}`)} loading={loading}
                   onOptimize={optimize} optimizing={planning === routeFor(dayKey(item))?.id} />
