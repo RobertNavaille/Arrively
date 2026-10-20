@@ -220,7 +220,11 @@ export interface PlanStop {
   window_start: string | null; window_end: string | null; arrived_at: string | null;
 }
 export interface PlanSummary { order: string[]; drive_s: number; distance_m: number; late: string[]; finish: string }
-export interface RoutePlan extends PlanSummary { etas: Record<string, string>; current: PlanSummary; approximate: boolean }
+export interface RoutePlan extends PlanSummary {
+  etas: Record<string, string>; current: PlanSummary; approximate: boolean;
+  /** Where the plan starts: the driver's location, the stop they're at, their last stop, or the best first stop. */
+  start?: "location" | "current_stop" | "last_stop" | "anywhere";
+}
 
 const UPCOMING = ["scheduled", "queued", "en_route", "arrived"];
 const isoOf = (t: number) => new Date(t * 1000).toISOString();
@@ -234,7 +238,8 @@ function localProblem(stops: PlanStop[], day: string, from: Point | null, now: n
   const seq = heading ? [heading, ...rest] : rest;
   const morning = new Date(`${day}T08:00:00`);
   const future = morning.toDateString() !== new Date(now * 1000).toDateString() && morning.getTime() / 1000 > now;
-  let start: Point | null = future ? null : from;
+  // Start where the driver is, on any day; without a location, at the best first stop.
+  let start: Point | null = from;
   let t0 = future ? morning.getTime() / 1000 : now;
   if (at) { start = at; t0 = Math.max(now, (secOf(at.arrived_at) ?? now) + at.service_minutes * 60); }
   const solverStops: SolverStop[] = seq.map((s) => ({
@@ -244,7 +249,7 @@ function localProblem(stops: PlanStop[], day: string, from: Point | null, now: n
   let m = straightLineMatrix(pts);
   if (!start) m = [new Array(m.length + 1).fill(0), ...m.map((r) => [0, ...r])];
   const dist = m.map((r) => r.map((v) => v * 11.176)); // back to meters at 25 mph
-  return { solverStops, m, dist, t0 };
+  return { solverStops, m, dist, t0, startKind: (at ? 'current_stop' : from ? 'location' : 'anywhere') as RoutePlan['start'] };
 }
 
 function distanceAlong(dist: number[][], order: number[]) {
@@ -254,7 +259,7 @@ function distanceAlong(dist: number[][], order: number[]) {
 }
 
 export function straightLinePlan(stops: PlanStop[], day: string, from: Point | null, now = Date.now() / 1000): RoutePlan {
-  const { solverStops, m, dist, t0 } = localProblem(stops, day, from, now);
+  const { solverStops, m, dist, t0, startKind } = localProblem(stops, day, from, now);
   const all = solverStops.map((_, i) => i);
   const cur = evaluate(solverStops, m, t0, all);
   const best = solve(solverStops, m, t0);
@@ -265,6 +270,7 @@ export function straightLinePlan(stops: PlanStop[], day: string, from: Point | n
     etas: Object.fromEntries(Object.entries(best.etas).map(([k, v]) => [k, isoOf(v)])),
     current: { order: cur.order, late: cur.late, drive_s: Math.round(cur.driveS), finish: isoOf(cur.finish), distance_m: distanceAlong(dist, all) },
     approximate: true,
+    start: startKind,
   };
 }
 

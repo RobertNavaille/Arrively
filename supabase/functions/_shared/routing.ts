@@ -60,7 +60,21 @@ const sec = (iso: string | null) => (iso ? Date.parse(iso) / 1000 : null);
  * they're heading to stays first (RTE-6); the rest follow in route order.
  * With no known start, `start` is null and the first stop costs no driving.
  */
-export function remaining({ route, stops, loc, tz }: Loaded, nowS: number) {
+export type StartKind = "location" | "current_stop" | "last_stop" | "anywhere";
+
+/** A lat/lng the caller sent, if it's a real coordinate. */
+export function asPoint(v: unknown): Point | null {
+  const p = v as Point | null;
+  return p && Number.isFinite(p.lat) && Number.isFinite(p.lng) && Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180
+    ? { lat: p.lat, lng: p.lng } : null;
+}
+
+/**
+ * `from` is where the driver is right now, sent by the driver app; when given,
+ * planning starts there on any day. Otherwise the last reported location is used
+ * if it's fresh and the route is today's.
+ */
+export function remaining({ route, stops, loc, tz }: Loaded, nowS: number, from: Point | null = null) {
   const left = stops.filter((s) => UPCOMING.includes(s.status));
   const at = left.find((s) => s.status === "arrived");
   const heading = left.find((s) => s.status === "en_route");
@@ -69,20 +83,23 @@ export function remaining({ route, stops, loc, tz }: Loaded, nowS: number) {
 
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(nowS * 1000));
   let start: Point | null = null;
+  let startKind: StartKind = "anywhere";
   let t0 = route.day > today ? morning(route.day, tz) : nowS;
   if (at) {
-    start = at;
+    start = at; startKind = "current_stop";
     t0 = Math.max(nowS, (sec(at.arrived_at) ?? nowS) + at.service_minutes * 60);
+  } else if (from) {
+    start = from; startKind = "location";
   } else if (loc && route.day === today && nowS * 1000 - Date.parse(loc.recorded_at) < FRESH_LOCATION_MS) {
-    start = loc;
+    start = loc; startKind = "location";
   } else if (route.status === "active") {
     const last = stops.filter((s) => s.marked_at).sort((a, b) => (b.marked_at! > a.marked_at! ? 1 : -1))[0];
-    start = last ?? null;
+    start = last ?? null; startKind = last ? "last_stop" : "anywhere";
   }
   const solverStops: SolverStop[] = seq.map((s) => ({
     id: s.id, serviceS: s.service_minutes * 60, windowStart: sec(s.window_start), windowEnd: sec(s.window_end), fixed: s === heading,
   }));
-  return { seq, start, t0, solverStops };
+  return { seq, start, startKind, t0, solverStops };
 }
 
 /** Matrix for [start, ...stops]; a missing start is a free starting point (zero row and column). */
@@ -113,8 +130,8 @@ const distanceOf = (distances: number[][], order: number[]) => {
 const iso = (t: number) => new Date(t * 1000).toISOString();
 
 /** The best order for what's left, next to the current order (RTE-4). */
-export async function plan(loaded: Loaded, nowS = Date.now() / 1000) {
-  const { seq, start, t0, solverStops } = remaining(loaded, nowS);
+export async function plan(loaded: Loaded, nowS = Date.now() / 1000, from: Point | null = null) {
+  const { seq, start, startKind, t0, solverStops } = remaining(loaded, nowS, from);
   if (seq.length > MAX_STOPS) {
     return { error: `Optimizing works on up to ${MAX_STOPS} stops at a time. This route has ${seq.length} left.` };
   }
@@ -134,12 +151,13 @@ export async function plan(loaded: Loaded, nowS = Date.now() / 1000) {
       distance_m: distanceOf(distances, solverStops.map((_, i) => i)),
     },
     approximate,
+    start: startKind,
   };
 }
 
 /** Traffic-aware ETAs for every stop left, in route order (ETA-1), written to the stops. */
-export async function refreshEtas(loaded: Loaded, nowS = Date.now() / 1000) {
-  const { seq, start, t0, solverStops } = remaining(loaded, nowS);
+export async function refreshEtas(loaded: Loaded, nowS = Date.now() / 1000, from: Point | null = null) {
+  const { seq, start, t0, solverStops } = remaining(loaded, nowS, from);
   if (!seq.length) return { updated: 0 };
   const pts: Point[] = start ? [start, ...seq] : seq;
   let into: number[]; // drive time into each stop

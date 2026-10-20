@@ -25,10 +25,10 @@ export interface Backend {
   updateAddress(stopId: string, address: string, at: LatLng): Promise<void>;
   reportLocation(p: LatLng & { heading?: number | null; speed?: number | null; accuracy?: number | null; at?: string }): Promise<void>;
   createDemoDay(at: LatLng, phone: string | null): Promise<void>;
-  /** The best order for the stops left, next to the current order (RTE-4). */
-  planRoute(routeId: string): Promise<RoutePlan>;
-  /** Saves an order the driver accepted, then refreshes ETAs. */
-  applyPlan(routeId: string, order: string[]): Promise<void>;
+  /** The best order for the stops left, starting where the driver is (`from`), next to the current order (RTE-4). */
+  planRoute(routeId: string, from: LatLng | null): Promise<RoutePlan>;
+  /** Saves an order the driver accepted, then refreshes ETAs from `from`. */
+  applyPlan(routeId: string, order: string[], from: LatLng | null): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,8 +140,8 @@ const supabaseBackend: Backend = {
     }));
     refreshEtas(false);
   },
-  planRoute(routeId) { return invoke<RoutePlan>('route-plan', { route_id: routeId }); },
-  async applyPlan(routeId, order) { await invoke('route-plan', { route_id: routeId, apply: order }); },
+  planRoute(routeId, from) { return invoke<RoutePlan>('route-plan', { route_id: routeId, from }); },
+  async applyPlan(routeId, order, from) { await invoke('route-plan', { route_id: routeId, apply: order, from }); },
   async createDemoDay(at, phone) {
     check(await supabase().rpc('create_demo_day', { p_lat: at.lat, p_lng: at.lng, p_stop_count: 6, p_customer_phone: phone }));
   },
@@ -275,11 +275,12 @@ const offlineBackend: Backend = {
     if (i >= 0) routes[i] = fresh; else routes.push(fresh);
     emit();
   },
-  async planRoute(routeId) {
+  async planRoute(routeId, from) {
     const r = ensureDemo().find((x) => x.id === routeId); if (!r) throw new Error('Route not found');
-    return localPlan(r, lastPos);
+    return localPlan(r, from ?? lastPos);
   },
-  async applyPlan(routeId, order) {
+  async applyPlan(routeId, order, from) {
+    if (from) lastPos = from;
     const r = ensureDemo().find((x) => x.id === routeId); if (!r) throw new Error('Route not found');
     // Same rule as reorder_route: upcoming stops take the slots upcoming stops hold.
     const movable = order.map((id) => r.stops.find((s) => s.id === id)).filter((s): s is Stop => !!s && (s.status === 'scheduled' || s.status === 'queued'));

@@ -70,3 +70,12 @@ Deno.test("too many stops is refused with a clear message", async () => {
   const p = await plan({ route, stops, loc: fresh, tz: "America/New_York" }, NOW);
   check("error" in p && /up to 24 stops/.test(p.error ?? ""), "should explain the limit");
 });
+
+Deno.test("a location sent by the driver is the start, even for a future day", () => {
+  const future = { ...route, day: "2026-10-20", status: "planned" };
+  const here = { lat: 28.08, lng: -80.6 };
+  const r = remaining({ route: future, stops: [stop("a", 1, "scheduled")], loc: null, tz: "America/New_York" }, NOW, here);
+  check(r.start === here && r.startKind === "location", "starts where the driver is");
+  const none = remaining({ route: future, stops: [stop("a", 1, "scheduled")], loc: null, tz: "America/New_York" }, NOW);
+  check(none.start === null && none.startKind === "anywhere", "without a location, the best first stop");
+});

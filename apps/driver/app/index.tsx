@@ -39,20 +39,24 @@ export default function MyDay() {
   const route = routeFor(dayK);
   const [menu, setMenu] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [plan, setPlan] = useState<{ route: Route; plan: RoutePlan } | null>(null);
+  const [plan, setPlan] = useState<{ route: Route; plan: RoutePlan; from: LatLng | null } | null>(null);
   const [planning, setPlanning] = useState<string | null>(null); // route id being optimized
   const [applying, setApplying] = useState(false);
 
   async function optimize(r: Route) {
     setPlanning(r.id);
-    try { setPlan({ route: r, plan: await backend.planRoute(r.id) }); }
+    try {
+      // Plan from where the driver is right now.
+      const here = pos ?? (await currentPosition());
+      setPlan({ route: r, plan: await backend.planRoute(r.id, here), from: here });
+    }
     catch (e) { showMessage('Could not optimize', e instanceof Error ? e.message : String(e)); }
     finally { setPlanning(null); }
   }
   async function usePlan() {
     if (!plan) return;
     setApplying(true);
-    try { await backend.applyPlan(plan.route.id, plan.plan.order); setPlan(null); await refresh(); }
+    try { await backend.applyPlan(plan.route.id, plan.plan.order, plan.from); setPlan(null); await refresh(); }
     catch (e) { showMessage('Could not save the order', e instanceof Error ? e.message : String(e)); }
     finally { setApplying(false); }
   }

@@ -18,6 +18,13 @@ function numbersAfter(route: Route, order: string[]) {
   return new Map(sorted.map((s, i) => [s.id, i + 1]));
 }
 
+const START = {
+  location: ' · from your location',
+  current_stop: ' · from the stop you\'re at',
+  last_stop: ' · from your last stop',
+  anywhere: ' · location unavailable, starting at the best first stop',
+} as const;
+
 export function PlanSheet({ route, plan, busy, onUse, onClose }: {
   route: Route; plan: RoutePlan; busy: boolean; onUse: () => void; onClose: () => void;
 }) {
@@ -42,7 +49,7 @@ export function PlanSheet({ route, plan, busy, onUse, onClose }: {
           <View style={{ padding: space[4], paddingBottom: space[3], gap: space[3], borderBottomWidth: 1, borderBottomColor: color.divider }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: color.divider, alignSelf: 'center' }} />
             <View>
-              <Text style={type.caption}>Best order</Text>
+              <Text style={type.caption}>Best order{START[plan.start ?? 'anywhere']}</Text>
               <Text style={type.title} accessibilityRole="header">{headline}</Text>
             </View>
             <StatRow compact items={[

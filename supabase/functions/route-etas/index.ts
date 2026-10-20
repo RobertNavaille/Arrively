@@ -1,6 +1,6 @@
 // Recomputes traffic-aware ETAs for the stops left on a route (ETA-1, ETA-2).
 //
-//   POST { route_id?, force? }
+//   POST { route_id?, force?, from? }   (from: where the driver is now)
 //
 // The driver app calls this after each location report (at most once a
 // minute) and right after a stop changes; the console after it edits a route.
@@ -9,7 +9,7 @@
 // Secret MAPBOX_TOKEN.
 
 import { cors, json, withCors } from "../_shared/admin.ts";
-import { asCaller, loadRoute, refreshEtas } from "../_shared/routing.ts";
+import { asCaller, asPoint, loadRoute, refreshEtas } from "../_shared/routing.ts";
 
 const MIN_INTERVAL_MS = 45_000;
 
@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
   if (!body.force && Date.now() - last < MIN_INTERVAL_MS) return withCors(json({ skipped: "too soon" }));
 
   try {
-    return withCors(json(await refreshEtas(loaded)));
+    return withCors(json(await refreshEtas(loaded, undefined, asPoint(body.from))));
   } catch (e) {
     console.error(e);
     return withCors(json({ error: e instanceof Error ? e.message : String(e) }, 502));
