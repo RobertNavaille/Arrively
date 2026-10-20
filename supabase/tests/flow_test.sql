@@ -184,3 +184,27 @@ insert into stops (org_id, route_id, position, customer_name, customer_phone, sm
 values (:'org1', :'fut', 1, 'Future Customer', '+14015557777', now(), '1 Future St', 41.8, -71.4) returning id as fs \gset
 select pg_temp.expect((select body like '%scheduled for ' || to_char(current_date + 3, 'FMDay, Mon FMDD') || '.%' from notifications where stop_id = :'fs' and kind = 'scheduled'), 'scheduled text names the future day');
 select 'SCHEDULED DAY PASSED' as result;
+
+-- ---- Removing stops ----------------------------------------------------------
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d', false);
+select id as rm from stops s where s.route_id = (select id from routes where driver_id = auth.uid() and day = current_date)
+  and s.status in ('scheduled', 'queued') order by position limit 1 \gset
+select public.remove_stop(:'rm');
+select pg_temp.expect((select status = 'cancelled' from stops where id = :'rm'), 'driver can remove an upcoming stop');
+select id as done_stop from stops where route_id = (select id from routes where driver_id = auth.uid() and day = current_date)
+  and status = 'completed' limit 1 \gset
+select set_config('my.done_stop', :'done_stop', false);
+do $$ begin
+  perform public.remove_stop(current_setting('my.done_stop')::uuid);
+  raise exception 'FAILED: a finished stop must not be removable';
+exception when sqlstate 'P0001' then raise notice 'ok: finished stops stay';
+end $$;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000d2', false);
+do $$ begin
+  perform public.remove_stop(current_setting('my.done_stop')::uuid);
+  raise exception 'FAILED: outsider removed a stop';
+exception when sqlstate '42501' then raise notice 'ok: outsiders cannot remove stops';
+end $$;
+reset role;
+select 'REMOVE PASSED' as result;

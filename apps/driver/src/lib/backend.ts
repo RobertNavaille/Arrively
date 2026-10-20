@@ -23,6 +23,8 @@ export interface Backend {
   markStop(stopId: string, outcome: MarkOutcome, reason: string | null, at: LatLng | null): Promise<void>;
   addStop(day: string, address: string, at: LatLng): Promise<void>;
   updateAddress(stopId: string, address: string, at: LatLng): Promise<void>;
+  /** Removes a stop the driver hasn't started (it's kept as cancelled). */
+  removeStop(stopId: string): Promise<void>;
   reportLocation(p: LatLng & { heading?: number | null; speed?: number | null; accuracy?: number | null; at?: string }): Promise<void>;
   createDemoDay(at: LatLng, phone: string | null): Promise<void>;
   /** The best order for the stops left, starting where the driver is (`from`), next to the current order (RTE-4). */
@@ -133,6 +135,10 @@ const supabaseBackend: Backend = {
     check(await supabase().rpc('update_stop_address', { p_stop: stopId, p_address: address, p_lat: at.lat, p_lng: at.lng }));
     refreshEtas(true);
   },
+  async removeStop(stopId) {
+    check(await supabase().rpc('remove_stop', { p_stop: stopId }));
+    refreshEtas(true);
+  },
   async reportLocation(p) {
     check(await supabase().rpc('report_location', {
       p_lat: p.lat, p_lng: p.lng, p_heading: p.heading ?? null, p_speed: p.speed ?? null,
@@ -218,7 +224,10 @@ const offlineBackend: Backend = {
   async verifyCode() { setSignedIn(true); },
   async signOut() { setSignedIn(false); },
   async profile() { return { id: 'demo', name: 'Bill Brien', role: 'driver', vehicle: 'White Ford Transit · 7KQ 204', org_name: 'Acme Plumbing (demo)' }; },
-  async routes(from, to) { return ensureDemo().filter((r) => r.day >= from && r.day <= to).map((r) => ({ ...r, stops: [...r.stops].sort((a, b) => a.position - b.position) })); },
+  async routes(from, to) {
+    return ensureDemo().filter((r) => r.day >= from && r.day <= to)
+      .map((r) => ({ ...r, stops: r.stops.filter((s) => s.status !== 'cancelled').sort((a, b) => a.position - b.position) }));
+  },
   subscribe(fn) { listeners.add(fn); return () => { listeners.delete(fn); }; },
   async startRoute(routeId) {
     const r = ensureDemo().find((x) => x.id === routeId); if (!r) throw new Error('Route not found');
@@ -259,6 +268,13 @@ const offlineBackend: Backend = {
     emit();
   },
   async updateAddress(stopId, address, at) { const [, s] = findStop(stopId); s.address = address; s.lat = at.lat; s.lng = at.lng; emit(); },
+  async removeStop(stopId) {
+    const [r, s] = findStop(stopId);
+    if (s.status !== 'scheduled' && s.status !== 'queued') throw new Error("Only stops you haven't started can be removed.");
+    s.status = 'cancelled';
+    if (r.status === 'active') finishIfDone(r);
+    emit();
+  },
   async reportLocation(p) {
     lastPos = { lat: p.lat, lng: p.lng };
     for (const r of ensureDemo()) {

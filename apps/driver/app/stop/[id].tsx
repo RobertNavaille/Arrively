@@ -69,6 +69,13 @@ export default function StopScreen() {
     await run(outcome, () => backend.markStop(stop.id, outcome, null, here));
   }
 
+  async function remove() {
+    const ok = await confirmAction(`Remove ${stop.customer_name}?`,
+      `${stop.address.split(',')[0]} comes off your route. The customer won't get any more texts about this visit.`, 'Remove');
+    if (!ok) return;
+    await run('remove', async () => { await backend.removeStop(stop.id); router.replace('/'); });
+  }
+
   const preview = stop.status === 'queued' || stop.status === 'scheduled';
   const statusText = preview ? `${total - n} more after this` : stop.status === 'en_route' ? 'On route' : 'Arrived';
 
@@ -98,7 +105,10 @@ export default function StopScreen() {
               <View style={{ gap: 4 }}>
                 <PersonRow name={stop.customer_name} subtitle={stop.address} accent={pos ? 'From current location' : undefined}
                   onMessage={() => showMessage('Coming soon', 'Chat with customers arrives in the next build.')} />
-                <Button variant="text" size="sm" label="Wrong address? Edit it" onPress={() => router.push(`/edit/${stop.id}`)} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Button variant="text" size="sm" label="Wrong address? Edit it" onPress={() => router.push(`/edit/${stop.id}`)} style={{ paddingHorizontal: 0 }} />
+                  <Button variant="danger" size="sm" label="Remove stop" loading={busy === 'remove'} onPress={remove} style={{ paddingHorizontal: 0 }} />
+                </View>
               </View>
               <View style={{ gap: space[3] }}>
                 {stop.window_start ? <DetailRow icon="clock" primary={fmtWindow(stop)} secondary="Window promised to the customer" /> : null}
