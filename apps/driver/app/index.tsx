@@ -6,18 +6,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
-import { useRoadPath } from '../src/lib/directions';
-import { addDays, dayKey, fmtDuration, fmtTime, routeTotals } from '../src/lib/geo';
-import { currentPosition, startSharing, stopSharing, useLivePosition } from '../src/lib/location';
+import { addDays, dayKey, fmtTime } from '../src/lib/geo';
+import { currentPosition, stopSharing, useLivePosition } from '../src/lib/location';
 import { searchAddress, type Place } from '../src/lib/mapbox';
-import type { RoutePlan } from '../src/lib/routing';
-import { currentStop, dayRange, lastMarked, useDriverData } from '../src/lib/store';
+import { currentStop, dayRange, useActiveTrip, useDriverData } from '../src/lib/store';
 import { isDone, type LatLng, type Route, type Stop } from '../src/lib/types';
-import { Avatar, Banner, Button, IconButton, StatRow, StatusPill, type PillTone } from '../src/ui/components';
+import { Avatar, Button, IconButton } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
-import { PlanSheet } from '../src/ui/PlanSheet';
 import { RouteMap } from '../src/ui/RouteMap';
-import { framePoints, type MapStop } from '../src/ui/RouteMap.types';
+import type { MapStop } from '../src/ui/RouteMap.types';
+import { TripBar } from '../src/ui/TripBar';
 import { bareInput, color, font, radius, shadow, space, type } from '../src/ui/theme';
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -125,37 +123,6 @@ export default function MyDay() {
   const [q, setQ] = useState('');
   const found = useAddressSearch(q, pos);
   useEffect(() => { setQ(''); }, [index]);
-  const [busy, setBusy] = useState(false);
-  const [plan, setPlan] = useState<{ route: Route; plan: RoutePlan; from: LatLng | null } | null>(null);
-  const [planning, setPlanning] = useState<string | null>(null); // route id being optimized
-  const [applying, setApplying] = useState(false);
-
-  async function optimize(r: Route) {
-    setPlanning(r.id);
-    try {
-      // Plan from where the driver is right now.
-      const here = pos ?? (await currentPosition());
-      setPlan({ route: r, plan: await backend.planRoute(r.id, here), from: here });
-    }
-    catch (e) { showMessage('Could not optimize', e instanceof Error ? e.message : String(e)); }
-    finally { setPlanning(null); }
-  }
-  // Today and later, with at least two stops still to visit. After the first
-  // optimize the button shrinks to its icon.
-  const optimizable = !!route && route.status !== 'completed' && dayK >= dayKey(today)
-    && route.stops.filter((s) => s.status === 'scheduled' || s.status === 'queued').length >= 2;
-  const optimizeButton = route ? (
-    <Button variant="secondary" icon="route" label={route.optimized_at ? 'Optimize again' : 'Optimize'}
-      iconOnly={!!route.optimized_at} loading={planning === route.id} onPress={() => optimize(route)} />
-  ) : null;
-  async function usePlan() {
-    if (!plan) return;
-    setApplying(true);
-    try { await backend.applyPlan(plan.route.id, plan.plan.order, plan.from); setPlan(null); await refresh(); }
-    catch (e) { showMessage('Could not save the order', e instanceof Error ? e.message : String(e)); }
-    finally { setApplying(false); }
-  }
-
   function goTo(i: number) {
     touched.current = true;
     // Jumps of more than a day skip the animation: the pages in between aren't drawn.
@@ -167,31 +134,7 @@ export default function MyDay() {
   goToRef.current = goTo;
 
   const current = currentStop(route);
-  const marked = lastMarked(route);
-  const showBanner = isToday && marked && current && marked.marked_at
-    && Date.now() - new Date(marked.marked_at).getTime() < 15 * 60 * 1000;
-
-  async function primaryAction() {
-    if (!route || !current) return;
-    setBusy(true);
-    try {
-      if (route.status === 'planned') {
-        await backend.startRoute(route.id);
-        const ok = await startSharing();
-        if (!ok) showMessage('Location is off', 'Allow location "Always" so customers can see you coming and stops are marked when you arrive.');
-      }
-      router.push(`/stop/${current.id}`);
-    } catch (e) {
-      showMessage('Could not start', e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const ctaLabel = !current ? '' : route?.status === 'planned' ? 'Start route'
-    : current.status === 'en_route' ? `Continue to ${current.customer_name}`
-    : current.status === 'arrived' ? `Back to ${current.customer_name}`
-    : `Start trip to ${current.customer_name}`;
+  const trip = useActiveTrip();
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: color.surface }}>
@@ -246,13 +189,6 @@ export default function MyDay() {
         />
       </View>
 
-      {showBanner && marked ? (
-        <View style={{ paddingHorizontal: space[4], paddingTop: space[3] }}>
-          <Banner title={marked.status === 'completed' ? 'Stop complete' : marked.status === 'no_show' ? 'Marked no-show' : 'Stop skipped'}
-            meta={`${marked.customer_name} · ${fmtTime(marked.marked_at)}`} />
-        </View>
-      ) : null}
-
       {/* Day pages: search, map, summary and stops scroll together */}
       <View style={{ flex: 1 }}>
           <FlatList
@@ -292,7 +228,7 @@ export default function MyDay() {
               return (
                 <View style={{ width, height: pagerH || undefined }}>
                   <DayPanel route={routeFor(k)} isToday={k === dayKey(today)} driver={k === dayKey(today) ? pos : null}
-                    onOpenStop={(s) => router.push(`/stop/${s.id}`)} loading={loading}
+                    onOpenStop={(s) => router.push(`/stop/${s.id}?view=details`)} loading={loading}
                     search={
                       <SearchHeader label={label} q={k === dayK ? q : ''} setQ={setQ} {...found}
                         onPick={(p) => {
@@ -305,29 +241,23 @@ export default function MyDay() {
               );
             }}
           />
-      {/* Footer */}
-          <View style={{ padding: space[4], paddingBottom: space[6], borderTopWidth: 1, borderTopColor: color.divider }}>
+      {/* Footer: while a trip is under way, the trip bar on every day; otherwise Start trip on today. */}
+          <View>
             {q.trim() ? <Pressable accessibilityLabel="Close search" onPress={() => setQ('')} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: color.scrim, zIndex: 2 }} /> : null}
-            {error ? <Text style={[type.caption, { color: color.danger, marginBottom: space[2] }]}>{error}</Text> : null}
-            {isToday && current ? (
-              <View style={{ flexDirection: 'row', gap: space[3] }}>
-                <Button label={ctaLabel} onPress={primaryAction} loading={busy} style={{ flex: 1 }} />
-                {optimizable ? optimizeButton : null}
+            {error ? <Text style={[type.caption, { color: color.danger, paddingHorizontal: space[4], paddingTop: space[2] }]}>{error}</Text> : null}
+            {trip ? <TripBar route={trip} /> : (
+              <View style={{ padding: space[4], paddingBottom: space[6], borderTopWidth: 1, borderTopColor: color.divider }}>
+                {isToday && current ? (
+                  <Button label="Start trip" onPress={() => router.push('/trip')} />
+                ) : (
+                  <Text style={[type.body, { color: color.inkMuted, textAlign: 'center', paddingVertical: space[3] }]}>
+                    {footerText(route, day, today)}
+                  </Text>
+                )}
               </View>
-            ) : optimizable ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
-                <Text style={[type.body, { flex: 1, color: color.inkMuted }]}>{footerText(route, day, today)}</Text>
-                {optimizeButton}
-              </View>
-            ) : (
-              <Text style={[type.body, { color: color.inkMuted, textAlign: 'center', paddingVertical: space[3] }]}>
-                {footerText(route, day, today)}
-              </Text>
             )}
           </View>
       </View>
-
-      {plan ? <PlanSheet route={plan.route} plan={plan.plan} busy={applying} onUse={usePlan} onClose={() => setPlan(null)} /> : null}
 
       <Menu visible={menu} onClose={() => setMenu(false)} offline={backend.offline} onDemo={async () => {
         setMenu(false);
@@ -385,21 +315,18 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, search }: {
   const current = currentStop(route);
   const remaining = stops.filter((s) => !isDone(s));
   const done = stops.length - remaining.length;
-  // Routed ETAs when the server has them; a straight-line estimate otherwise.
-  const totals = routeTotals(remaining, isToday ? driver : null);
-  const last = remaining[remaining.length - 1];
-  const routed = route?.drive_s != null && !!last?.eta;
-  const driveLabel = routed ? fmtDuration(Math.round(route!.drive_s! / 60)) : `~${fmtDuration(totals.driveMin)}`;
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  // Stops only: the order, drive time and route line live in the Trip screen.
+  const count = route?.status === 'completed' ? plural(stops.length, 'stop', 'stops')
+    : done ? plural(remaining.length, 'stop left', 'stops left') : plural(stops.length, 'stop', 'stops');
+  const countMeta = route?.status === 'completed' ? `${stops.filter((s) => s.status === 'completed').length} completed`
+    : done ? `${done} done` : isToday && remaining.length > 1 ? 'Order is set when you start the trip' : '';
 
   const mapStops: MapStop[] = stops.map((s, i) => ({
     id: s.id, lat: s.lat, lng: s.lng, n: i + 1,
-    state: isDone(s) ? 'done' : s.id === current?.id ? 'next' : 'upcoming',
+    // The next stop stands out only once the trip is under way.
+    state: isDone(s) ? 'done' : route?.status === 'active' && s.id === current?.id ? 'next' : 'upcoming',
   }));
-  // Follow real roads when Mapbox can route them; straight lines until then.
-  // A driver too far away to show on the map isn't routed from either.
-  const near = isToday && driver && framePoints({ stops: mapStops, driver }).includes(driver) ? driver : null;
-  const road = useRoadPath(near, remaining);
-  const line = road ? [...(near ? [near] : []), ...road] : [...(isToday && driver ? [driver] : []), ...remaining];
 
   if (!stops.length) {
     return (
@@ -420,16 +347,12 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, search }: {
       {search}
       <View style={{ paddingHorizontal: space[4] }}>
         <View style={{ borderRadius: radius.md, overflow: 'hidden' }}>
-          <RouteMap height={190} stops={mapStops} driver={isToday ? driver : null} line={line} />
+          <RouteMap height={190} stops={mapStops} driver={isToday ? driver : null} />
         </View>
       </View>
-      <View style={{ padding: space[4], paddingVertical: space[3] }}>
-        <StatRow compact items={route?.status === 'completed'
-          ? [{ value: String(stops.length), label: 'stops' }, { value: String(stops.filter((s) => s.status === 'completed').length), label: 'completed' }]
-          : [
-            { value: String(remaining.length), label: done ? 'stops left' : 'stops' },
-            { value: driveLabel, label: 'drive' },
-          ]} />
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space[3], paddingHorizontal: space[4], paddingTop: space[4], paddingBottom: space[2] }}>
+        <Text style={type.heading}>{count}</Text>
+        {countMeta ? <Text style={type.caption}>{countMeta}</Text> : null}
       </View>
       <View style={{ borderTopWidth: 1, borderTopColor: color.divider, paddingHorizontal: space[4] }}>
         {stops.map((s, i) => (
@@ -442,9 +365,6 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, search }: {
 
 function StopListRow({ stop, isCurrent, last, onPress }: { stop: Stop; isCurrent: boolean; last: boolean; onPress: () => void }) {
   const done = isDone(stop);
-  const status = stop.status === 'completed' ? ['Done', 'success'] : stop.status === 'no_show' ? ['No-show', 'warning']
-    : stop.status === 'skipped' ? ['Skipped', 'neutral'] : stop.status === 'arrived' ? ['Arrived', 'info']
-    : stop.status === 'en_route' ? ['On the way', 'info'] : isCurrent ? ['Next', 'info'] : null;
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${stop.customer_name}, ${stop.address}${done ? ', done' : isCurrent ? ', next' : ''}`}
       style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[3], borderBottomWidth: last ? 0 : 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
@@ -453,7 +373,6 @@ function StopListRow({ stop, isCurrent, last, onPress }: { stop: Stop; isCurrent
         <Text style={type.bodyStrong}>{stop.customer_name}</Text>
         <Text style={type.caption} numberOfLines={1}>{stop.address}{stop.notes ? ` · ${stop.notes}` : ''}</Text>
       </View>
-      {status ? <StatusPill label={status[0]} tone={status[1] as PillTone} /> : null}
     </Pressable>
   );
 }

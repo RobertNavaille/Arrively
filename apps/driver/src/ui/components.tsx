@@ -162,26 +162,3 @@ export const styles = StyleSheet.create({
   pillText: { fontFamily: font.medium, fontSize: 11, lineHeight: 18, letterSpacing: 0.2 },
   banner: { flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3], borderRadius: radius.md, backgroundColor: color.surfaceMuted },
 });
-
-/**
- * A stop's marker in lists, matching the map: the next stop is solid blue,
- * upcoming stops are ringed, finished ones are grey with a check. No numbers:
- * they stop making sense once stops are finished, skipped or moved.
- */
-export function StopDot({ state }: { state: 'next' | 'upcoming' | 'done' }) {
-  return (
-    <View style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }} accessibilityElementsHidden importantForAccessibility="no">
-      {state === 'done' ? (
-        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: color.inkMuted, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name="check" size={13} color={color.onAction} />
-        </View>
-      ) : state === 'next' ? (
-        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: color.brandTint, alignItems: 'center', justifyContent: 'center' }}>
-          <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: color.action }} />
-        </View>
-      ) : (
-        <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: color.surface, borderWidth: 3, borderColor: color.action }} />
-      )}
-    </View>
-  );
-}

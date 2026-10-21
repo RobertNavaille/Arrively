@@ -85,6 +85,13 @@ export function stopNumber(route: Route, stop: Stop) {
   return route.stops.findIndex((s) => s.id === stop.id) + 1;
 }
 
+/** Today's route while its trip is under way (started, stops still to visit). */
+export function useActiveTrip(): Route | undefined {
+  const { routeFor } = useDriverData();
+  const route = routeFor(dayKey(new Date()));
+  return route?.status === 'active' && route.stops.some((s) => !isDone(s)) ? route : undefined;
+}
+
 export function lastMarked(route: Route | undefined): Stop | undefined {
   if (!route) return undefined;
   return [...route.stops].filter((s) => s.marked_at).sort((a, b) => (b.marked_at ?? '').localeCompare(a.marked_at ?? ''))[0];

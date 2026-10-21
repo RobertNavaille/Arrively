@@ -46,7 +46,7 @@ export default function SkipScreen() {
     try {
       await backend.markStop(stop.id, what, reason, await currentPosition());
       router.dismissAll();
-      router.replace('/');
+      router.replace('/trip');
     } catch (e) {
       showMessage('Could not update the stop', e instanceof Error ? e.message : String(e));
       setBusy(false);

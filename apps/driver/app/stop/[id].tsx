@@ -7,10 +7,11 @@ import { backend } from '../../src/lib/backend';
 import { distanceM, estimateDriveMin, fmtTime, fmtWindow, miles, parseDay } from '../../src/lib/geo';
 import { useRoadRoute } from '../../src/lib/directions';
 import { currentPosition, useLivePosition } from '../../src/lib/location';
-import { stopNumber, useDriverData } from '../../src/lib/store';
+import { stopNumber, useActiveTrip, useDriverData } from '../../src/lib/store';
 import { isDone, type Stop } from '../../src/lib/types';
 import { Banner, Button, DetailRow, IconButton, PersonRow, StatRow, StatusPill, StopProgress } from '../../src/ui/components';
 import { RouteMap } from '../../src/ui/RouteMap';
+import { TripBar } from '../../src/ui/TripBar';
 import { color, radius, shadow, space, type } from '../../src/ui/theme';
 
 const RADIUS_M = 75;
@@ -24,22 +25,23 @@ function openDirections(s: Stop) {
 
 /** Screens 2–4: next stop, on route, arrived. The view follows the stop's status. */
 export default function StopScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, view } = useLocalSearchParams<{ id: string; view?: string }>();
   const router = useRouter();
   const { stopById } = useDriverData();
   const found = stopById(String(id));
   const pos = useLivePosition();
+  const trip = useActiveTrip();
   const [busy, setBusy] = useState<string | null>(null);
   // The road route to the stop while it's ahead of the driver (not once arrived or finished).
-  const heading = found && (found.stop.status === 'queued' || found.stop.status === 'scheduled' || found.stop.status === 'en_route');
+  const heading = found && view !== 'details' && (found.stop.status === 'queued' || found.stop.status === 'scheduled' || found.stop.status === 'en_route');
   const road = useRoadRoute(heading ? pos : null, heading && found ? found.stop : null);
 
-  // Marking the stop here sends the driver back to My day (screen 5 = screen 1).
+  // Marking the stop here sends the driver back to the trip.
   // A stop that was already finished when opened just shows its details.
   const openedDone = useRef<boolean | null>(null);
   if (found && openedDone.current === null) openedDone.current = isDone(found.stop);
   useEffect(() => {
-    if (found && isDone(found.stop) && openedDone.current === false) router.replace('/');
+    if (found && isDone(found.stop) && openedDone.current === false) router.replace('/trip');
   }, [found, router]);
 
   if (!found) {
@@ -87,6 +89,8 @@ export default function StopScreen() {
   }
 
   const preview = stop.status === 'queued' || stop.status === 'scheduled';
+  // Opened from My day's list: the stop's details, not a step of the trip.
+  const details = view === 'details' && preview;
   const done = isDone(stop);
   const outcome = stop.status === 'completed' ? 'Done' : stop.status === 'no_show' ? 'No-show' : 'Skipped';
   const statusText = done ? outcome : preview ? `${total - n} more after this` : stop.status === 'en_route' ? 'On route' : 'Arrived';
@@ -94,15 +98,19 @@ export default function StopScreen() {
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: color.surface }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[3], paddingVertical: space[2] }}>
-        <IconButton icon="back" label="Back to My day" variant="plain" onPress={() => router.replace('/')} />
+        {details || done || !trip
+          ? <IconButton icon="back" label="Back to My day" variant="plain" onPress={() => router.replace('/')} />
+          : <IconButton icon="back" label="Back to the trip" variant="plain" onPress={() => router.replace('/trip')} />}
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={type.heading}>{parseDay(route.day).toLocaleDateString('en-US', { weekday: 'long' })}</Text>
           <Text style={type.caption}>{parseDay(route.day).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
-      <StopProgress current={n} total={total} status={farFromArrived ? 'Not marked yet' : statusText}
-        statusColor={farFromArrived ? color.warning : undefined} />
+      {details ? null : (
+        <StopProgress current={n} total={total} status={farFromArrived ? 'Not marked yet' : statusText}
+          statusColor={farFromArrived ? color.warning : undefined} />
+      )}
 
       {done ? (
         // ---- A finished stop: details only ----
@@ -138,12 +146,12 @@ export default function StopScreen() {
           <ScrollView contentContainerStyle={{ paddingBottom: space[4] }}>
             <View style={{ paddingHorizontal: space[4] }}>
               <View style={{ borderRadius: radius.md, overflow: 'hidden' }}>
-                <RouteMap height={240} pin={stop} pinLabel={stop.address.split(',')[0]} driver={pos} line={roadLine} />
+                <RouteMap height={240} pin={stop} pinLabel={stop.address.split(',')[0]} driver={details ? null : pos} line={details ? undefined : roadLine} />
               </View>
             </View>
             <View style={{ padding: space[4], gap: space[6] }}>
               <View style={{ gap: 4 }}>
-                <PersonRow name={stop.customer_name} subtitle={stop.address} accent={pos ? 'From current location' : undefined}
+                <PersonRow name={stop.customer_name} subtitle={stop.address} accent={pos && !details ? 'From current location' : undefined}
                   onMessage={() => showMessage('Coming soon', 'Chat with customers arrives in the next build.')} />
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Button variant="text" size="sm" label="Wrong address? Edit it" onPress={() => router.push(`/edit/${stop.id}`)} style={{ paddingHorizontal: 0 }} />
@@ -156,6 +164,7 @@ export default function StopScreen() {
               </View>
             </View>
           </ScrollView>
+          {details ? (trip ? <TripBar route={trip} /> : null) : (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[4], padding: space[4], paddingBottom: space[6], borderTopWidth: 1, borderTopColor: color.divider }}>
             {driveMin != null ? (
               <View>
@@ -166,6 +175,7 @@ export default function StopScreen() {
             <Button label="Start trip" style={{ flex: 1 }} loading={busy === 'start'}
               onPress={() => run('start', () => backend.startTrip(stop.id))} />
           </View>
+          )}
         </>
       ) : (
         // ---- Screens 3 and 4: on route / arrived ----
