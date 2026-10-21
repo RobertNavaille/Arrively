@@ -199,7 +199,6 @@ export default function Trip() {
             <>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
                 <View style={{ flex: 1 }} accessible accessibilityLabel={`${legMin ?? '–'} minutes, ${legMeters != null ? miles(legMeters).toFixed(1) : '–'} miles to ${current.customer_name}`}>
-                  <Text style={[type.label, { textTransform: 'uppercase', color: color.actionInk }]}>On the way</Text>
                   <Text style={{ fontFamily: font.semibold, fontSize: 34, lineHeight: 40, color: color.ink }}>{legMin != null ? `${legMin} min` : '–'}</Text>
                   <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]} numberOfLines={1}>
                     {legMeters != null ? `${miles(legMeters).toFixed(1)} mi · ` : ''}to {current.customer_name}
