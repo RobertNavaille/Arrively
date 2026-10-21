@@ -9,7 +9,7 @@ import { currentPosition, startSharing, useLivePosition } from '../src/lib/locat
 import type { RoutePlan } from '../src/lib/routing';
 import { currentStop, lastMarked, useDriverData } from '../src/lib/store';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
-import { Banner, Button, DetailRow, IconButton, StatRow, StatusPill } from '../src/ui/components';
+import { Banner, Button, DetailRow, IconButton, StatusPill } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
 import type { MapStop } from '../src/ui/RouteMap.types';
@@ -119,18 +119,31 @@ export default function Trip() {
 
   // The map: the whole trip, or once arrived, this stop alone.
   const order = [...done, ...ahead];
-  const mapStops: MapStop[] = phase === 'arrived' ? [] : order.map((s, i) => ({
+  // On the way, the map follows the drive: the driver and this leg only.
+  const focus = phase === 'arrived' || phase === 'onroute';
+  const mapStops: MapStop[] = focus ? [] : order.map((s, i) => ({
     id: s.id, lat: s.lat, lng: s.lng, n: i + 1,
     state: isDone(s) ? 'done' : s.id === (reviewOrder?.[0] ?? current)?.id ? 'next' : 'upcoming',
   }));
-  const line = phase === 'arrived' ? undefined : road ? [...(pos ? [pos] : []), ...road.path] : [...(pos ? [pos] : []), ...ahead];
+  const line = phase === 'arrived' ? undefined
+    : phase === 'onroute' && current ? [...(pos ? [pos] : []), ...(leg ? leg.path : []), current]
+    : road ? [...(pos ? [pos] : []), ...road.path] : [...(pos ? [pos] : []), ...ahead];
   const peek = Math.round(height * 0.36);
 
   return (
     <View style={{ flex: 1, backgroundColor: color.mapGround }}>
       <RouteMap height={height} stops={mapStops} driver={pos} line={line}
-        pin={phase === 'arrived' ? current : null} pinLabel={phase === 'arrived' ? current?.address.split(',')[0] : undefined}
-        inset={{ bottom: height - peek - MAP_STRIP }} />
+        pin={focus ? current : null} pinLabel={phase === 'arrived' ? current?.address.split(',')[0] : undefined}
+        inset={{ top: phase === 'onroute' ? 84 : 0, bottom: height - peek - MAP_STRIP }} />
+
+      {/* On the way: where to, across the top of the map. */}
+      {phase === 'onroute' && current ? (
+        <Pressable onPress={() => openDirections(current)} accessibilityRole="button" accessibilityLabel={`Directions to ${current.address}`}
+          style={[{ position: 'absolute', top: 12, left: space[4], right: space[4], zIndex: 2, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], paddingVertical: 10, borderRadius: radius.md, backgroundColor: color.surface }, shadow.float]}>
+          <Icon name="navigate" size={18} color={color.ink} />
+          <Text style={[type.body, { flex: 1 }]} numberOfLines={1}>{current.address}</Text>
+        </Pressable>
+      ) : null}
 
       <ScrollView style={{ position: 'absolute', top: MAP_STRIP, left: 0, right: 0, bottom: 0 }}
         stickyHeaderIndices={[1]} showsVerticalScrollIndicator={false}>
@@ -181,18 +194,22 @@ export default function Trip() {
             </>
           ) : null}
 
+          {/* On the way: the drive leads; who it's to comes second. */}
           {phase === 'onroute' && current ? (
             <>
-              <StopHeading eyebrow="On the way" stop={current} onCall={call} onMessage={message} />
-              <StatRow compact items={[
-                { value: legMin != null ? String(legMin) : '–', label: 'minutes' },
-                { value: legMeters != null ? miles(legMeters).toFixed(1) : '–', label: 'miles' },
-              ]} />
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
-                <Button label="Arrived" style={{ flex: 1 }} loading={busy === 'arrived'}
-                  onPress={() => run('arrived', async () => { await backend.markArrived(current.id); await refresh(); })} />
-                <Button variant="text" icon="navigate" label="Directions" onPress={() => openDirections(current)} />
+                <View style={{ flex: 1 }} accessible accessibilityLabel={`${legMin ?? '–'} minutes, ${legMeters != null ? miles(legMeters).toFixed(1) : '–'} miles to ${current.customer_name}`}>
+                  <Text style={[type.label, { textTransform: 'uppercase', color: color.actionInk }]}>On the way</Text>
+                  <Text style={{ fontFamily: font.semibold, fontSize: 34, lineHeight: 40, color: color.ink }}>{legMin != null ? `${legMin} min` : '–'}</Text>
+                  <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]} numberOfLines={1}>
+                    {legMeters != null ? `${miles(legMeters).toFixed(1)} mi · ` : ''}to {current.customer_name}
+                  </Text>
+                </View>
+                {call ? <IconButton icon="phone" label={`Call ${current.customer_name}`} onPress={call} /> : null}
+                <IconButton icon="navigate" label="Directions" onPress={() => openDirections(current)} />
               </View>
+              <Button label="Arrived" loading={busy === 'arrived'}
+                onPress={() => run('arrived', async () => { await backend.markArrived(current.id); await refresh(); })} />
               <Text style={[type.caption, { textAlign: 'center' }]}>Arrival is detected when you reach the stop.</Text>
             </>
           ) : null}
