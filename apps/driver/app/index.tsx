@@ -52,34 +52,53 @@ export default function MyDay() {
     if (Platform.OS !== 'web') return;
     const node = (listRef.current as unknown as { getScrollableNode?: () => HTMLElement | null })?.getScrollableNode?.();
     if (!node) return;
-    const mark = () => { touched.current = true; };
-    const events = ['touchstart', 'pointerdown', 'keydown'] as const;
-    events.forEach((e) => node.addEventListener(e, mark, { passive: true }));
-    // Trackpad and mouse wheel: a sideways swipe moves exactly one day. The
-    // browser's own snapping re-snaps after every small trackpad movement, so
-    // on wide screens a swipe never reached the next day. Vertical scrolling is
-    // left alone so the stop list scrolls normally.
-    let sum = 0, locked = false, idle: ReturnType<typeof setTimeout> | undefined;
-    const onWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
-      e.preventDefault();
-      touched.current = true;
-      clearTimeout(idle);
-      idle = setTimeout(() => { sum = 0; locked = false; }, 250); // the gesture (and its momentum) has ended
-      if (locked) return;
-      sum += e.deltaX;
-      if (Math.abs(sum) < 30) return;
-      locked = true;
-      const next = Math.min(Math.max(indexRef.current + (sum > 0 ? 1 : -1), 0), daysRef.current.length - 1);
-      goToRef.current(next);
-    };
-    node.addEventListener('wheel', onWheel, { passive: false });
-    return () => {
-      events.forEach((e) => node.removeEventListener(e, mark));
-      node.removeEventListener('wheel', onWheel);
-      clearTimeout(idle);
-    };
+    return sideSwipe(node, () => { touched.current = true; },
+      (dir) => goToRef.current(Math.min(Math.max(indexRef.current + dir, 0), daysRef.current.length - 1)));
   }, []);
+
+  // The week strip pages too: swiping it moves to the same weekday in the next
+  // or previous week, and the day pages follow.
+  const weeks = useMemo(() => Array.from({ length: days.length / 7 }, (_, w) => days.slice(w * 7, w * 7 + 7)), [days]);
+  const week = Math.floor(index / 7);
+  const stripRef = useRef<FlatList<Date[]>>(null);
+  const stripTouched = useRef(false);
+  const stripIdle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  function goToWeek(w: number) {
+    const i = Math.min(Math.max(w, 0), weeks.length - 1) * 7 + (indexRef.current % 7);
+    if (i !== indexRef.current) goTo(i);
+    else stripRef.current?.scrollToOffset({ offset: width * week, animated: true });
+  }
+  const goToWeekRef = useRef(goToWeek);
+  goToWeekRef.current = goToWeek;
+  // Keep the strip on the selected day's week, however the day changed.
+  const stripPlaced = useRef(false);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      stripRef.current?.scrollToOffset({ offset: width * week, animated: stripPlaced.current });
+      stripPlaced.current = true;
+    }, 0);
+    return () => clearTimeout(t);
+  }, [week, width]);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const node = (stripRef.current as unknown as { getScrollableNode?: () => HTMLElement | null })?.getScrollableNode?.();
+    if (!node) return;
+    return sideSwipe(node, () => { stripTouched.current = true; },
+      (dir) => goToWeekRef.current(Math.floor(indexRef.current / 7) + dir));
+  }, []);
+  // Web has no momentum-end event: act once the strip has stopped scrolling.
+  function onStripScroll(x: number) {
+    clearTimeout(stripIdle.current);
+    stripIdle.current = setTimeout(() => {
+      const w = Math.round(x / width);
+      const now = Math.floor(indexRef.current / 7);
+      if (w === now) return;
+      if (stripTouched.current) goToWeekRef.current(w);
+      // Not the driver (Safari restoring an old position): back to the selected week.
+      else stripRef.current?.scrollToOffset({ offset: width * now, animated: false });
+      stripTouched.current = false;
+    }, 120);
+  }
 
   // Back on the app on a new day: select the new today.
   useEffect(() => {
@@ -139,8 +158,10 @@ export default function MyDay() {
 
   function goTo(i: number) {
     touched.current = true;
+    // Jumps of more than a day skip the animation: the pages in between aren't drawn.
+    const near = Math.abs(i - indexRef.current) <= 1;
     setIndex(i);
-    listRef.current?.scrollToIndex({ index: i, animated: true });
+    listRef.current?.scrollToIndex({ index: i, animated: near });
   }
   const goToRef = useRef(goTo);
   goToRef.current = goTo;
@@ -185,25 +206,44 @@ export default function MyDay() {
       </View>
 
       {/* Date strip */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: space[4], paddingBottom: space[3], borderBottomWidth: 1, borderBottomColor: color.divider }}>
-        {/* The selected day's week, Sunday to Saturday. */}
-        {days.slice(index - (index % 7), index - (index % 7) + 7).map((d, j) => {
-          const i = index - (index % 7) + j;
-          const sel = i === index;
-          const has = (routeFor(dayKey(d))?.stops.length ?? 0) > 0;
-          const past = dayKey(d) < dayKey(today);
-          const isTodayCell = dayKey(d) === dayKey(today);
-          return (
-            <Pressable key={i} onPress={() => goTo(i)} accessibilityRole="tab" accessibilityState={{ selected: sel }}
-              accessibilityLabel={`${d.toDateString()}${isTodayCell ? ', today' : ''}`} style={{ alignItems: 'center', gap: 2, minWidth: 36 }}>
-              <Text style={[type.label, past && { color: color.controlBorder }]}>{DOW[d.getDay()]}</Text>
-              <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: sel ? (past ? color.inkMuted : color.action) : isTodayCell ? color.brandTint : 'transparent' }}>
-                <Text style={[type.bodyStrong, { color: sel ? color.onAction : isTodayCell ? color.onTint : past ? color.controlBorder : color.ink }]}>{d.getDate()}</Text>
-              </View>
-              <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: has ? (past ? color.divider : color.inkMuted) : 'transparent' }} />
-            </Pressable>
-          );
-        })}
+      {/* Week strip, Sunday to Saturday; swipe for the next or previous week. */}
+      <View style={{ borderBottomWidth: 1, borderBottomColor: color.divider }}>
+        <FlatList
+          ref={stripRef}
+          data={weeks}
+          horizontal
+          pagingEnabled
+          initialScrollIndex={week}
+          initialNumToRender={weeks.length}
+          getItemLayout={(_, w) => ({ length: width, offset: width * w, index: w })}
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(w) => dayKey(w[0])}
+          extraData={{ index, routeFor, today }}
+          onScroll={Platform.OS === 'web' ? (e) => onStripScroll(e.nativeEvent.contentOffset.x) : undefined}
+          onMomentumScrollEnd={(e) => goToWeek(Math.round(e.nativeEvent.contentOffset.x / width))}
+          scrollEventThrottle={32}
+          renderItem={({ item: wk, index: w }) => (
+            <View style={{ width, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: space[4], paddingBottom: space[3] }}>
+              {wk.map((d, j) => {
+                const i = w * 7 + j;
+                const sel = i === index;
+                const has = (routeFor(dayKey(d))?.stops.length ?? 0) > 0;
+                const past = dayKey(d) < dayKey(today);
+                const isTodayCell = dayKey(d) === dayKey(today);
+                return (
+                  <Pressable key={i} onPress={() => goTo(i)} accessibilityRole="tab" accessibilityState={{ selected: sel }}
+                    accessibilityLabel={`${d.toDateString()}${isTodayCell ? ', today' : ''}`} style={{ alignItems: 'center', gap: 2, minWidth: 36 }}>
+                    <Text style={[type.label, past && { color: color.controlBorder }]}>{DOW[d.getDay()]}</Text>
+                    <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: sel ? (past ? color.inkMuted : color.action) : isTodayCell ? color.brandTint : 'transparent' }}>
+                      <Text style={[type.bodyStrong, { color: sel ? color.onAction : isTodayCell ? color.onTint : past ? color.controlBorder : color.ink }]}>{d.getDate()}</Text>
+                    </View>
+                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: has ? (past ? color.divider : color.inkMuted) : 'transparent' }} />
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        />
       </View>
 
       {showBanner && marked ? (
@@ -297,6 +337,34 @@ export default function MyDay() {
       }} onSignOut={async () => { setMenu(false); await stopSharing(); await backend.signOut(); }} />
     </SafeAreaView>
   );
+}
+
+// Trackpad and mouse wheel on a pager: one sideways swipe moves exactly one
+// page. The browser's own snapping re-snaps after every small trackpad
+// movement, so on wide screens a swipe never reached the next page. Vertical
+// scrolling is left alone so the stop list scrolls normally.
+function sideSwipe(node: HTMLElement, onInput: () => void, step: (dir: 1 | -1) => void) {
+  const events = ['touchstart', 'pointerdown', 'keydown'] as const;
+  events.forEach((e) => node.addEventListener(e, onInput, { passive: true }));
+  let sum = 0, locked = false, idle: ReturnType<typeof setTimeout> | undefined;
+  const onWheel = (e: WheelEvent) => {
+    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+    e.preventDefault();
+    onInput();
+    clearTimeout(idle);
+    idle = setTimeout(() => { sum = 0; locked = false; }, 250); // the gesture (and its momentum) has ended
+    if (locked) return;
+    sum += e.deltaX;
+    if (Math.abs(sum) < 30) return;
+    locked = true;
+    step(sum > 0 ? 1 : -1);
+  };
+  node.addEventListener('wheel', onWheel, { passive: false });
+  return () => {
+    events.forEach((e) => node.removeEventListener(e, onInput));
+    node.removeEventListener('wheel', onWheel);
+    clearTimeout(idle);
+  };
 }
 
 function footerText(route: Route | undefined, day: Date, today: Date) {
