@@ -9,6 +9,7 @@ import { searchAddress, type Place } from '../src/lib/mapbox';
 import { useDriverData } from '../src/lib/store';
 import { Button } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
+import { RouteMap } from '../src/ui/RouteMap';
 import { bareInput, color, font, radius, space, type } from '../src/ui/theme';
 
 const field = {
@@ -50,6 +51,11 @@ export default function NewStop() {
           <View style={{ gap: 4 }}>
             <Text style={type.title} accessibilityRole="header">New stop</Text>
             <Text style={type.caption}>Adding to {label}</Text>
+          </View>
+
+          {/* Where the stop is; follows the address if it's changed below. */}
+          <View style={{ borderRadius: radius.md, overflow: 'hidden' }}>
+            <RouteMap height={180} pin={place} pinLabel={place.name} />
           </View>
 
           <View style={{ gap: space[2] }}>
