@@ -1,200 +1,309 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Linking, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { backend } from '../src/lib/backend';
-import { showMessage } from '../src/lib/dialog';
-import { useRoadPath } from '../src/lib/directions';
-import { dayKey, fmtDuration, fmtTime, miles, parseDay, routeTotals } from '../src/lib/geo';
+import { confirmAction, showMessage } from '../src/lib/dialog';
+import { useRoadPath, useRoadRoute } from '../src/lib/directions';
+import { dayKey, distanceM, estimateDriveMin, fmtDuration, fmtTime, miles, routeTotals } from '../src/lib/geo';
 import { currentPosition, startSharing, useLivePosition } from '../src/lib/location';
 import type { RoutePlan } from '../src/lib/routing';
 import { currentStop, lastMarked, useDriverData } from '../src/lib/store';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
-import { Banner, Button, IconButton, StatRow } from '../src/ui/components';
+import { Banner, Button, DetailRow, IconButton, StatRow, StatusPill } from '../src/ui/components';
+import { Icon } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
 import type { MapStop } from '../src/ui/RouteMap.types';
-import { color, font, radius, space, type } from '../src/ui/theme';
+import { color, font, radius, shadow, space, type } from '../src/ui/theme';
+
+const RADIUS_M = 75;
+// A strip of map always shows above the sheet, even pulled all the way up.
+const MAP_STRIP = 68;
+
+function openDirections(s: Stop) {
+  const url = Platform.OS === 'ios'
+    ? `http://maps.apple.com/?daddr=${s.lat},${s.lng}&dirflg=d`
+    : `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}`;
+  Linking.openURL(url);
+}
 
 /**
- * The trip: today's stops as a route. Optimize the order here, then go stop
- * by stop; marking a stop comes back here. My day only lists the stops.
+ * The trip in one view: the map fills the screen and the trip sits in a sheet
+ * over it. The sheet's top is pinned and shows the step the driver is on (next
+ * stop, on the way, arrived); below it, the stops after this one and the ones
+ * done. Scrolling slides the sheet up over the map. My day only lists stops.
  */
 export default function Trip() {
   const router = useRouter();
+  const { height } = useWindowDimensions();
   const { routeFor, refresh } = useDriverData();
   const pos = useLivePosition();
   const route = routeFor(dayKey(new Date()));
   const [review, setReview] = useState<{ plan: RoutePlan; from: LatLng | null } | null>(null);
-  const [busy, setBusy] = useState<'plan' | 'apply' | 'go' | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   const stops = route?.stops ?? [];
+  const byId = new Map(stops.map((s) => [s.id, s]));
   const done = stops.filter(isDone);
   const remaining = stops.filter((s) => !isDone(s));
-  const byId = new Map(stops.map((s) => [s.id, s]));
-  // While reviewing, the stops left are shown in the suggested order.
-  const ahead = review ? review.plan.order.map((id) => byId.get(id)).filter((s): s is Stop => !!s) : remaining;
-  const next = review ? ahead[0] : currentStop(route);
+  const current = currentStop(route);
+  const phase = !current ? 'finished' : review ? 'review' : current.status === 'en_route' ? 'onroute' : current.status === 'arrived' ? 'arrived' : 'next';
+  // In review the whole suggested order is listed; otherwise the stops after the current one.
+  const reviewOrder = review ? review.plan.order.map((id) => byId.get(id)).filter((s): s is Stop => !!s) : null;
+  const ahead = reviewOrder ?? remaining;
+  const after = reviewOrder ?? remaining.filter((s) => s.id !== current?.id);
   const was = new Map((review?.plan.current.order ?? []).map((id, i) => [id, i]));
+
+  // The road route for the whole trip ahead, and for the leg to the current stop.
   const road = useRoadPath(pos, ahead);
+  const heading = phase === 'next' || phase === 'onroute';
+  const leg = useRoadRoute(heading ? pos : null, heading && current ? current : null);
+  const legMeters = leg ? leg.distanceM : pos && current ? distanceM(pos, current) : null;
+  const legMin = leg ? Math.max(1, Math.round(leg.durationS / 60)) : legMeters != null ? estimateDriveMin(legMeters) : null;
+  const straight = routeTotals(ahead, pos);
+  const tripMin = road ? Math.round(road.durationS / 60) : straight.driveMin;
+  const tripMeters = road ? road.distanceM : straight.meters;
+
+  const away = current && pos ? distanceM(pos, current) > RADIUS_M * 2 : false;
   const marked = lastMarked(route);
-  const showBanner = !review && marked?.marked_at && Date.now() - Date.parse(marked.marked_at) < 15 * 60 * 1000;
+  const justMarked = phase === 'next' && marked?.marked_at && Date.now() - Date.parse(marked.marked_at) < 15 * 60 * 1000;
+  const canOptimize = !!route && route.status !== 'completed' && remaining.filter((s) => s.status === 'scheduled' || s.status === 'queued').length >= 2;
 
   if (!route || !stops.length) {
     return (
-      <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space[3], backgroundColor: color.surface }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space[3], backgroundColor: color.surface }}>
         <Text style={type.body}>No stops today.</Text>
         <Button variant="text" label="Back to My day" onPress={() => router.replace('/')} />
-      </SafeAreaView>
+      </View>
     );
   }
 
-  // Road figures for the order shown when Mapbox has them; the same
-  // straight-line estimate for any order otherwise, so orders compare fairly.
-  const straight = routeTotals(ahead, pos);
-  const driveMin = road ? Math.round(road.durationS / 60) : straight.driveMin;
-  const meters = road ? road.distanceM : straight.meters;
-  const savedMin = review ? Math.round((review.plan.current.drive_s - review.plan.drive_s) / 60) : 0;
-  const same = review ? review.plan.order.join() === review.plan.current.order.join() : false;
-  const canOptimize = route.status !== 'completed' && remaining.filter((s) => s.status === 'scheduled' || s.status === 'queued').length >= 2;
-
-  const order = [...done, ...ahead];
-  const mapStops: MapStop[] = order.map((s, i) => ({
-    id: s.id, lat: s.lat, lng: s.lng, n: i + 1,
-    state: isDone(s) ? 'done' : s.id === next?.id ? 'next' : 'upcoming',
-  }));
-  const line = road ? [...(pos ? [pos] : []), ...road.path] : [...(pos ? [pos] : []), ...ahead];
-
-  async function optimize() {
-    setBusy('plan');
-    try {
-      const here = pos ?? (await currentPosition());
-      setReview({ plan: await backend.planRoute(route!.id, here), from: here });
-    } catch (e) { showMessage('Could not optimize', e instanceof Error ? e.message : String(e)); }
+  async function run(label: string, fn: () => Promise<void>) {
+    setBusy(label);
+    try { await fn(); }
+    catch (e) { showMessage('Something went wrong', e instanceof Error ? e.message : String(e)); }
     finally { setBusy(null); }
   }
-  async function useOrder() {
+  const optimize = () => run('plan', async () => {
+    const here = pos ?? (await currentPosition());
+    setReview({ plan: await backend.planRoute(route.id, here), from: here });
+  });
+  const useOrder = () => run('apply', async () => {
     if (!review) return;
-    setBusy('apply');
-    try { await backend.applyPlan(route!.id, review.plan.order, review.from); setReview(null); await refresh(); }
-    catch (e) { showMessage('Could not save the order', e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(null); }
+    await backend.applyPlan(route.id, review.plan.order, review.from);
+    setReview(null);
+    await refresh();
+  });
+  const startDriving = () => run('start', async () => {
+    if (!current) return;
+    // The first drive starts the trip: location sharing and the customers' texts begin here.
+    if (route.status === 'planned') {
+      await backend.startRoute(route.id);
+      const ok = await startSharing();
+      if (!ok) showMessage('Location is off', 'Allow location "Always" so customers can see you coming and stops are marked when you arrive.');
+    }
+    await backend.startTrip(current.id);
+    await refresh();
+  });
+  async function mark(outcome: 'completed' | 'no_show') {
+    if (!current) return;
+    const here = pos ?? (await currentPosition());
+    if (here && distanceM(here, current) > RADIUS_M * 2) {
+      const ok = await confirmAction('You are away from this stop', 'Marking it from here is flagged to your business. Mark it anyway?', 'Mark it');
+      if (ok) await run(outcome, async () => { await backend.markStop(current.id, outcome, 'Marked away from the stop', here); await refresh(); });
+      return;
+    }
+    await run(outcome, async () => { await backend.markStop(current.id, outcome, null, here); await refresh(); });
   }
-  async function go() {
-    if (!next) return;
-    setBusy('go');
-    try {
-      // The trip starts with the first stop: location sharing and the customers' texts begin here.
-      if (route!.status === 'planned') {
-        await backend.startRoute(route!.id);
-        const ok = await startSharing();
-        if (!ok) showMessage('Location is off', 'Allow location "Always" so customers can see you coming and stops are marked when you arrive.');
-      }
-      router.push(`/stop/${next.id}`);
-    } catch (e) { showMessage('Could not start', e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(null); }
-  }
+  const call = current?.customer_phone ? () => Linking.openURL(`tel:${current.customer_phone}`) : undefined;
+  const message = () => showMessage('Coming soon', 'Chat with customers arrives in the next build.');
 
-  const goLabel = !next ? '' : next.status === 'en_route' ? `Continue to ${next.customer_name}`
-    : next.status === 'arrived' ? `Back to ${next.customer_name}` : `Go to ${next.customer_name}`;
-  const headline = same ? 'Your order is already the best'
-    : savedMin >= 1 ? `Best order saves ${fmtDuration(savedMin)} of driving` : 'About the same drive time';
+  // The map: the whole trip, or once arrived, this stop alone.
+  const order = [...done, ...ahead];
+  const mapStops: MapStop[] = phase === 'arrived' ? [] : order.map((s, i) => ({
+    id: s.id, lat: s.lat, lng: s.lng, n: i + 1,
+    state: isDone(s) ? 'done' : s.id === (reviewOrder?.[0] ?? current)?.id ? 'next' : 'upcoming',
+  }));
+  const line = phase === 'arrived' ? undefined : road ? [...(pos ? [pos] : []), ...road.path] : [...(pos ? [pos] : []), ...ahead];
+  const peek = Math.round(height * 0.36);
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: color.surface }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[3], paddingVertical: space[2] }}>
-        <IconButton icon="back" label="Back to My day" variant="plain" onPress={() => router.replace('/')} />
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={type.heading} accessibilityRole="header">Trip</Text>
-          <Text style={type.caption}>{parseDay(route.day).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
-        </View>
-        <View style={{ width: 40 }} />
-      </View>
+    <View style={{ flex: 1, backgroundColor: color.mapGround }}>
+      <RouteMap height={height} stops={mapStops} driver={pos} line={line}
+        pin={phase === 'arrived' ? current : null} pinLabel={phase === 'arrived' ? current?.address.split(',')[0] : undefined}
+        inset={{ bottom: height - peek - MAP_STRIP }} />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: space[4] }}>
-        <RouteMap height={240} stops={mapStops} driver={pos} line={line} />
-        <View style={{ padding: space[4], gap: space[3] }}>
-          <StatRow compact items={[
-            { value: String(ahead.length), label: done.length ? 'stops left' : 'stops' },
-            { value: fmtDuration(Math.max(1, driveMin)), label: 'drive' },
-            { value: miles(meters).toFixed(1), label: 'miles' },
-          ]} />
-          {review ? (
-            <View style={{ gap: 2, padding: space[3], borderRadius: radius.md, backgroundColor: color.brandTint }}>
-              <Text style={[type.bodyStrong, { color: color.onTint }]}>{headline}</Text>
-              <Text style={[type.caption, { color: color.onTint }]}>From your location. Stops that move are marked below.</Text>
+      <ScrollView style={{ position: 'absolute', top: MAP_STRIP, left: 0, right: 0, bottom: 0 }}
+        stickyHeaderIndices={[1]} showsVerticalScrollIndicator={false}>
+        <View style={{ height: peek }} />
+
+        {/* The step the driver is on: pinned while the list scrolls under it. */}
+        <View style={[{ backgroundColor: color.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' ? 0 : 1, borderBottomColor: color.divider }, shadow.sheet]}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: color.divider, alignSelf: 'center' }} />
+
+          {phase === 'next' && current ? (
+            <>
+              {justMarked && marked ? (
+                <Banner title={marked.status === 'completed' ? 'Stop complete' : marked.status === 'no_show' ? 'Marked no-show' : 'Stop skipped'}
+                  meta={`${marked.customer_name} · ${fmtTime(marked.marked_at)}`} />
+              ) : null}
+              <StopHeading eyebrow="Next stop" stop={current} onCall={call} onMessage={message} />
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[3] }}>
+                {legMin != null ? (
+                  <Text style={type.body}><Text style={type.bodyStrong}>{legMin} min</Text>
+                    <Text style={{ color: color.inkMuted }}> · {miles(legMeters!).toFixed(1)} mi</Text></Text>
+                ) : null}
+                {current.notes ? <Text style={[type.body, { flex: 1, color: color.inkMuted }]} numberOfLines={1}>{current.notes}</Text> : null}
+              </View>
+              <View style={{ flexDirection: 'row', gap: space[3] }}>
+                <Button label="Start driving" onPress={startDriving} loading={busy === 'start'} style={{ flex: 1 }} />
+                {canOptimize ? (
+                  <Button variant="secondary" icon="route" label={route.optimized_at ? 'Optimize again' : 'Optimize'}
+                    iconOnly={!!route.optimized_at} loading={busy === 'plan'} onPress={optimize} />
+                ) : null}
+              </View>
+            </>
+          ) : null}
+
+          {phase === 'review' && review ? (
+            <>
+              <View style={{ gap: 2, padding: space[3], borderRadius: radius.md, backgroundColor: color.brandTint }}>
+                <Text style={[type.bodyStrong, { color: color.onTint }]}>{reviewHeadline(review.plan)}</Text>
+                <Text style={[type.caption, { color: color.onTint }]}>From your location. Stops that move are marked below.</Text>
+              </View>
+              {review.plan.order.join() === review.plan.current.order.join() ? (
+                <Button label="Done" onPress={useOrder} loading={busy === 'apply'} />
+              ) : (
+                <View style={{ flexDirection: 'row', gap: space[3] }}>
+                  <Button label="Use this order" onPress={useOrder} loading={busy === 'apply'} style={{ flex: 1 }} />
+                  <Button variant="text" label="Keep my order" onPress={() => setReview(null)} />
+                </View>
+              )}
+            </>
+          ) : null}
+
+          {phase === 'onroute' && current ? (
+            <>
+              <StopHeading eyebrow="On the way" stop={current} onCall={call} onMessage={message} />
+              <StatRow compact items={[
+                { value: legMin != null ? String(legMin) : '–', label: 'minutes' },
+                { value: legMeters != null ? miles(legMeters).toFixed(1) : '–', label: 'miles' },
+              ]} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+                <Button label="Arrived" style={{ flex: 1 }} loading={busy === 'arrived'}
+                  onPress={() => run('arrived', async () => { await backend.markArrived(current.id); await refresh(); })} />
+                <Button variant="text" icon="navigate" label="Directions" onPress={() => openDirections(current)} />
+              </View>
+              <Text style={[type.caption, { textAlign: 'center' }]}>Arrival is detected when you reach the stop.</Text>
+            </>
+          ) : null}
+
+          {/* Arrived: the stop's own moment; the list comes back once it's marked. */}
+          {phase === 'arrived' && current ? (
+            <View style={{ gap: space[4] }}>
+              {away ? <Banner tone="warning" icon="alert" title="You left without marking this stop" meta="Mark it to start your next trip." /> : null}
+              <View style={{ alignItems: 'center', gap: 4 }}>
+                <StatusPill tone="info" icon="clock" label={`At stop${current.arrived_at ? ` since ${fmtTime(current.arrived_at)}` : ''}`} />
+                <Text style={[type.title, { fontSize: 28, lineHeight: 34, marginTop: 6 }]} accessibilityRole="header">Arrived</Text>
+                <Text style={[type.body, { color: color.inkMuted, textAlign: 'center' }]}>{current.customer_name} · {current.address.split(',')[0]}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space[3] }}>
+                {call ? <IconButton icon="phone" label={`Call ${current.customer_name}`} onPress={call} /> : null}
+                <IconButton icon="message" label={`Message ${current.customer_name}`} onPress={message} />
+              </View>
+              {current.notes ? <DetailRow icon="notes" primary={current.notes} /> : null}
+              <View style={{ gap: space[2] }}>
+                <Button icon="check" label="Complete stop" loading={busy === 'completed'} onPress={() => mark('completed')} />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Button variant="danger" label="No-show" loading={busy === 'no_show'} onPress={() => mark('no_show')} />
+                  <Button variant="text" icon="skip" label="Skip or defer" onPress={() => router.push(`/skip/${current.id}`)} />
+                </View>
+              </View>
+              <Text style={[type.caption, { textAlign: 'center' }]}>Mark this stop to start your next trip.</Text>
             </View>
           ) : null}
-          {showBanner && marked ? (
-            <Banner title={marked.status === 'completed' ? 'Stop complete' : marked.status === 'no_show' ? 'Marked no-show' : 'Stop skipped'}
-              meta={`${marked.customer_name} · ${fmtTime(marked.marked_at)}`} />
+
+          {phase === 'finished' ? (
+            <View style={{ alignItems: 'center', gap: space[3], paddingVertical: space[3] }}>
+              <Text style={type.title}>Every stop is marked</Text>
+              <Button variant="text" label="Back to My day" onPress={() => router.replace('/')} />
+            </View>
           ) : null}
         </View>
 
-        {/* The stops as a sequence, from where the driver is. */}
-        <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
-          <TimelineRow dot="start" title="Your location" last={!order.length} />
-          {order.map((s, i) => {
-            const before = was.get(s.id);
-            const after = review ? ahead.indexOf(s) : -1;
-            const moved = review && before != null && before !== after ? (before > after ? 'Moved earlier' : 'Moved later') : '';
-            return (
-              <TimelineRow key={s.id} last={i === order.length - 1}
-                dot={isDone(s) ? 'done' : s.id === next?.id ? 'next' : 'upcoming'}
-                title={s.customer_name} detail={`${moved ? `${moved} · ` : ''}${s.address.split(',')[0]}`}
-                onPress={() => router.push(`/stop/${s.id}`)} />
-            );
-          })}
+        {/* The rest of the sheet: the stops after this one, then the ones done. */}
+        <View style={{ minHeight: height, backgroundColor: color.surface, paddingBottom: space[8] }}>
+          {phase !== 'arrived' ? (
+            <>
+              {after.length ? (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', padding: space[4], paddingBottom: space[3] }}>
+                  <Text style={type.heading}>{review ? 'New order' : 'After this'} · {after.length} {after.length === 1 ? 'stop' : 'stops'}</Text>
+                  <Text style={type.caption}>{fmtDuration(Math.max(1, tripMin))} · {miles(tripMeters).toFixed(1)} mi</Text>
+                </View>
+              ) : null}
+              <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
+                {after.map((s, i) => {
+                  const before = was.get(s.id);
+                  const moved = review && before != null && before !== i ? (before > i ? 'Moved earlier · ' : 'Moved later · ') : '';
+                  return <AheadRow key={s.id} stop={s} detail={`${moved}${s.address.split(',')[0]}`} last={i === after.length - 1}
+                    onPress={() => router.push(`/stop/${s.id}`)} />;
+                })}
+              </View>
+              {done.length && !review ? (
+                <>
+                  <Text style={[type.caption, { fontFamily: font.semibold, paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: space[3], borderTopWidth: after.length ? 1 : 0, borderTopColor: color.divider }]}>
+                    Done · {done.length}
+                  </Text>
+                  {done.map((s) => (
+                    <Pressable key={s.id} onPress={() => router.push(`/stop/${s.id}`)} accessibilityRole="button" accessibilityLabel={`${s.customer_name}, done`}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingBottom: space[4] }}>
+                      <View style={{ width: 20, alignItems: 'center' }}><Icon name="check" size={18} color={color.inkMuted} /></View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[type.bodyStrong, { fontSize: 16, lineHeight: 22, color: color.inkMuted }]}>{s.customer_name}</Text>
+                        <Text style={type.caption}>{s.address.split(',')[0]}</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </>
+              ) : null}
+            </>
+          ) : null}
         </View>
       </ScrollView>
-
-      <View style={{ padding: space[4], paddingBottom: space[6], gap: space[2], borderTopWidth: 1, borderTopColor: color.divider }}>
-        {review ? (
-          same ? <Button label="Done" onPress={useOrder} loading={busy === 'apply'} /> : (
-            <>
-              <Button label="Use this order" onPress={useOrder} loading={busy === 'apply'} />
-              <Button variant="text" label="Keep my order" onPress={() => setReview(null)} />
-            </>
-          )
-        ) : next ? (
-          <View style={{ flexDirection: 'row', gap: space[3] }}>
-            <Button label={goLabel} onPress={go} loading={busy === 'go'} style={{ flex: 1 }} />
-            {canOptimize ? (
-              <Button variant="secondary" icon="route" label={route.optimized_at ? 'Optimize again' : 'Optimize'}
-                iconOnly={!!route.optimized_at} loading={busy === 'plan'} onPress={optimize} />
-            ) : null}
-          </View>
-        ) : (
-          <>
-            <Text style={[type.body, { color: color.inkMuted, textAlign: 'center' }]}>Every stop is marked.</Text>
-            <Button variant="text" label="Back to My day" onPress={() => router.replace('/')} />
-          </>
-        )}
-      </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
-function TimelineRow({ dot, title, detail, last, onPress }: {
-  dot: 'start' | 'done' | 'next' | 'upcoming'; title: string; detail?: string; last: boolean; onPress?: () => void;
-}) {
-  const fill = dot === 'done' ? color.inkMuted : dot === 'next' ? color.action : color.surface;
-  const edge = dot === 'done' ? color.inkMuted : color.action;
-  const muted = dot === 'done' || dot === 'start';
+function reviewHeadline(plan: RoutePlan) {
+  if (plan.order.join() === plan.current.order.join()) return 'Your order is already the best';
+  const saved = Math.round((plan.current.drive_s - plan.drive_s) / 60);
+  return saved >= 1 ? `Best order saves ${fmtDuration(saved)} of driving` : 'About the same drive time';
+}
+
+function StopHeading({ eyebrow, stop, onCall, onMessage }: { eyebrow: string; stop: Stop; onCall?: () => void; onMessage: () => void }) {
   return (
-    <Pressable onPress={onPress} disabled={!onPress} accessibilityRole={onPress ? 'button' : 'text'}
-      accessibilityLabel={`${title}${detail ? `, ${detail}` : ''}${dot === 'done' ? ', done' : dot === 'next' ? ', next' : ''}`}
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space[3] }}>
+      <View style={{ flex: 1 }}>
+        <Text style={[type.label, { textTransform: 'uppercase', color: color.actionInk }]}>{eyebrow}</Text>
+        <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]} accessibilityRole="header">{stop.customer_name}</Text>
+        <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]}>{stop.address.split(',')[0]}</Text>
+      </View>
+      {onCall ? <IconButton icon="phone" label={`Call ${stop.customer_name}`} onPress={onCall} /> : null}
+      <IconButton icon="message" label={`Message ${stop.customer_name}`} onPress={onMessage} />
+    </View>
+  );
+}
+
+function AheadRow({ stop, detail, last, onPress }: { stop: Stop; detail: string; last: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${stop.customer_name}, ${detail}`}
       style={({ pressed }) => [{ flexDirection: 'row', gap: space[3] }, pressed && { opacity: 0.6 }]}>
       <View style={{ width: 20, alignItems: 'center' }}>
-        {dot === 'start' ? (
-          <View style={{ marginTop: 5, width: 14, height: 14, borderRadius: 7, backgroundColor: color.brand, borderWidth: 3, borderColor: color.brandTint }} />
-        ) : (
-          <View style={{ marginTop: 5, width: 16, height: 16, borderRadius: 8, backgroundColor: fill, borderWidth: 3, borderColor: edge }} />
-        )}
+        <View style={{ marginTop: 5, width: 16, height: 16, borderRadius: 8, backgroundColor: color.surface, borderWidth: 3, borderColor: color.action }} />
         {last ? null : <View style={{ flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider }} />}
       </View>
       <View style={{ flex: 1, paddingBottom: 20 }}>
-        <Text style={{ fontFamily: dot === 'start' ? font.regular : font.semibold, fontSize: dot === 'start' ? 16 : 18, lineHeight: 26, color: muted ? color.inkMuted : color.ink }}>{title}</Text>
-        {detail ? <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }}>{detail}</Text> : null}
+        <Text style={{ fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: color.ink }}>{stop.customer_name}</Text>
+        <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }}>{detail}</Text>
       </View>
     </Pressable>
   );

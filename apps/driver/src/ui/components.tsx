@@ -122,23 +122,6 @@ export function PersonRow({ name, subtitle, accent, onCall, onMessage }: {
   );
 }
 
-/** "Stop 2 of 8" with a segmented progress bar. */
-export function StopProgress({ current, total, status, statusColor }: { current: number; total: number; status: string; statusColor?: string }) {
-  return (
-    <View style={{ gap: space[2], paddingHorizontal: space[4], paddingBottom: space[3] }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <Text style={type.heading}>Stop {current} of {total}</Text>
-        <Text style={[type.caption, statusColor ? { color: statusColor } : null]}>{status}</Text>
-      </View>
-      <View style={{ flexDirection: 'row', gap: 4 }}>
-        {Array.from({ length: total }, (_, i) => (
-          <View key={i} style={{ flex: 1, height: 4, borderRadius: radius.full, backgroundColor: i < current ? color.brand : color.divider }} />
-        ))}
-      </View>
-    </View>
-  );
-}
-
 export function Banner({ tone = 'success', title, meta, icon = 'check' }: { tone?: 'success' | 'warning'; title: string; meta?: string; icon?: IconName }) {
   const warn = tone === 'warning';
   return (

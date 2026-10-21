@@ -228,7 +228,7 @@ export default function MyDay() {
               return (
                 <View style={{ width, height: pagerH || undefined }}>
                   <DayPanel route={routeFor(k)} isToday={k === dayKey(today)} driver={k === dayKey(today) ? pos : null}
-                    onOpenStop={(s) => router.push(`/stop/${s.id}?view=details`)} loading={loading}
+                    onOpenStop={(s) => router.push(`/stop/${s.id}`)} loading={loading}
                     search={
                       <SearchHeader label={label} q={k === dayK ? q : ''} setQ={setQ} {...found}
                         onPick={(p) => {

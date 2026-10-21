@@ -39,7 +39,7 @@ function driverEl() {
   return el;
 }
 
-function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line }: RouteMapProps) {
+function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset }: RouteMapProps) {
   const host = useRef<View>(null);
   const map = useRef<import('mapbox-gl').Map | null>(null);
   const markers = useRef<import('mapbox-gl').Marker[]>([]);
@@ -94,8 +94,8 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line }: RouteMap
     if (!ready || !m || !framed.length) return;
     const lngs = framed.map((p) => p.lng), lats = framed.map((p) => p.lat);
     m.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-      { padding: { top: pinLabel ? 56 : 36, bottom: 28, left: 28, right: 28 }, maxZoom: 15, duration: 0 });
-  }, [ready, frameKey]); // eslint-disable-line react-hooks/exhaustive-deps
+      { padding: { top: (pinLabel ? 56 : 36) + (inset?.top ?? 0), bottom: 28 + (inset?.bottom ?? 0), left: 28, right: 28 }, maxZoom: 15, duration: 0 });
+  }, [ready, frameKey, inset?.top, inset?.bottom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <View ref={host} style={{ height, backgroundColor: color.mapGround, overflow: 'hidden' }} />;
 }
@@ -107,7 +107,7 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line }: RouteMap
 const BASE_W = 400;
 const BASE_H = 300;
 
-function Drawn({ height, stops = [], pin, pinLabel, driver, line }: RouteMapProps) {
+function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset }: RouteMapProps) {
   const [width, setWidth] = useState(BASE_W);
   const W = width, H = height;
   const pts = framePoints({ stops, pin, driver });
@@ -119,7 +119,7 @@ function Drawn({ height, stops = [], pin, pinLabel, driver, line }: RouteMapProp
   const minLat = Math.min(...lats, cLat - 0.005), maxLat = Math.max(...lats, cLat + 0.005);
   const minLng = Math.min(...lngs, cLng - 0.006), maxLng = Math.max(...lngs, cLng + 0.006);
   // Room for markers at the edges, and above a labelled pin.
-  const padX = 30, padTop = pinLabel ? 64 : 30, padBottom = 26;
+  const padX = 30, padTop = (pinLabel ? 64 : 30) + (inset?.top ?? 0), padBottom = 26 + (inset?.bottom ?? 0);
   // Longitude degrees are shorter than latitude degrees away from the equator.
   const k = Math.cos((cLat * Math.PI) / 180);
   const s = Math.min(

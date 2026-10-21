@@ -18,6 +18,8 @@ export interface RouteMapProps {
   driver?: LatLng | null;
   /** Draws a line through these points in order. */
   line?: LatLng[];
+  /** Bands covered by other UI (a sheet over the map): the points are framed in what's left. */
+  inset?: { top?: number; bottom?: number };
 }
 
 // The driver is kept in view only when near the stops; a driver far away
