@@ -4,8 +4,8 @@ import { Linking, Platform, Pressable, ScrollView, Text, View, useWindowDimensio
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
-import { dayKey, distanceM, estimateDriveMin, fmtDuration, fmtTime, miles, routeTotals } from '../src/lib/geo';
-import { currentPosition, startSharing, useLivePosition } from '../src/lib/location';
+import { bearingDeg, dayKey, distanceM, estimateDriveMin, fmtDuration, fmtTime, miles, routeTotals } from '../src/lib/geo';
+import { currentPosition, startSharing, useLivePosition, useTravelBearing } from '../src/lib/location';
 import type { RoutePlan } from '../src/lib/routing';
 import { currentStop, lastMarked, useDriverData } from '../src/lib/store';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
@@ -37,6 +37,7 @@ export default function Trip() {
   const { height } = useWindowDimensions();
   const { routeFor, refresh } = useDriverData();
   const pos = useLivePosition();
+  const travel = useTravelBearing(pos);
   const route = routeFor(dayKey(new Date()));
   const [review, setReview] = useState<{ plan: RoutePlan; from: LatLng | null } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -147,7 +148,9 @@ export default function Trip() {
         pin={focus ? current : null} pinLabel={phase === 'arrived' ? current?.address.split(',')[0] : undefined}
         inset={{ top: phase === 'onroute' ? 84 : 0, bottom: height - peek - MAP_STRIP }}
         // On the way it's a navigation view: the map follows the driver, who stays centred.
-        follow={phase === 'onroute'} />
+        follow={phase === 'onroute'}
+        // Direction of travel is up; before the driver moves, the stop is.
+        bearing={travel ?? (pos && current ? bearingDeg(pos, current) : 0)} />
 
       {/* On the way: where to, across the top of the map. */}
       {phase === 'onroute' && current ? (

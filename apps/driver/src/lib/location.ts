@@ -1,8 +1,9 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { backend } from './backend';
+import { bearingDeg, distanceM } from './geo';
 import type { LatLng } from './types';
 
 export const LOCATION_TASK = 'arrively-location';
@@ -70,8 +71,11 @@ export async function currentPosition(): Promise<LatLng | null> {
 }
 
 /** Live position for the screens (foreground). Also reports it in the browser demo. */
-export function useLivePosition(enabled = true): LatLng | null {
-  const [pos, setPos] = useState<LatLng | null>(null);
+/** A live fix: where the driver is, and their compass heading and speed when the device knows them. */
+export type LivePosition = LatLng & { heading?: number | null; speed?: number | null };
+
+export function useLivePosition(enabled = true): LivePosition | null {
+  const [pos, setPos] = useState<LivePosition | null>(null);
   useEffect(() => {
     if (!enabled) return;
     let sub: Location.LocationSubscription | null = null;
@@ -86,7 +90,7 @@ export function useLivePosition(enabled = true): LatLng | null {
         { accuracy: Location.Accuracy.High, distanceInterval: 10, timeInterval: 4000 },
         (loc) => {
           if (cancelled) return;
-          const p = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+          const p = { lat: loc.coords.latitude, lng: loc.coords.longitude, heading: loc.coords.heading, speed: loc.coords.speed };
           setPos(p);
           if (Platform.OS === 'web') backend.reportLocation(p).catch(() => {});
         },
@@ -95,4 +99,28 @@ export function useLivePosition(enabled = true): LatLng | null {
     return () => { cancelled = true; sub?.remove(); };
   }, [enabled]);
   return pos;
+}
+
+/**
+ * The driver's direction of travel, degrees from north: the device's heading
+ * while moving, otherwise the bearing between fixes at least 8 m apart (web
+ * often has no heading). Null until they've moved.
+ */
+export function useTravelBearing(pos: LivePosition | null): number | null {
+  const [bearing, setBearing] = useState<number | null>(null);
+  const from = useRef<LatLng | null>(null);
+  useEffect(() => {
+    if (!pos) return;
+    if (pos.heading != null && pos.heading >= 0 && (pos.speed ?? 0) > 1) {
+      setBearing(pos.heading);
+      from.current = pos;
+      return;
+    }
+    if (!from.current) { from.current = pos; return; }
+    if (distanceM(from.current, pos) >= 8) {
+      setBearing(bearingDeg(from.current, pos));
+      from.current = pos;
+    }
+  }, [pos?.lat, pos?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+  return bearing;
 }

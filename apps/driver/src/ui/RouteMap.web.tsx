@@ -39,7 +39,7 @@ function driverEl() {
   return el;
 }
 
-function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, follow }: RouteMapProps) {
+function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0 }: RouteMapProps) {
   const host = useRef<View>(null);
   const map = useRef<import('mapbox-gl').Map | null>(null);
   const markers = useRef<import('mapbox-gl').Marker[]>([]);
@@ -94,16 +94,16 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
   useEffect(() => {
     const m = map.current;
     if (!ready || !m || !following) return;
-    m.easeTo({ center: [driver!.lng, driver!.lat], zoom: FOLLOW_ZOOM, duration: 800,
+    m.easeTo({ center: [driver!.lng, driver!.lat], zoom: FOLLOW_ZOOM, bearing, duration: 800,
       padding: { top: inset?.top ?? 0, bottom: inset?.bottom ?? 0, left: 0, right: 0 } });
-  }, [ready, following, driver?.lat, driver?.lng, inset?.top, inset?.bottom]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, following, driver?.lat, driver?.lng, bearing, inset?.top, inset?.bottom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const m = map.current;
     if (!ready || !m || !framed.length || following) return;
     const lngs = framed.map((p) => p.lng), lats = framed.map((p) => p.lat);
     m.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-      { padding: { top: (pinLabel ? 56 : 36) + (inset?.top ?? 0), bottom: 28 + (inset?.bottom ?? 0), left: 28, right: 28 }, maxZoom: 15, duration: 0 });
+      { padding: { top: (pinLabel ? 56 : 36) + (inset?.top ?? 0), bottom: 28 + (inset?.bottom ?? 0), left: 28, right: 28 }, maxZoom: 15, bearing: 0, duration: 0 });
   }, [ready, frameKey, inset?.top, inset?.bottom, following]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <View ref={host} style={{ height, backgroundColor: color.mapGround, overflow: 'hidden' }} />;
@@ -114,11 +114,11 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
 // tall screens; the street pattern is kept faint so markers stand out.
 // ---------------------------------------------------------------------------
 const BASE_W = 400;
-// About half a kilometre either side of a followed driver.
-const FOLLOW_SPAN = 0.004;
+// About 150 m either side of a followed driver.
+const FOLLOW_SPAN = 0.0014;
 const BASE_H = 300;
 
-function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset, follow }: RouteMapProps) {
+function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0 }: RouteMapProps) {
   const [width, setWidth] = useState(BASE_W);
   const W = width, H = height;
   const pts = framePoints({ stops, pin, driver });
@@ -157,48 +157,52 @@ function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset, follow 
       onLayout={(e) => { const w = Math.round(e.nativeEvent.layout.width); if (w && w !== width) setWidth(w); }}>
       <Svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
         <Rect x={0} y={0} width={W} height={H} fill={color.mapGround} />
-        {/* Decorative streets, stretched to the box and kept faint. */}
-        <G transform={`scale(${W / BASE_W} ${H / BASE_H})`} opacity={0.55}>
-          {Array.from({ length: 24 }, (_, i) => {
-            const row = Math.floor(i / 6), c = i % 6;
-            if ((row * 7 + c * 3) % 5 === 0) return null;
-            return <Rect key={i} x={8 + c * 66 + (row % 2) * 6} y={8 + row * 74 + c * 4} width={44} height={50} rx={4} fill={color.mapBlock} />;
-          })}
-          {minor.map((p, i) => <Path key={`m${i}`} d={p} stroke={color.mapRoad} strokeWidth={4} fill="none" />)}
-          {roads.map((p, i) => <Path key={`r${i}`} d={p} stroke={color.mapRoad} strokeWidth={9} fill="none" />)}
-        </G>
-        {d ? <Path d={d} stroke={color.surface} strokeWidth={7} fill="none" strokeLinecap="round" strokeLinejoin="round" /> : null}
-        {d ? <Path d={d} stroke={color.brand} strokeWidth={3.5} strokeOpacity={0.85} fill="none" strokeLinecap="round" strokeLinejoin="round" /> : null}
-        {byDrawOrder(stops).map((st) => {
-          const { size, ring } = MARKER[st.state];
-          return (
-            <G key={st.id} transform={`translate(${X(st.lng)} ${Y(st.lat)})`}>
-              <Circle r={size / 2 + 1} cy={1.5} fill="rgba(26,26,26,0.18)" />
-              <Circle r={(size - ring) / 2} strokeWidth={ring}
-                fill={st.state === 'next' ? color.action : st.state === 'done' ? color.inkMuted : color.surface}
-                stroke={st.state === 'upcoming' ? color.action : color.surface} />
-            </G>
-          );
-        })}
-        {pin ? (
-          <G transform={`translate(${X(pin.lng)} ${Y(pin.lat)})`}>
-            <Path d="M0 0 C-3 -6 -11 -12 -11 -20 A11 11 0 0 1 11 -20 C11 -12 3 -6 0 0 Z" fill={color.mapLabel} stroke={color.surface} strokeWidth={2} />
-            <Circle cy={-20} r={4} fill={color.surface} />
-            {pinLabel ? (
-              <G transform="translate(0 -44)">
-                <Rect x={-(pinLabel.length * 3.3 + 10)} y={-10} width={pinLabel.length * 6.6 + 20} height={20} rx={10} fill={color.mapLabel} />
-                <SvgText y={4} textAnchor="middle" fontSize={11} fontFamily={font.medium} fill={color.onAction}>{pinLabel}</SvgText>
+        {/* Following: the map turns about the driver so the direction of travel is up. */}
+        <G transform={following && driver ? `rotate(${-bearing} ${X(driver.lng)} ${Y(driver.lat)})` : undefined}>
+          {/* Decorative streets, stretched to the box and kept faint. */}
+          {/* Enlarged while following, so turning it never shows a bare corner. */}
+          <G transform={`${following ? `translate(${W / 2} ${H / 2}) scale(1.8) translate(${-W / 2} ${-H / 2}) ` : ''}scale(${W / BASE_W} ${H / BASE_H})`} opacity={0.55}>
+            {Array.from({ length: 24 }, (_, i) => {
+              const row = Math.floor(i / 6), c = i % 6;
+              if ((row * 7 + c * 3) % 5 === 0) return null;
+              return <Rect key={i} x={8 + c * 66 + (row % 2) * 6} y={8 + row * 74 + c * 4} width={44} height={50} rx={4} fill={color.mapBlock} />;
+            })}
+            {minor.map((p, i) => <Path key={`m${i}`} d={p} stroke={color.mapRoad} strokeWidth={4} fill="none" />)}
+            {roads.map((p, i) => <Path key={`r${i}`} d={p} stroke={color.mapRoad} strokeWidth={9} fill="none" />)}
+          </G>
+          {d ? <Path d={d} stroke={color.surface} strokeWidth={7} fill="none" strokeLinecap="round" strokeLinejoin="round" /> : null}
+          {d ? <Path d={d} stroke={color.brand} strokeWidth={3.5} strokeOpacity={0.85} fill="none" strokeLinecap="round" strokeLinejoin="round" /> : null}
+          {byDrawOrder(stops).map((st) => {
+            const { size, ring } = MARKER[st.state];
+            return (
+              <G key={st.id} transform={`translate(${X(st.lng)} ${Y(st.lat)})`}>
+                <Circle r={size / 2 + 1} cy={1.5} fill="rgba(26,26,26,0.18)" />
+                <Circle r={(size - ring) / 2} strokeWidth={ring}
+                  fill={st.state === 'next' ? color.action : st.state === 'done' ? color.inkMuted : color.surface}
+                  stroke={st.state === 'upcoming' ? color.action : color.surface} />
               </G>
-            ) : null}
-          </G>
-        ) : null}
-        {driver && showDriver ? (
-          <G transform={`translate(${X(driver.lng)} ${Y(driver.lat)})`}>
-            <Circle r={20} fill={color.brand} opacity={0.18} />
-            <Circle r={9} fill={color.surface} />
-            <Circle r={6.5} fill={color.brand} />
-          </G>
-        ) : null}
+            );
+          })}
+          {pin ? (
+            <G transform={`translate(${X(pin.lng)} ${Y(pin.lat)}) rotate(${following ? bearing : 0})`}>
+              <Path d="M0 0 C-3 -6 -11 -12 -11 -20 A11 11 0 0 1 11 -20 C11 -12 3 -6 0 0 Z" fill={color.mapLabel} stroke={color.surface} strokeWidth={2} />
+              <Circle cy={-20} r={4} fill={color.surface} />
+              {pinLabel ? (
+                <G transform="translate(0 -44)">
+                  <Rect x={-(pinLabel.length * 3.3 + 10)} y={-10} width={pinLabel.length * 6.6 + 20} height={20} rx={10} fill={color.mapLabel} />
+                  <SvgText y={4} textAnchor="middle" fontSize={11} fontFamily={font.medium} fill={color.onAction}>{pinLabel}</SvgText>
+                </G>
+              ) : null}
+            </G>
+          ) : null}
+          {driver && showDriver ? (
+            <G transform={`translate(${X(driver.lng)} ${Y(driver.lat)})`}>
+              <Circle r={20} fill={color.brand} opacity={0.18} />
+              <Circle r={9} fill={color.surface} />
+              <Circle r={6.5} fill={color.brand} />
+            </G>
+          ) : null}
+        </G>
       </Svg>
     </View>
   );

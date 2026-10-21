@@ -25,10 +25,12 @@ export interface RouteMapProps {
    * street level, moving with them, instead of framing every point.
    */
   follow?: boolean;
+  /** While following: the direction of travel (degrees from north), shown as up. */
+  bearing?: number;
 }
 
-/** Street-level zoom for following the driver. */
-export const FOLLOW_ZOOM = 16;
+/** Close street-level zoom for following the driver. */
+export const FOLLOW_ZOOM = 17.5;
 
 // The driver is kept in view only when near the stops; a driver far away
 // (still at home, another city) would shrink the stops into a cluster.

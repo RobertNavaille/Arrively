@@ -1,5 +1,13 @@
 import type { LatLng, Stop } from './types';
 
+/** Compass bearing from a to b: degrees clockwise from north. */
+export function bearingDeg(a: LatLng, b: LatLng): number {
+  const r = (d: number) => (d * Math.PI) / 180;
+  const y = Math.sin(r(b.lng - a.lng)) * Math.cos(r(b.lat));
+  const x = Math.cos(r(a.lat)) * Math.sin(r(b.lat)) - Math.sin(r(a.lat)) * Math.cos(r(b.lat)) * Math.cos(r(b.lng - a.lng));
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
 export function distanceM(a: LatLng, b: LatLng): number {
   const r = (d: number) => (d * Math.PI) / 180;
   const dLat = r(b.lat - a.lat);
