@@ -361,22 +361,22 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, search }: {
           ]} />
       </View>
       <View style={{ borderTopWidth: 1, borderTopColor: color.divider, paddingHorizontal: space[4] }}>
-        {stops.map((s) => (
-          <StopListRow key={s.id} stop={s} isCurrent={s.id === current?.id} onPress={() => onOpenStop(s)} />
+        {stops.map((s, i) => (
+          <StopListRow key={s.id} stop={s} isCurrent={s.id === current?.id} last={i === stops.length - 1} onPress={() => onOpenStop(s)} />
         ))}
       </View>
     </ScrollView>
   );
 }
 
-function StopListRow({ stop, isCurrent, onPress }: { stop: Stop; isCurrent: boolean; onPress: () => void }) {
+function StopListRow({ stop, isCurrent, last, onPress }: { stop: Stop; isCurrent: boolean; last: boolean; onPress: () => void }) {
   const done = isDone(stop);
   const status = stop.status === 'completed' ? ['Done', 'success'] : stop.status === 'no_show' ? ['No-show', 'warning']
     : stop.status === 'skipped' ? ['Skipped', 'neutral'] : stop.status === 'arrived' ? ['Arrived', 'info']
     : stop.status === 'en_route' ? ['On the way', 'info'] : isCurrent ? ['Next', 'info'] : null;
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${stop.customer_name}, ${stop.address}${done ? ', done' : isCurrent ? ', next' : ''}`}
-      style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
+      style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[3], borderBottomWidth: last ? 0 : 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
       <View style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: done ? color.divider : color.brand }} />
       <View style={{ flex: 1 }}>
         <Text style={type.bodyStrong}>{stop.customer_name}</Text>
