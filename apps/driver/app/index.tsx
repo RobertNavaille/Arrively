@@ -369,7 +369,6 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, search }: {
         {stops.map((s) => (
           <StopListRow key={s.id} stop={s} isCurrent={s.id === current?.id} onPress={() => onOpenStop(s)} />
         ))}
-        <Text style={[type.caption, { paddingTop: space[3] }]}>Tap a stop to see its details or fix its address.</Text>
       </View>
     </ScrollView>
   );
