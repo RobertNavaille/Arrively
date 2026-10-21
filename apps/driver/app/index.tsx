@@ -330,10 +330,6 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, search }: {
   const road = useRoadPath(near, remaining);
   const line = road ? [...(near ? [near] : []), ...road] : [...(isToday && driver ? [driver] : []), ...remaining];
 
-  let badge: { label: string; tone: PillTone } = { label: 'Planned', tone: 'info' };
-  if (route?.status === 'completed') badge = { label: 'Done', tone: 'success' };
-  else if (route?.status === 'active') badge = { label: `${done} of ${stops.length} done`, tone: 'info' };
-
   if (!stops.length) {
     return (
       <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
@@ -356,14 +352,13 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, search }: {
           <RouteMap height={190} stops={mapStops} driver={isToday ? driver : null} line={line} />
         </View>
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: space[4], paddingVertical: space[3] }}>
+      <View style={{ padding: space[4], paddingVertical: space[3] }}>
         <StatRow compact items={route?.status === 'completed'
           ? [{ value: String(stops.length), label: 'stops' }, { value: String(stops.filter((s) => s.status === 'completed').length), label: 'completed' }]
           : [
             { value: String(remaining.length), label: done ? 'stops left' : 'stops' },
             { value: driveLabel, label: 'drive' },
           ]} />
-        <StatusPill label={badge.label} tone={badge.tone} />
       </View>
       <View style={{ borderTopWidth: 1, borderTopColor: color.divider, paddingHorizontal: space[4] }}>
         {stops.map((s) => (
