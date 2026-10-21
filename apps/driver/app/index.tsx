@@ -420,7 +420,7 @@ function SearchHeader({ label, q, setQ, results, err, onPick }: {
         <Icon name="search" size={20} color={color.inkMuted} />
         <TextInput value={q} onChangeText={setQ} placeholder={`Add a stop to ${label}`} placeholderTextColor={color.inkMuted}
           accessibilityLabel={`Add a stop to ${label}`} autoCorrect={false}
-          style={[{ flex: 1, fontFamily: font.regular, fontSize: 14, color: color.ink, paddingVertical: 0 }, bareInput]} />
+          style={[{ flex: 1, fontFamily: font.regular, fontSize: 16, color: color.ink, paddingVertical: 0 }, bareInput]} />
         {open ? <Pressable onPress={() => setQ('')} accessibilityLabel="Clear search" hitSlop={8}><Icon name="close" size={16} color={color.inkMuted} /></Pressable> : null}
       </View>
       {open ? (
