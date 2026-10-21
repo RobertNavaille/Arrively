@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import Svg, { Circle, G, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { MAPBOX_TOKEN } from '../lib/config';
 import { color, font } from './theme';
-import { MARKER, byDrawOrder, framePoints, type MapStop, type RouteMapProps } from './RouteMap.types';
+import { FOLLOW_ZOOM, MARKER, byDrawOrder, framePoints, type MapStop, type RouteMapProps } from './RouteMap.types';
 
 // Browser map: real Mapbox GL when a token is set, otherwise a drawn stand-in
 // (offline demo, screenshots).
@@ -39,13 +39,14 @@ function driverEl() {
   return el;
 }
 
-function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset }: RouteMapProps) {
+function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, follow }: RouteMapProps) {
   const host = useRef<View>(null);
   const map = useRef<import('mapbox-gl').Map | null>(null);
   const markers = useRef<import('mapbox-gl').Marker[]>([]);
   const [ready, setReady] = useState(false);
   const framed = framePoints({ stops, pin, driver });
-  const showDriver = !!driver && framed.includes(driver);
+  const following = !!follow && !!driver;
+  const showDriver = !!driver && (following || framed.includes(driver));
   const path = (line ?? []).filter((p) => p !== driver || showDriver);
   // Refit only when the set of framed places changes, not on every location ping.
   const frameKey = framed.filter((p) => p !== driver).map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join('|') + (showDriver ? '|d' : '');
@@ -89,13 +90,21 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset }: R
     })();
   }); // every render: cheap, and keeps numbers and states current
 
+  // Following: glide along with the driver, centred in the uncovered part.
   useEffect(() => {
     const m = map.current;
-    if (!ready || !m || !framed.length) return;
+    if (!ready || !m || !following) return;
+    m.easeTo({ center: [driver!.lng, driver!.lat], zoom: FOLLOW_ZOOM, duration: 800,
+      padding: { top: inset?.top ?? 0, bottom: inset?.bottom ?? 0, left: 0, right: 0 } });
+  }, [ready, following, driver?.lat, driver?.lng, inset?.top, inset?.bottom]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const m = map.current;
+    if (!ready || !m || !framed.length || following) return;
     const lngs = framed.map((p) => p.lng), lats = framed.map((p) => p.lat);
     m.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
       { padding: { top: (pinLabel ? 56 : 36) + (inset?.top ?? 0), bottom: 28 + (inset?.bottom ?? 0), left: 28, right: 28 }, maxZoom: 15, duration: 0 });
-  }, [ready, frameKey, inset?.top, inset?.bottom]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, frameKey, inset?.top, inset?.bottom, following]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <View ref={host} style={{ height, backgroundColor: color.mapGround, overflow: 'hidden' }} />;
 }
@@ -105,14 +114,21 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset }: R
 // tall screens; the street pattern is kept faint so markers stand out.
 // ---------------------------------------------------------------------------
 const BASE_W = 400;
+// About half a kilometre either side of a followed driver.
+const FOLLOW_SPAN = 0.004;
 const BASE_H = 300;
 
-function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset }: RouteMapProps) {
+function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset, follow }: RouteMapProps) {
   const [width, setWidth] = useState(BASE_W);
   const W = width, H = height;
   const pts = framePoints({ stops, pin, driver });
-  const lats = pts.map((p) => p.lat);
-  const lngs = pts.map((p) => p.lng);
+  // Following: a street-level window around the driver instead of every point.
+  const following = !!follow && !!driver;
+  const box = following ? [
+    { lat: driver!.lat - FOLLOW_SPAN, lng: driver!.lng - FOLLOW_SPAN }, { lat: driver!.lat + FOLLOW_SPAN, lng: driver!.lng + FOLLOW_SPAN },
+  ] : pts;
+  const lats = box.map((p) => p.lat);
+  const lngs = box.map((p) => p.lng);
   // Fit every point, with at least ~1 km of view so a single pin sits mid-map.
   const cLat = lats.length ? (Math.min(...lats) + Math.max(...lats)) / 2 : 41.824;
   const cLng = lngs.length ? (Math.min(...lngs) + Math.max(...lngs)) / 2 : -71.4128;
@@ -132,7 +148,7 @@ function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset }: Route
   const roads = ['M-20 40 L420 70', 'M-20 150 L420 175', 'M-20 245 L420 262', 'M70 -20 L95 320', 'M190 -20 L205 320', 'M310 -20 L330 320', 'M-20 300 L250 -20'];
   const minor = ['M-20 95 L420 120', 'M-20 205 L420 222', 'M130 -20 L150 320', 'M250 -20 L268 320', 'M365 -20 L380 320'];
   // A driver too far away to frame isn't drawn, and neither is the leg from them.
-  const showDriver = !!driver && pts.includes(driver);
+  const showDriver = !!driver && (following || pts.includes(driver));
   const path = (line ?? []).filter((p) => p !== driver || showDriver);
   const d = path.length > 1 ? path.map((p, i) => `${i ? 'L' : 'M'}${X(p.lng)} ${Y(p.lat)}`).join(' ') : null;
 

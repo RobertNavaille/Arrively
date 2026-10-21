@@ -145,7 +145,9 @@ export default function Trip() {
     <View style={{ flex: 1, backgroundColor: color.mapGround }}>
       <RouteMap height={height} stops={mapStops} driver={pos} line={line}
         pin={focus ? current : null} pinLabel={phase === 'arrived' ? current?.address.split(',')[0] : undefined}
-        inset={{ top: phase === 'onroute' ? 84 : 0, bottom: height - peek - MAP_STRIP }} />
+        inset={{ top: phase === 'onroute' ? 84 : 0, bottom: height - peek - MAP_STRIP }}
+        // On the way it's a navigation view: the map follows the driver, who stays centred.
+        follow={phase === 'onroute'} />
 
       {/* On the way: where to, across the top of the map. */}
       {phase === 'onroute' && current ? (

@@ -20,7 +20,15 @@ export interface RouteMapProps {
   line?: LatLng[];
   /** Bands covered by other UI (a sheet over the map): the points are framed in what's left. */
   inset?: { top?: number; bottom?: number };
+  /**
+   * Navigation view: keep the driver in the middle of the uncovered part at
+   * street level, moving with them, instead of framing every point.
+   */
+  follow?: boolean;
 }
+
+/** Street-level zoom for following the driver. */
+export const FOLLOW_ZOOM = 16;
 
 // The driver is kept in view only when near the stops; a driver far away
 // (still at home, another city) would shrink the stops into a cluster.
