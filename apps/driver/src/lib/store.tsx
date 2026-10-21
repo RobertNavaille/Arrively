@@ -3,7 +3,14 @@ import { backend } from './backend';
 import { addDays, dayKey } from './geo';
 import { isDone, type Profile, type Route, type Stop } from './types';
 
-export const DAY_RANGE = { before: 3, after: 3 };
+// The days My day can page through: whole weeks (Sunday to Saturday) around
+// this one, so swiping past Saturday goes on to the next week.
+export const WEEKS = { back: 4, ahead: 8 };
+export function dayRange(today: Date) {
+  const todayIndex = WEEKS.back * 7 + today.getDay();
+  const count = (WEEKS.back + WEEKS.ahead + 1) * 7;
+  return { start: addDays(today, -todayIndex), count, todayIndex };
+}
 
 interface DriverData {
   profile: Profile | null;
@@ -25,10 +32,10 @@ export function DriverDataProvider({ children, enabled }: { children: ReactNode;
 
   const refresh = useCallback(async () => {
     try {
-      const today = new Date();
+      const { start, count } = dayRange(new Date());
       const [p, r] = await Promise.all([
         backend.profile(),
-        backend.routes(dayKey(addDays(today, -DAY_RANGE.before)), dayKey(addDays(today, DAY_RANGE.after))),
+        backend.routes(dayKey(start), dayKey(addDays(start, count - 1))),
       ]);
       setProfile(p);
       setRoutes(r);

@@ -11,7 +11,7 @@ import { addDays, dayKey, fmtDuration, fmtTime, routeTotals } from '../src/lib/g
 import { currentPosition, startSharing, stopSharing, useLivePosition } from '../src/lib/location';
 import { searchAddress, type Place } from '../src/lib/mapbox';
 import type { RoutePlan } from '../src/lib/routing';
-import { DAY_RANGE, currentStop, lastMarked, useDriverData } from '../src/lib/store';
+import { currentStop, dayRange, lastMarked, useDriverData } from '../src/lib/store';
 import { isDone, type LatLng, type Route, type Stop } from '../src/lib/types';
 import { Avatar, Banner, Button, IconButton, StatRow, StatusPill, type PillTone } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
@@ -29,11 +29,9 @@ export default function MyDay() {
   const pos = useLivePosition();
   // "Today" follows the clock, so an app left open overnight moves to the new day.
   const [today, setToday] = useState(() => new Date());
-  const days = useMemo(
-    () => Array.from({ length: DAY_RANGE.before + DAY_RANGE.after + 1 }, (_, i) => addDays(today, i - DAY_RANGE.before)),
-    [today],
-  );
-  const [index, setIndex] = useState(DAY_RANGE.before);
+  const range = useMemo(() => dayRange(today), [today]);
+  const days = useMemo(() => Array.from({ length: range.count }, (_, i) => addDays(range.start, i)), [range]);
+  const [index, setIndex] = useState(range.todayIndex);
   // Each day page is exactly as tall as the pager, so its stop list scrolls
   // inside it instead of running off the bottom (browsers don't stretch pages).
   const [pagerH, setPagerH] = useState(0);
@@ -48,6 +46,8 @@ export default function MyDay() {
   }, [width]); // eslint-disable-line react-hooks/exhaustive-deps
   const indexRef = useRef(index);
   indexRef.current = index;
+  const daysRef = useRef(days);
+  daysRef.current = days;
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     const node = (listRef.current as unknown as { getScrollableNode?: () => HTMLElement | null })?.getScrollableNode?.();
@@ -70,7 +70,7 @@ export default function MyDay() {
       sum += e.deltaX;
       if (Math.abs(sum) < 30) return;
       locked = true;
-      const next = Math.min(Math.max(indexRef.current + (sum > 0 ? 1 : -1), 0), DAY_RANGE.before + DAY_RANGE.after);
+      const next = Math.min(Math.max(indexRef.current + (sum > 0 ? 1 : -1), 0), daysRef.current.length - 1);
       goToRef.current(next);
     };
     node.addEventListener('wheel', onWheel, { passive: false });
@@ -85,11 +85,13 @@ export default function MyDay() {
   useEffect(() => {
     const check = () => {
       if (dayKey(new Date()) === dayKey(today)) return;
-      setToday(new Date());
-      setIndex(DAY_RANGE.before);
+      const now = new Date();
+      const at = dayRange(now).todayIndex;
+      setToday(now);
+      setIndex(at);
       refresh();
       touched.current = false;
-      setTimeout(() => listRef.current?.scrollToOffset({ offset: width * DAY_RANGE.before, animated: false }), 0);
+      setTimeout(() => listRef.current?.scrollToOffset({ offset: width * at, animated: false }), 0);
     };
     const sub = AppState.addEventListener('change', (st) => { if (st === 'active') check(); });
     const timer = setInterval(check, 60_000);
@@ -184,7 +186,9 @@ export default function MyDay() {
 
       {/* Date strip */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: space[4], paddingBottom: space[3], borderBottomWidth: 1, borderBottomColor: color.divider }}>
-        {days.map((d, i) => {
+        {/* The selected day's week, Sunday to Saturday. */}
+        {days.slice(index - (index % 7), index - (index % 7) + 7).map((d, j) => {
+          const i = index - (index % 7) + j;
           const sel = i === index;
           const has = (routeFor(dayKey(d))?.stops.length ?? 0) > 0;
           const past = dayKey(d) < dayKey(today);
@@ -216,7 +220,11 @@ export default function MyDay() {
             data={days}
             horizontal
             pagingEnabled
-            initialScrollIndex={DAY_RANGE.before}
+            initialScrollIndex={range.todayIndex}
+            // Only the day on screen and its neighbours are drawn (each has a map).
+            windowSize={3}
+            initialNumToRender={1}
+            maxToRenderPerBatch={1}
             onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h && h !== pagerH) setPagerH(h); }}
             getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
             showsHorizontalScrollIndicator={false}
@@ -234,7 +242,10 @@ export default function MyDay() {
             scrollEventThrottle={64}
             renderItem={({ item }) => {
               const k = dayKey(item);
-              const label = k === dayKey(today) ? 'today' : item.toLocaleDateString('en-US', { weekday: 'long' });
+              // A weekday alone is clear within a week of today; further out it gets the date.
+              const label = k === dayKey(today) ? 'today'
+                : Math.abs(item.getTime() - today.getTime()) < 6.5 * 86400000 ? item.toLocaleDateString('en-US', { weekday: 'long' })
+                : item.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
               return (
                 <View style={{ width, height: pagerH || undefined }}>
                   <DayPanel route={routeFor(k)} isToday={k === dayKey(today)} driver={k === dayKey(today) ? pos : null}
@@ -278,7 +289,7 @@ export default function MyDay() {
       <Menu visible={menu} onClose={() => setMenu(false)} offline={backend.offline} onDemo={async () => {
         setMenu(false);
         const here = pos ?? (await currentPosition()) ?? { lat: 41.824, lng: -71.4128 };
-        try { await backend.createDemoDay(here, null); goTo(DAY_RANGE.before); await refresh(); }
+        try { await backend.createDemoDay(here, null); goTo(range.todayIndex); await refresh(); }
         catch (e) { showMessage('Could not create demo day', e instanceof Error ? e.message : String(e)); }
       }} onSignOut={async () => { setMenu(false); await stopSharing(); await backend.signOut(); }} />
     </SafeAreaView>
