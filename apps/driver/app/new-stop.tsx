@@ -4,7 +4,6 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
-import { dayKey, parseDay } from '../src/lib/geo';
 import { searchAddress, type Place } from '../src/lib/mapbox';
 import { useDriverData } from '../src/lib/store';
 import { Button } from '../src/ui/components';
@@ -30,7 +29,6 @@ export default function NewStop() {
   const [busy, setBusy] = useState(false);
 
   const day = String(params.day);
-  const label = day === dayKey(new Date()) ? 'today' : parseDay(day).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 
   async function save() {
     setBusy(true);
@@ -47,29 +45,24 @@ export default function NewStop() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: color.surface }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space[4], gap: space[6] }}>
-          <View style={{ gap: 4 }}>
-            <Text style={type.title} accessibilityRole="header">New stop</Text>
-            <Text style={type.caption}>Adding to {label}</Text>
-          </View>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: space[4] }}>
+          {/* Where the stop is, edge to edge at the top; follows the address if it's changed below. */}
+          <RouteMap height={200} pin={place} pinLabel={place.name} />
 
-          {/* Where the stop is; follows the address if it's changed below. */}
-          <View style={{ borderRadius: radius.md, overflow: 'hidden' }}>
-            <RouteMap height={180} pin={place} pinLabel={place.name} />
-          </View>
+          <View style={{ padding: space[4], gap: space[6] }}>
+            <View style={{ gap: space[2] }}>
+              <Text style={[type.label, { textTransform: 'uppercase' }]}>Name</Text>
+              <TextInput value={name} onChangeText={setName} placeholder="Customer or place name" placeholderTextColor={color.inkMuted}
+                autoFocus autoCapitalize="words" textContentType="name" returnKeyType="next" accessibilityLabel="Name" style={field} />
+            </View>
 
-          <View style={{ gap: space[2] }}>
-            <Text style={[type.label, { textTransform: 'uppercase' }]}>Name</Text>
-            <TextInput value={name} onChangeText={setName} placeholder="Customer or place name" placeholderTextColor={color.inkMuted}
-              autoFocus autoCapitalize="words" textContentType="name" returnKeyType="next" accessibilityLabel="Name" style={field} />
-          </View>
+            <AddressField place={place} onChange={setPlace} />
 
-          <AddressField place={place} onChange={setPlace} />
-
-          <View style={{ gap: space[2] }}>
-            <Text style={[type.label, { textTransform: 'uppercase' }]}>Notes</Text>
-            <TextInput value={notes} onChangeText={setNotes} placeholder="Gate code, parking, what the job is" placeholderTextColor={color.inkMuted}
-              multiline accessibilityLabel="Notes" style={[field, { minHeight: 96, paddingTop: space[3], textAlignVertical: 'top' }]} />
+            <View style={{ gap: space[2] }}>
+              <Text style={[type.label, { textTransform: 'uppercase' }]}>Notes</Text>
+              <TextInput value={notes} onChangeText={setNotes} placeholder="Gate code, parking, what the job is" placeholderTextColor={color.inkMuted}
+                multiline accessibilityLabel="Notes" style={[field, { minHeight: 96, paddingTop: space[3], textAlignVertical: 'top' }]} />
+            </View>
           </View>
         </ScrollView>
         <View style={{ padding: space[4], paddingBottom: space[6], gap: space[2], borderTopWidth: 1, borderTopColor: color.divider }}>
