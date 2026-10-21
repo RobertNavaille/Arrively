@@ -221,10 +221,12 @@ export default function MyDay() {
             horizontal
             pagingEnabled
             initialScrollIndex={range.todayIndex}
-            // Only the day on screen and its neighbours are drawn (each has a map).
-            windowSize={3}
-            initialNumToRender={1}
-            maxToRenderPerBatch={1}
+            // Every day is a real page, so the browser's snapping only ever lands on
+            // a day (stand-in spacers for undrawn days made iOS jump weeks back).
+            // Only the day on screen and its neighbours draw their map and list.
+            initialNumToRender={days.length}
+            windowSize={days.length * 2}
+            extraData={index}
             onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h && h !== pagerH) setPagerH(h); }}
             getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
             showsHorizontalScrollIndicator={false}
@@ -240,7 +242,8 @@ export default function MyDay() {
               if (i !== index) setIndex(i);
             } : undefined}
             scrollEventThrottle={64}
-            renderItem={({ item }) => {
+            renderItem={({ item, index: i }) => {
+              if (Math.abs(i - index) > 1) return <View style={{ width, height: pagerH || undefined }} />;
               const k = dayKey(item);
               // A weekday alone is clear within a week of today; further out it gets the date.
               const label = k === dayKey(today) ? 'today'
