@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
@@ -40,6 +40,10 @@ export default function Trip() {
   const route = routeFor(dayKey(new Date()));
   const [review, setReview] = useState<{ plan: RoutePlan; from: LatLng | null } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // Where the drive row ends inside the sheet's top card (measured), so on the
+  // way the sheet can rest with Arrived just below the bottom edge.
+  const [driveRowEnd, setDriveRowEnd] = useState<number | null>(null);
+  const sheetRef = useRef<ScrollView>(null);
 
   const stops = route?.stops ?? [];
   const byId = new Map(stops.map((s) => [s.id, s]));
@@ -67,6 +71,8 @@ export default function Trip() {
   const marked = lastMarked(route);
   const justMarked = phase === 'next' && marked?.marked_at && Date.now() - Date.parse(marked.marked_at) < 15 * 60 * 1000;
   const canOptimize = !!route && route.status !== 'completed' && remaining.filter((s) => s.status === 'scheduled' || s.status === 'queued').length >= 2;
+  // Each step starts with the sheet at its resting height.
+  useEffect(() => { sheetRef.current?.scrollTo({ y: 0, animated: false }); }, [phase]);
 
   if (!route || !stops.length) {
     return (
@@ -128,7 +134,12 @@ export default function Trip() {
   const line = phase === 'arrived' ? undefined
     : phase === 'onroute' && current ? [...(pos ? [pos] : []), ...(leg ? leg.path : []), current]
     : road ? [...(pos ? [pos] : []), ...road.path] : [...(pos ? [pos] : []), ...ahead];
-  const peek = Math.round(height * 0.36);
+  // The sheet rests a third of the way down; on the way, low enough that only
+  // the drive shows and Arrived sits just below the bottom edge (pull up for it).
+  const sheetArea = height - MAP_STRIP;
+  const peek = phase === 'onroute' && driveRowEnd != null
+    ? Math.max(0, Math.round(sheetArea - driveRowEnd - space[3]))
+    : Math.round(height * 0.36);
 
   return (
     <View style={{ flex: 1, backgroundColor: color.mapGround }}>
@@ -145,7 +156,7 @@ export default function Trip() {
         </Pressable>
       ) : null}
 
-      <ScrollView style={{ position: 'absolute', top: MAP_STRIP, left: 0, right: 0, bottom: 0 }}
+      <ScrollView ref={sheetRef} style={{ position: 'absolute', top: MAP_STRIP, left: 0, right: 0, bottom: 0 }}
         stickyHeaderIndices={[1]} showsVerticalScrollIndicator={false}>
         <View style={{ height: peek }} />
 
@@ -197,7 +208,8 @@ export default function Trip() {
           {/* On the way: the drive leads; who it's to comes second. */}
           {phase === 'onroute' && current ? (
             <>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+              <View onLayout={(e) => { const end = e.nativeEvent.layout.y + e.nativeEvent.layout.height; if (end !== driveRowEnd) setDriveRowEnd(end); }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
                 <View style={{ flex: 1 }} accessible accessibilityLabel={`${legMin ?? '–'} minutes, ${legMeters != null ? miles(legMeters).toFixed(1) : '–'} miles to ${current.customer_name}`}>
                   <Text style={{ fontFamily: font.semibold, fontSize: 34, lineHeight: 40, color: color.ink }}>{legMin != null ? `${legMin} min` : '–'}</Text>
                   <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]} numberOfLines={1}>
