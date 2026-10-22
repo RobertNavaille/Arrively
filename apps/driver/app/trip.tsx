@@ -249,7 +249,6 @@ export default function Trip() {
               </View>
               <Button label="Arrived" loading={busy === 'arrived'}
                 onPress={() => run('arrived', async () => { await backend.markArrived(current.id); await refresh(); })} />
-              <Text style={[type.caption, { textAlign: 'center' }]}>Arrival is detected when you reach the stop.</Text>
             </>
           ) : null}
 
