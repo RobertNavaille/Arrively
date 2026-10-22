@@ -71,3 +71,28 @@ export function parseDay(key: string): Date {
   const [y, m, d] = key.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
+
+/**
+ * The part of a route still ahead of the driver: from the point on it nearest
+ * to them (their position projected onto the closest segment) to its end. As
+ * they drive, what's behind them drops off. Distances use a flat projection
+ * around the driver, plenty for a few kilometres.
+ */
+export function pathAhead(path: LatLng[], at: LatLng): LatLng[] {
+  if (path.length < 2) return path;
+  const k = Math.cos((at.lat * Math.PI) / 180);
+  const xy = (p: LatLng) => ({ x: (p.lng - at.lng) * k, y: p.lat - at.lat });
+  let best = { i: 0, t: 0, d: Infinity };
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = xy(path[i]), b = xy(path[i + 1]);
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = dx * dx + dy * dy;
+    // The driver is the origin; project it onto segment a→b.
+    const t = len ? Math.min(1, Math.max(0, -(a.x * dx + a.y * dy) / len)) : 0;
+    const d = (a.x + t * dx) ** 2 + (a.y + t * dy) ** 2;
+    if (d < best.d) best = { i, t, d };
+  }
+  const a = path[best.i], b = path[best.i + 1];
+  const onRoute = { lat: a.lat + (b.lat - a.lat) * best.t, lng: a.lng + (b.lng - a.lng) * best.t };
+  return [onRoute, ...path.slice(best.i + 1)];
+}

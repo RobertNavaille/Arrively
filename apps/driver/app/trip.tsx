@@ -4,7 +4,7 @@ import { Linking, Platform, Pressable, Text, View, useWindowDimensions } from 'r
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
-import { bearingDeg, dayKey, distanceM, estimateDriveMin, fmtDuration, fmtTime, miles, routeTotals } from '../src/lib/geo';
+import { bearingDeg, dayKey, distanceM, pathAhead, estimateDriveMin, fmtDuration, fmtTime, miles, routeTotals } from '../src/lib/geo';
 import { currentPosition, enableCompass, startSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
 import type { RoutePlan } from '../src/lib/routing';
 import { currentStop, lastMarked, useDriverData } from '../src/lib/store';
@@ -138,9 +138,12 @@ export default function Trip() {
     id: s.id, lat: s.lat, lng: s.lng, n: i + 1,
     state: isDone(s) ? 'done' : s.id === (reviewOrder?.[0] ?? current)?.id ? 'next' : 'upcoming',
   }));
+  // The route line starts at the driver: the road route is fetched only every
+  // so often, so what's already behind them is trimmed off on every fix.
+  const trimmed = (path: LatLng[]) => (pos ? [pos, ...pathAhead(path, pos)] : path);
   const line = phase === 'arrived' ? undefined
-    : phase === 'onroute' && current ? [...(pos ? [pos] : []), ...(leg ? leg.path : []), current]
-    : road ? [...(pos ? [pos] : []), ...road.path] : [...(pos ? [pos] : []), ...ahead];
+    : phase === 'onroute' && current ? trimmed([...(leg ? leg.path : []), current])
+    : road ? trimmed(road.path) : [...(pos ? [pos] : []), ...ahead];
   // The sheet rests a third of the way down; on the way, low enough that only
   // the drive shows and Arrived sits just below the bottom edge (pull up for it).
   const sheetArea = height - MAP_STRIP;
