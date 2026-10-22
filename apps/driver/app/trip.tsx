@@ -158,6 +158,8 @@ export default function Trip() {
         // The way the driver faces: the compass when there is one, else their direction of travel.
         driverHeading={compass ?? travel}
         onUserMove={() => { if (phase === 'onroute') setFreeMap(true); }}
+        // After they take over, the map stays where they put it (no jump to the overview).
+        hold={phase === 'onroute' && freeMap}
         // Direction of travel is up; before the driver moves, the stop is.
         bearing={travel ?? (pos && current ? bearingDeg(pos, current) : 0)} />
 

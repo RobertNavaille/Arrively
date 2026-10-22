@@ -42,7 +42,7 @@ function driverEl(facing: boolean) {
   return el;
 }
 
-function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, driverHeading, onUserMove }: RouteMapProps) {
+function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, driverHeading, onUserMove, hold }: RouteMapProps) {
   const host = useRef<View>(null);
   const map = useRef<import('mapbox-gl').Map | null>(null);
   const markers = useRef<import('mapbox-gl').Marker[]>([]);
@@ -51,7 +51,11 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
   userMove.current = onUserMove;
   const framed = framePoints({ stops, pin, driver });
   const following = !!follow && !!driver;
-  const showDriver = !!driver && (following || framed.includes(driver));
+  const followingRef = useRef(following);
+  followingRef.current = following;
+  // While following, the driver's own zoom is kept (like Apple Maps); a fresh follow starts at street level.
+  const followZoom = useRef(FOLLOW_ZOOM);
+  const showDriver = !!driver && (following || hold || framed.includes(driver));
   const path = (line ?? []).filter((p) => p !== driver || showDriver);
   // Refit only when the set of framed places changes, not on every location ping.
   const frameKey = framed.filter((p) => p !== driver).map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join('|') + (showDriver ? '|d' : '');
@@ -66,10 +70,12 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
       const m = new mapboxgl.Map({ container: el, style: 'mapbox://styles/mapbox/light-v11', center: [-71.41, 41.82], zoom: 11, attributionControl: false });
       m.addControl(new mapboxgl.AttributionControl({ compact: true }));
       // Moves the driver makes by hand carry the browser event; the app's own camera moves don't.
+      // Dragging or turning takes over from following; zooming while following keeps it, at their zoom.
       const byHand = (e: { originalEvent?: unknown }) => { if (e.originalEvent) userMove.current?.(); };
       m.on('dragstart', byHand);
-      m.on('zoomstart', byHand);
       m.on('rotatestart', byHand);
+      m.on('zoomstart', (e) => { if (!followingRef.current) byHand(e); });
+      m.on('zoomend', (e) => { if (e.originalEvent && followingRef.current) followZoom.current = m.getZoom(); });
       m.on('load', () => {
         m.addSource('route', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         m.addLayer({ id: 'route-casing', type: 'line', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 7 } });
@@ -104,17 +110,33 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
   useEffect(() => {
     const m = map.current;
     if (!ready || !m || !following) return;
-    m.easeTo({ center: [driver!.lng, driver!.lat], zoom: FOLLOW_ZOOM, bearing, duration: 800,
+    m.easeTo({ center: [driver!.lng, driver!.lat], zoom: followZoom.current, bearing, duration: 800,
       padding: { top: inset?.top ?? 0, bottom: inset?.bottom ?? 0, left: 0, right: 0 } });
   }, [ready, following, driver?.lat, driver?.lng, bearing, inset?.top, inset?.bottom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const m = map.current;
-    if (!ready || !m || !framed.length || following) return;
+    if (!ready || !m || !framed.length || following || hold) return;
     const lngs = framed.map((p) => p.lng), lats = framed.map((p) => p.lat);
     m.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
       { padding: { top: (pinLabel ? 56 : 36) + (inset?.top ?? 0), bottom: 28 + (inset?.bottom ?? 0), left: 28, right: 28 }, maxZoom: 15, bearing: 0, duration: 0 });
-  }, [ready, frameKey, inset?.top, inset?.bottom, following]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, frameKey, inset?.top, inset?.bottom, following, hold]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Following: pinch and wheel zoom about the driver (the map's centre), not the finger,
+  // so they stay put; a fresh follow (Re-center) starts back at street level.
+  useEffect(() => {
+    const m = map.current;
+    if (!ready || !m) return;
+    // (enable() ignores new options while already on, hence off-then-on.)
+    if (following) {
+      m.scrollZoom.disable(); m.scrollZoom.enable({ around: 'center' });
+      m.touchZoomRotate.disable(); m.touchZoomRotate.enable({ around: 'center' });
+    } else {
+      followZoom.current = FOLLOW_ZOOM;
+      m.scrollZoom.disable(); m.scrollZoom.enable();
+      m.touchZoomRotate.disable(); m.touchZoomRotate.enable();
+    }
+  }, [ready, following]);
 
   return <View ref={host} style={{ height, backgroundColor: color.mapGround, overflow: 'hidden' }} />;
 }

@@ -11,7 +11,7 @@ if (MAPBOX_TOKEN) Mapbox.setAccessToken(MAPBOX_TOKEN);
 
 // Mapbox map in the Arrively style: light base map, blue route and driver,
 // numbered stops, a dark pin for a single destination.
-export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, driverHeading, onUserMove }: RouteMapProps) {
+export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, driverHeading, onUserMove, hold }: RouteMapProps) {
   const points = useMemo(() => {
     const all = framePoints({ stops, pin, driver });
     return all.length ? all : [{ lat: 41.824, lng: -71.4128 }];
@@ -39,7 +39,10 @@ export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inse
       <Mapbox.MapView style={{ flex: 1 }} styleURL={Mapbox.StyleURL.Light} scaleBarEnabled={false}
         onCameraChanged={(state) => { if (state.gestures.isGestureActive) onUserMove?.(); }}
         logoPosition={{ bottom: 6, left: 6 }} attributionPosition={{ bottom: 6, right: 6 }}>
-        {following ? (
+        {hold ? (
+          // The driver took over from following: leave the camera where they put it.
+          <Mapbox.Camera animationDuration={0} />
+        ) : following ? (
           // Navigation view: the driver stays centred in the uncovered part as they move.
           <Mapbox.Camera centerCoordinate={[driver!.lng, driver!.lat]} zoomLevel={FOLLOW_ZOOM} heading={bearing} animationDuration={800}
             padding={{ paddingTop: inset?.top ?? 0, paddingBottom: inset?.bottom ?? 0, paddingLeft: 0, paddingRight: 0 }} />

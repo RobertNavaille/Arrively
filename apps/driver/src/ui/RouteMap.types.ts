@@ -29,8 +29,10 @@ export interface RouteMapProps {
   bearing?: number;
   /** Which way the driver is facing, degrees from north: a pointer on their dot. */
   driverHeading?: number | null;
-  /** The driver panned, zoomed or turned the map by hand (so following can stand aside). */
+  /** The driver dragged or turned the map by hand (so following can stand aside). Zooming keeps following. */
   onUserMove?: () => void;
+  /** Leave the camera where the driver put it: no reframing (after they took over from following). */
+  hold?: boolean;
 }
 
 /** Close street-level zoom for following the driver. */
