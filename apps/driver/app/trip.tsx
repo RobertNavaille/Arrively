@@ -48,7 +48,7 @@ export default function Trip() {
   const [busy, setBusy] = useState<string | null>(null);
   // The height of the sheet's top card (measured) and what's covered at the
   // bottom of the screen (home indicator, Safari's floating bar), so each step
-  // rests with its card, Arrived included, fully above it.
+  // rests with its card, Arrived and Cancel route included, fully above it.
   const [cardH, setCardH] = useState<number | null>(null);
   const bottomInset = useBottomInset();
   // The driver moved the map by hand: stop following until they re-center.
@@ -251,8 +251,13 @@ export default function Trip() {
                 {call ? <IconButton icon="phone" label={`Call ${current.customer_name}`} onPress={call} /> : null}
                 <IconButton icon="navigate" label="Directions" onPress={() => openDirections(current)} />
               </View>
-              <Button label="Arrived" loading={busy === 'arrived'}
-                onPress={() => run('arrived', async () => { await backend.markArrived(current.id); await refresh(); })} />
+              <View style={{ gap: space[2] }}>
+                <Button label="Arrived" loading={busy === 'arrived'}
+                  onPress={() => run('arrived', async () => { await backend.markArrived(current.id); await refresh(); })} />
+                {/* Started by mistake, or plans changed: back to the trip view. */}
+                <Button variant="text" label="Cancel route" loading={busy === 'cancel'}
+                  onPress={() => run('cancel', async () => { await backend.cancelTrip(current.id); await refresh(); })} />
+              </View>
             </>
           ) : null}
 

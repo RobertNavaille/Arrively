@@ -25,6 +25,8 @@ export interface Backend {
   markArrived(stopId: string): Promise<void>;
   /** Back to on the way, for an arrival marked by mistake. */
   undoArrived(stopId: string): Promise<void>;
+  /** Back from on the way to the trip view: the stop waits, next in line. */
+  cancelTrip(stopId: string): Promise<void>;
   markStop(stopId: string, outcome: MarkOutcome, reason: string | null, at: LatLng | null): Promise<void>;
   addStop(day: string, address: string, at: LatLng, details?: StopDetails): Promise<void>;
   updateAddress(stopId: string, address: string, at: LatLng): Promise<void>;
@@ -128,6 +130,7 @@ const supabaseBackend: Backend = {
   async startTrip(stopId) { check(await supabase().rpc('start_trip', { p_stop: stopId })); refreshEtas(true); },
   async markArrived(stopId) { check(await supabase().rpc('mark_arrived', { p_stop: stopId })); refreshEtas(true); },
   async undoArrived(stopId) { check(await supabase().rpc('undo_arrived', { p_stop: stopId })); refreshEtas(true); },
+  async cancelTrip(stopId) { check(await supabase().rpc('cancel_trip', { p_stop: stopId })); refreshEtas(true); },
   async markStop(stopId, outcome, reason, at) {
     check(await supabase().rpc('mark_stop', { p_stop: stopId, p_outcome: outcome, p_reason: reason, p_lat: at?.lat ?? null, p_lng: at?.lng ?? null }));
     refreshEtas(true);
@@ -252,6 +255,7 @@ const offlineBackend: Backend = {
   },
   async markArrived(stopId) { const [, s] = findStop(stopId); s.status = 'arrived'; s.arrived_at = new Date().toISOString(); emit(); },
   async undoArrived(stopId) { const [, s] = findStop(stopId); s.status = 'en_route'; s.arrived_at = null; emit(); },
+  async cancelTrip(stopId) { const [, s] = findStop(stopId); s.status = 'queued'; emit(); },
   async markStop(stopId, outcome, reason, at) {
     const [r, s] = findStop(stopId);
     const outside = at ? distanceM(at, s) > RADIUS * 2 : false;
