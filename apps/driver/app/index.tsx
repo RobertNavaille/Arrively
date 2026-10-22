@@ -10,6 +10,7 @@ import { addDays, dayKey, fmtTime } from '../src/lib/geo';
 import { currentPosition, stopSharing, useLivePosition } from '../src/lib/location';
 import { searchAddress, type Place } from '../src/lib/mapbox';
 import { currentStop, dayRange, useActiveTrip, useDriverData } from '../src/lib/store';
+import { useBottomInset } from '../src/lib/viewport';
 import { isDone, type LatLng, type Route, type Stop } from '../src/lib/types';
 import { Avatar, Button, IconButton } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
@@ -135,6 +136,7 @@ export default function MyDay() {
 
   const current = currentStop(route);
   const trip = useActiveTrip();
+  const bottomInset = useBottomInset();
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: color.surface }}>
@@ -246,7 +248,7 @@ export default function MyDay() {
             {q.trim() ? <Pressable accessibilityLabel="Close search" onPress={() => setQ('')} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: color.scrim, zIndex: 2 }} /> : null}
             {error ? <Text style={[type.caption, { color: color.danger, paddingHorizontal: space[4], paddingTop: space[2] }]}>{error}</Text> : null}
             {trip ? <TripBar route={trip} /> : (
-              <View style={{ padding: space[4], paddingBottom: space[6], borderTopWidth: 1, borderTopColor: color.divider }}>
+              <View style={{ padding: space[4], paddingBottom: space[6] + bottomInset, borderTopWidth: 1, borderTopColor: color.divider }}>
                 {isToday && current ? (
                   <Button label="Start trip" onPress={() => router.push('/trip')} />
                 ) : (

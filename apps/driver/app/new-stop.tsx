@@ -6,6 +6,7 @@ import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
 import { searchAddress, type Place } from '../src/lib/mapbox';
 import { useDriverData } from '../src/lib/store';
+import { useBottomInset } from '../src/lib/viewport';
 import { Button } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
@@ -21,6 +22,7 @@ export default function NewStop() {
   const params = useLocalSearchParams<{ day: string; name: string; detail: string; lat: string; lng: string }>();
   const router = useRouter();
   const { refresh } = useDriverData();
+  const bottomInset = useBottomInset();
   const [place, setPlace] = useState<Place>({
     id: 'picked', name: String(params.name ?? ''), detail: String(params.detail ?? ''), lat: Number(params.lat), lng: Number(params.lng),
   });
@@ -65,7 +67,7 @@ export default function NewStop() {
             </View>
           </View>
         </ScrollView>
-        <View style={{ padding: space[4], paddingBottom: space[6], gap: space[2], borderTopWidth: 1, borderTopColor: color.divider }}>
+        <View style={{ padding: space[4], paddingBottom: space[6] + bottomInset, gap: space[2], borderTopWidth: 1, borderTopColor: color.divider }}>
           <Button label="Add stop" onPress={save} loading={busy} />
           <Button variant="text" label="Cancel" onPress={() => router.back()} />
         </View>

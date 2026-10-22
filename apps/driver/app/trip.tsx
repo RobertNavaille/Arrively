@@ -8,6 +8,7 @@ import { bearingDeg, dayKey, distanceM, pathAhead, estimateDriveMin, fmtDuration
 import { currentPosition, enableCompass, startSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
 import type { RoutePlan } from '../src/lib/routing';
 import { currentStop, lastMarked, useDriverData } from '../src/lib/store';
+import { useBottomInset } from '../src/lib/viewport';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
 import { BottomSheet } from '../src/ui/BottomSheet';
 import { Banner, Button, DetailRow, IconButton, StatusPill } from '../src/ui/components';
@@ -43,9 +44,11 @@ export default function Trip() {
   const route = routeFor(dayKey(new Date()));
   const [review, setReview] = useState<{ plan: RoutePlan; from: LatLng | null } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  // Where the drive row ends inside the sheet's top card (measured), so on the
-  // way the sheet can rest with Arrived just below the bottom edge.
-  const [driveRowEnd, setDriveRowEnd] = useState<number | null>(null);
+  // The height of the sheet's top card (measured) and what's covered at the
+  // bottom of the screen (home indicator, Safari's floating bar), so each step
+  // rests with its card, Arrived included, fully above it.
+  const [cardH, setCardH] = useState<number | null>(null);
+  const bottomInset = useBottomInset();
   // The driver moved the map by hand: stop following until they re-center.
   const [freeMap, setFreeMap] = useState(false);
 
@@ -144,12 +147,12 @@ export default function Trip() {
   const line = phase === 'arrived' ? undefined
     : phase === 'onroute' && current ? trimmed([...(leg ? leg.path : []), current])
     : road ? trimmed(road.path) : [...(pos ? [pos] : []), ...ahead];
-  // The sheet rests a third of the way down; on the way, low enough that only
-  // the drive shows and Arrived sits just below the bottom edge (pull up for it).
+  // The sheet rests a third of the way down, or lower on the way: just low
+  // enough that the step's card (with Arrived) sits above what's covered at the
+  // bottom. Never so low that the card would slip under it.
   const sheetArea = height - MAP_STRIP;
-  const peek = phase === 'onroute' && driveRowEnd != null
-    ? Math.max(0, Math.round(sheetArea - driveRowEnd - space[3]))
-    : Math.round(height * 0.36);
+  const cardRest = cardH != null ? Math.max(0, Math.round(sheetArea - cardH - bottomInset)) : null;
+  const peek = phase === 'onroute' && cardRest != null ? cardRest : Math.min(Math.round(height * 0.36), cardRest ?? Infinity);
 
   return (
     <View style={{ flex: 1, backgroundColor: color.mapGround }}>
@@ -184,9 +187,10 @@ export default function Trip() {
       ) : null}
 
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
-      <BottomSheet top={MAP_STRIP} rest={peek} resetKey={phase} header={
+      <BottomSheet top={MAP_STRIP} rest={peek} resetKey={phase} bottomInset={bottomInset} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
-        <View style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' ? 0 : 1, borderBottomColor: color.divider }}>
+        <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH) setCardH(h); }}
+          style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' ? 0 : 1, borderBottomColor: color.divider }}>
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: color.divider, alignSelf: 'center' }} />
 
           {phase === 'next' && current ? (
@@ -233,8 +237,7 @@ export default function Trip() {
           {/* On the way: the drive leads; who it's to comes second. */}
           {phase === 'onroute' && current ? (
             <>
-              <View onLayout={(e) => { const end = e.nativeEvent.layout.y + e.nativeEvent.layout.height; if (end !== driveRowEnd) setDriveRowEnd(end); }}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
                 <View style={{ flex: 1 }} accessible accessibilityLabel={`${legMin ?? '–'} minutes, ${legMeters != null ? miles(legMeters).toFixed(1) : '–'} miles to ${current.customer_name}`}>
                   <Text style={{ fontFamily: font.semibold, fontSize: 34, lineHeight: 40, color: color.ink }}>{legMin != null ? `${legMin} min` : '–'}</Text>
                   <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]} numberOfLines={1}>

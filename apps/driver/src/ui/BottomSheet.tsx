@@ -9,8 +9,11 @@ import { color, radius, shadow } from './theme';
  * put inside the sheet; the list scrolls only once the sheet is open. The map
  * above the sheet gets every touch, since nothing covers it.
  */
-export function BottomSheet({ top, rest, resetKey, header, children }: {
-  top: number; rest: number; resetKey: string; header: ReactNode; children: ReactNode;
+export function BottomSheet({ top, rest, resetKey, bottomInset = 0, header, children }: {
+  top: number; rest: number; resetKey: string;
+  /** Covered at the bottom of the screen: the list's end scrolls clear of it. */
+  bottomInset?: number;
+  header: ReactNode; children: ReactNode;
 }) {
   const { height } = useWindowDimensions();
   const offset = useRef(new Animated.Value(rest)).current;
@@ -72,7 +75,7 @@ export function BottomSheet({ top, rest, resetKey, header, children }: {
       <View onLayout={(e) => { headerH.current = e.nativeEvent.layout.height; }}>{header}</View>
       <ScrollView ref={listRef} style={[{ flex: 1 }, open ? styles.listOpen : styles.listShut]} scrollEnabled={open}
         onScroll={(e) => { listAtTop.current = e.nativeEvent.contentOffset.y <= 0; }} scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: bottomInset }}>
         {children}
       </ScrollView>
     </Animated.View>
