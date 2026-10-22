@@ -17,6 +17,8 @@ import { RouteMap } from '../src/ui/RouteMap';
 import type { MapStop } from '../src/ui/RouteMap.types';
 import { color, font, radius, shadow, space, type } from '../src/ui/theme';
 
+export { ScreenError as ErrorBoundary } from '../src/ui/ScreenError';
+
 const RADIUS_M = 75;
 // A strip of map always shows above the sheet, even pulled all the way up.
 const MAP_STRIP = 68;

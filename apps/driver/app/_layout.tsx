@@ -9,6 +9,8 @@ import '../src/lib/location'; // registers the background location task
 import { DriverDataProvider } from '../src/lib/store';
 import { color } from '../src/ui/theme';
 
+export { ScreenError as ErrorBoundary } from '../src/ui/ScreenError';
+
 function useAuthGate() {
   const [ready, setReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
