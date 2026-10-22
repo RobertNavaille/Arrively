@@ -270,11 +270,9 @@ export default function Trip() {
               {current.notes ? <DetailRow icon="notes" primary={current.notes} /> : null}
               {choosing ? (
                 <View style={{ gap: space[2] }}>
-                  <Button icon="check" label="Complete" loading={busy === 'completed'} onPress={() => mark('completed')} />
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Button variant="text" label="No show" loading={busy === 'no_show'} onPress={() => mark('no_show')} />
-                    <Button variant="text" label="Skip" onPress={() => router.push(`/skip/${current.id}`)} />
-                  </View>
+                  <Button label="Complete" loading={busy === 'completed'} onPress={() => mark('completed')} />
+                  <Button variant="text" label="No show" loading={busy === 'no_show'} onPress={() => mark('no_show')} />
+                  <Button variant="text" label="Skip" onPress={() => router.push(`/skip/${current.id}`)} />
                 </View>
               ) : (
                 <View style={{ gap: space[2] }}>
