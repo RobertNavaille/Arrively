@@ -143,3 +143,56 @@ export function useTravelBearing(pos: LivePosition | null): number | null {
   }, [pos?.lat, pos?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
   return bearing;
 }
+
+type OrientationEventWithCompass = DeviceOrientationEvent & { webkitCompassHeading?: number };
+type OrientationPermission = { requestPermission?: () => Promise<'granted' | 'denied'> };
+
+/**
+ * iPhone browsers only share the compass after the person allows it, and the
+ * request must come from a tap: call this from one (Start driving). Elsewhere
+ * it does nothing.
+ */
+export async function enableCompass(): Promise<void> {
+  if (Platform.OS !== 'web' || typeof DeviceOrientationEvent === 'undefined') return;
+  const ask = (DeviceOrientationEvent as unknown as OrientationPermission).requestPermission;
+  if (ask) await ask().catch(() => 'denied');
+}
+
+/** Which way the device is facing (compass, degrees from north); null where there's no compass. */
+export function useCompassHeading(enabled = true): number | null {
+  const [heading, setHeading] = useState<number | null>(null);
+  const last = useRef<number | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    // Small wobbles don't need a re-render.
+    const update = (h: number) => {
+      const prev = last.current;
+      if (prev != null && Math.abs(((h - prev + 540) % 360) - 180) < 3) return;
+      last.current = h;
+      setHeading(h);
+    };
+    if (Platform.OS === 'web') {
+      if (typeof window === 'undefined') return;
+      // iOS Safari: webkitCompassHeading. Others: an absolute alpha (counter-clockwise from north).
+      const onOrientation = (e: Event) => {
+        const o = e as OrientationEventWithCompass;
+        if (o.webkitCompassHeading != null && Number.isFinite(o.webkitCompassHeading)) update(o.webkitCompassHeading);
+        else if (o.absolute && o.alpha != null) update((360 - o.alpha) % 360);
+      };
+      window.addEventListener('deviceorientationabsolute', onOrientation);
+      window.addEventListener('deviceorientation', onOrientation);
+      return () => {
+        window.removeEventListener('deviceorientationabsolute', onOrientation);
+        window.removeEventListener('deviceorientation', onOrientation);
+      };
+    }
+    let sub: Location.LocationSubscription | null = null;
+    let cancelled = false;
+    Location.watchHeadingAsync((h) => {
+      const v = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
+      if (!cancelled && v >= 0) update(v);
+    }).then((s) => { if (cancelled) s.remove(); else sub = s; }).catch(() => {});
+    return () => { cancelled = true; sub?.remove(); };
+  }, [enabled]);
+  return heading;
+}

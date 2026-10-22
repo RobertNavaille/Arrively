@@ -5,7 +5,7 @@ import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
 import { bearingDeg, dayKey, distanceM, estimateDriveMin, fmtDuration, fmtTime, miles, routeTotals } from '../src/lib/geo';
-import { currentPosition, startSharing, useLivePosition, useTravelBearing } from '../src/lib/location';
+import { currentPosition, enableCompass, startSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
 import type { RoutePlan } from '../src/lib/routing';
 import { currentStop, lastMarked, useDriverData } from '../src/lib/store';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
@@ -38,6 +38,7 @@ export default function Trip() {
   const { routeFor, refresh } = useDriverData();
   const pos = useLivePosition();
   const travel = useTravelBearing(pos);
+  const compass = useCompassHeading();
   const route = routeFor(dayKey(new Date()));
   const [review, setReview] = useState<{ plan: RoutePlan; from: LatLng | null } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -104,6 +105,8 @@ export default function Trip() {
   });
   const startDriving = () => run('start', async () => {
     if (!current) return;
+    // Asked from this tap: iPhone browsers share the compass only once allowed.
+    await enableCompass();
     // The first drive starts the trip: location sharing and the customers' texts begin here.
     if (route.status === 'planned') {
       await backend.startRoute(route.id);
@@ -151,6 +154,8 @@ export default function Trip() {
         inset={{ top: phase === 'onroute' ? 84 : 0, bottom: height - peek - MAP_STRIP }}
         // On the way it's a navigation view: the map follows the driver, who stays centred.
         follow={phase === 'onroute' && !freeMap}
+        // The way the driver faces: the compass when there is one, else their direction of travel.
+        driverHeading={compass ?? travel}
         onUserMove={() => { if (phase === 'onroute') setFreeMap(true); }}
         // Direction of travel is up; before the driver moves, the stop is.
         bearing={travel ?? (pos && current ? bearingDeg(pos, current) : 0)} />

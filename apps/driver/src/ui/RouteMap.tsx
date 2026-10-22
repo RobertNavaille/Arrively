@@ -9,7 +9,7 @@ if (MAPBOX_TOKEN) Mapbox.setAccessToken(MAPBOX_TOKEN);
 
 // Mapbox map in the Arrively style: light base map, blue route and driver,
 // numbered stops, a dark pin for a single destination.
-export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, onUserMove }: RouteMapProps) {
+export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, driverHeading, onUserMove }: RouteMapProps) {
   const points = useMemo(() => {
     const all = framePoints({ stops, pin, driver });
     return all.length ? all : [{ lat: 41.824, lng: -71.4128 }];
@@ -82,7 +82,12 @@ export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inse
         ) : null}
         {driver ? (
           <Mapbox.MarkerView coordinate={[driver.lng, driver.lat]} allowOverlap>
-            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,157,254,0.18)', alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,157,254,0.18)', alignItems: 'center', justifyContent: 'center',
+              // Facing, relative to the screen: the map itself is turned by the camera heading while following.
+              transform: [{ rotate: `${(driverHeading ?? 0) - (following ? bearing : 0)}deg` }] }}>
+              {driverHeading != null ? (
+                <View style={{ position: 'absolute', top: 1, width: 0, height: 0, borderLeftWidth: 7, borderRightWidth: 7, borderBottomWidth: 10, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: color.brand }} />
+              ) : null}
               <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center' }}>
                 <View style={{ width: 13, height: 13, borderRadius: 6.5, backgroundColor: color.brand }} />
               </View>

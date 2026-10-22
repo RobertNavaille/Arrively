@@ -32,14 +32,19 @@ function pinEl(label?: string) {
   return el;
 }
 
-function driverEl() {
+// The driver's dot; with a heading, a triangle on its rim points the way they face
+// (the marker is turned by Mapbox, relative to north, so it stays right as the map turns).
+function driverEl(facing: boolean) {
   const el = document.createElement('div');
-  el.style.cssText = 'width:40px;height:40px;border-radius:50%;background:rgba(0,157,254,.18);display:grid;place-items:center;';
-  el.innerHTML = `<span style="width:16px;height:16px;border-radius:50%;background:${color.brand};border:3px solid #fff;box-shadow:0 1px 4px rgba(26,26,26,.3)"></span>`;
+  el.style.cssText = 'position:relative;width:40px;height:40px;border-radius:50%;background:rgba(0,157,254,.18);display:grid;place-items:center;';
+  el.innerHTML = (facing
+    ? `<span style="position:absolute;top:1px;left:50%;margin-left:-7px;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:10px solid ${color.brand}"></span>`
+    : '')
+    + `<span style="width:16px;height:16px;border-radius:50%;background:${color.brand};border:3px solid #fff;box-shadow:0 1px 4px rgba(26,26,26,.3)"></span>`;
   return el;
 }
 
-function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, onUserMove }: RouteMapProps) {
+function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, driverHeading, onUserMove }: RouteMapProps) {
   const host = useRef<View>(null);
   const map = useRef<import('mapbox-gl').Map | null>(null);
   const markers = useRef<import('mapbox-gl').Marker[]>([]);
@@ -88,7 +93,7 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
       markers.current = [
         ...byDrawOrder(stops).map((s) => new mapboxgl.Marker({ element: stopEl(s) }).setLngLat([s.lng, s.lat])),
         ...(pin ? [new mapboxgl.Marker({ element: pinEl(pinLabel), anchor: 'bottom' }).setLngLat([pin.lng, pin.lat])] : []),
-        ...(driver && showDriver ? [new mapboxgl.Marker({ element: driverEl() }).setLngLat([driver.lng, driver.lat])] : []),
+        ...(driver && showDriver ? [new mapboxgl.Marker({ element: driverEl(driverHeading != null), rotation: driverHeading ?? 0, rotationAlignment: 'map' }).setLngLat([driver.lng, driver.lat])] : []),
       ].map((mk) => mk.addTo(m));
       (m.getSource('route') as import('mapbox-gl').GeoJSONSource | undefined)?.setData({
         type: 'Feature', properties: {},
@@ -125,7 +130,7 @@ const BASE_W = 400;
 const FOLLOW_SPAN = 0.0014;
 const BASE_H = 300;
 
-function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0 }: RouteMapProps) {
+function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, driverHeading }: RouteMapProps) {
   const [width, setWidth] = useState(BASE_W);
   const W = width, H = height;
   const pts = framePoints({ stops, pin, driver });
@@ -205,6 +210,8 @@ function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset, follow,
           {driver && showDriver ? (
             <G transform={`translate(${X(driver.lng)} ${Y(driver.lat)})`}>
               <Circle r={20} fill={color.brand} opacity={0.18} />
+              {/* Facing: drawn in map space, so it turns with a turned map. */}
+              {driverHeading != null ? <Path d="M0 -19 L-7 -9 L7 -9 Z" fill={color.brand} transform={`rotate(${driverHeading})`} /> : null}
               <Circle r={9} fill={color.surface} />
               <Circle r={6.5} fill={color.brand} />
             </G>
