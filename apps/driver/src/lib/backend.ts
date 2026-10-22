@@ -253,9 +253,9 @@ const offlineBackend: Backend = {
     r.status = 'active'; r.stops.forEach((x) => { if (x.status === 'scheduled') x.status = 'queued'; });
     s.status = 'en_route'; emit();
   },
-  async markArrived(stopId) { const [, s] = findStop(stopId); s.status = 'arrived'; s.arrived_at = new Date().toISOString(); emit(); },
+  async markArrived(stopId) { const [, s] = findStop(stopId); if (s.status === 'arrived') return; s.status = 'arrived'; s.arrived_at = new Date().toISOString(); emit(); },
   async undoArrived(stopId) { const [, s] = findStop(stopId); s.status = 'en_route'; s.arrived_at = null; emit(); },
-  async cancelTrip(stopId) { const [, s] = findStop(stopId); s.status = 'queued'; emit(); },
+  async cancelTrip(stopId) { const [, s] = findStop(stopId); s.status = 'queued'; s.arrived_at = null; emit(); },
   async markStop(stopId, outcome, reason, at) {
     const [r, s] = findStop(stopId);
     const outside = at ? distanceM(at, s) > RADIUS * 2 : false;

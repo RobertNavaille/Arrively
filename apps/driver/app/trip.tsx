@@ -98,7 +98,11 @@ export default function Trip() {
   async function run(label: string, fn: () => Promise<void>) {
     setBusy(label);
     try { await fn(); }
-    catch (e) { showMessage('Something went wrong', e instanceof Error ? e.message : String(e)); }
+    catch (e) {
+      showMessage('Something went wrong', e instanceof Error ? e.message : String(e));
+      // The stop may have moved on without us (arrival is also detected from location): catch up.
+      refresh();
+    }
     finally { setBusy(null); }
   }
   const optimize = () => run('plan', async () => {
