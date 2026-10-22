@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
@@ -45,6 +45,8 @@ export default function Trip() {
   // way the sheet can rest with Arrived just below the bottom edge.
   const [driveRowEnd, setDriveRowEnd] = useState<number | null>(null);
   const sheetRef = useRef<ScrollView>(null);
+  // The driver moved the map by hand: stop following until they re-center.
+  const [freeMap, setFreeMap] = useState(false);
 
   const stops = route?.stops ?? [];
   const byId = new Map(stops.map((s) => [s.id, s]));
@@ -73,7 +75,7 @@ export default function Trip() {
   const justMarked = phase === 'next' && marked?.marked_at && Date.now() - Date.parse(marked.marked_at) < 15 * 60 * 1000;
   const canOptimize = !!route && route.status !== 'completed' && remaining.filter((s) => s.status === 'scheduled' || s.status === 'queued').length >= 2;
   // Each step starts with the sheet at its resting height.
-  useEffect(() => { sheetRef.current?.scrollTo({ y: 0, animated: false }); }, [phase]);
+  useEffect(() => { sheetRef.current?.scrollTo({ y: 0, animated: false }); setFreeMap(false); }, [phase]);
 
   if (!route || !stops.length) {
     return (
@@ -148,9 +150,18 @@ export default function Trip() {
         pin={focus ? current : null} pinLabel={phase === 'arrived' ? current?.address.split(',')[0] : undefined}
         inset={{ top: phase === 'onroute' ? 84 : 0, bottom: height - peek - MAP_STRIP }}
         // On the way it's a navigation view: the map follows the driver, who stays centred.
-        follow={phase === 'onroute'}
+        follow={phase === 'onroute' && !freeMap}
+        onUserMove={() => { if (phase === 'onroute') setFreeMap(true); }}
         // Direction of travel is up; before the driver moves, the stop is.
         bearing={travel ?? (pos && current ? bearingDeg(pos, current) : 0)} />
+
+      {phase === 'onroute' && freeMap ? (
+        <Pressable onPress={() => setFreeMap(false)} accessibilityRole="button" accessibilityLabel="Re-center on your location"
+          style={[{ position: 'absolute', top: 72, right: space[4], zIndex: 2, flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: space[3], borderRadius: radius.full, backgroundColor: color.surface }, shadow.float]}>
+          <Icon name="navigate" size={16} color={color.actionInk} />
+          <Text style={[type.bodyStrong, { color: color.actionInk }]}>Re-center</Text>
+        </Pressable>
+      ) : null}
 
       {/* On the way: where to, across the top of the map. */}
       {phase === 'onroute' && current ? (
@@ -161,9 +172,11 @@ export default function Trip() {
         </Pressable>
       ) : null}
 
-      <ScrollView ref={sheetRef} style={{ position: 'absolute', top: MAP_STRIP, left: 0, right: 0, bottom: 0 }}
+      {/* The sheet scrolls only from the sheet itself; touches on the open map
+          (the spacer above the sheet) go through to the map, which pans and zooms. */}
+      <ScrollView ref={sheetRef} style={[styles.sheetScroll, styles.passThrough]} contentContainerStyle={styles.passThrough}
         stickyHeaderIndices={[1]} showsVerticalScrollIndicator={false}>
-        <View style={{ height: peek }} />
+        <View style={[{ height: peek }, styles.noTouch]} />
 
         {/* The step the driver is on: pinned while the list scrolls under it. */}
         <View style={[{ backgroundColor: color.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' ? 0 : 1, borderBottomColor: color.divider }, shadow.sheet]}>
@@ -341,3 +354,10 @@ function AheadRow({ stop, detail, last, onPress }: { stop: Stop; detail: string;
     </Pressable>
   );
 }
+
+// Pointer behaviour lives in a StyleSheet: react-native-web applies it from there, not from inline styles.
+const styles = StyleSheet.create({
+  sheetScroll: { position: 'absolute', top: MAP_STRIP, left: 0, right: 0, bottom: 0 },
+  passThrough: { pointerEvents: 'box-none' },
+  noTouch: { pointerEvents: 'none' },
+});

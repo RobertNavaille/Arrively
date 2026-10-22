@@ -27,6 +27,8 @@ export interface RouteMapProps {
   follow?: boolean;
   /** While following: the direction of travel (degrees from north), shown as up. */
   bearing?: number;
+  /** The driver panned, zoomed or turned the map by hand (so following can stand aside). */
+  onUserMove?: () => void;
 }
 
 /** Close street-level zoom for following the driver. */

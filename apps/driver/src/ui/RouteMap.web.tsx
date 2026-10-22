@@ -39,11 +39,13 @@ function driverEl() {
   return el;
 }
 
-function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0 }: RouteMapProps) {
+function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, onUserMove }: RouteMapProps) {
   const host = useRef<View>(null);
   const map = useRef<import('mapbox-gl').Map | null>(null);
   const markers = useRef<import('mapbox-gl').Marker[]>([]);
   const [ready, setReady] = useState(false);
+  const userMove = useRef(onUserMove);
+  userMove.current = onUserMove;
   const framed = framePoints({ stops, pin, driver });
   const following = !!follow && !!driver;
   const showDriver = !!driver && (following || framed.includes(driver));
@@ -60,6 +62,11 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
       mapboxgl.accessToken = MAPBOX_TOKEN;
       const m = new mapboxgl.Map({ container: el, style: 'mapbox://styles/mapbox/light-v11', center: [-71.41, 41.82], zoom: 11, attributionControl: false });
       m.addControl(new mapboxgl.AttributionControl({ compact: true }));
+      // Moves the driver makes by hand carry the browser event; the app's own camera moves don't.
+      const byHand = (e: { originalEvent?: unknown }) => { if (e.originalEvent) userMove.current?.(); };
+      m.on('dragstart', byHand);
+      m.on('zoomstart', byHand);
+      m.on('rotatestart', byHand);
       m.on('load', () => {
         m.addSource('route', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         m.addLayer({ id: 'route-casing', type: 'line', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 7 } });
