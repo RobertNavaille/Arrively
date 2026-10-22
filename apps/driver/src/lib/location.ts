@@ -70,16 +70,37 @@ export async function currentPosition(): Promise<LatLng | null> {
   }
 }
 
-/** Live position for the screens (foreground). Also reports it in the browser demo. */
 /** A live fix: where the driver is, and their compass heading and speed when the device knows them. */
 export type LivePosition = LatLng & { heading?: number | null; speed?: number | null };
 
+const finite = (n: number | null | undefined) => (n != null && Number.isFinite(n) ? n : null);
+
+/** Live position for the screens (foreground). Also reports it in the browser demo. */
 export function useLivePosition(enabled = true): LivePosition | null {
   const [pos, setPos] = useState<LivePosition | null>(null);
   useEffect(() => {
     if (!enabled) return;
-    let sub: Location.LocationSubscription | null = null;
     let cancelled = false;
+    // In the browser, watch with the Geolocation API directly. expo-location's
+    // web watcher files each update under the browser's watch id rather than
+    // its own, so unless the two happen to match (they did in Chrome tests, not
+    // on phones) the update is dropped and the browser watch is cleared after
+    // the first fix, and the driver's position stops moving.
+    if (Platform.OS === 'web') {
+      if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+      const id = navigator.geolocation.watchPosition(
+        (fix) => {
+          if (cancelled) return;
+          const p = { lat: fix.coords.latitude, lng: fix.coords.longitude, heading: finite(fix.coords.heading), speed: finite(fix.coords.speed) };
+          setPos(p);
+          backend.reportLocation(p).catch(() => {});
+        },
+        () => { /* denied or unavailable: keep the last position */ },
+        { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 },
+      );
+      return () => { cancelled = true; navigator.geolocation.clearWatch(id); };
+    }
+    let sub: Location.LocationSubscription | null = null;
     (async () => {
       const perm = await Location.requestForegroundPermissionsAsync();
       if (perm.status !== 'granted') return;
@@ -90,9 +111,7 @@ export function useLivePosition(enabled = true): LivePosition | null {
         { accuracy: Location.Accuracy.High, distanceInterval: 10, timeInterval: 4000 },
         (loc) => {
           if (cancelled) return;
-          const p = { lat: loc.coords.latitude, lng: loc.coords.longitude, heading: loc.coords.heading, speed: loc.coords.speed };
-          setPos(p);
-          if (Platform.OS === 'web') backend.reportLocation(p).catch(() => {});
+          setPos({ lat: loc.coords.latitude, lng: loc.coords.longitude, heading: finite(loc.coords.heading), speed: finite(loc.coords.speed) });
         },
       );
     })();
