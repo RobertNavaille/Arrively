@@ -51,6 +51,8 @@ export default function Trip() {
   const bottomInset = useBottomInset();
   // The driver moved the map by hand: stop following until they re-center.
   const [freeMap, setFreeMap] = useState(false);
+  // Arrived: Complete stop opens the ways to mark it (complete, no show, skip).
+  const [choosing, setChoosing] = useState(false);
 
   const stops = route?.stops ?? [];
   const byId = new Map(stops.map((s) => [s.id, s]));
@@ -80,7 +82,7 @@ export default function Trip() {
   const canOptimize = !!route && route.status !== 'completed' && remaining.filter((s) => s.status === 'scheduled' || s.status === 'queued').length >= 2;
   // Each step starts with the sheet at its resting height.
   // Each step follows the driver again (the sheet itself goes back to rest on its own).
-  useEffect(() => { setFreeMap(false); }, [phase]);
+  useEffect(() => { setFreeMap(false); setChoosing(false); }, [phase]);
 
   if (!route || !stops.length) {
     return (
@@ -266,13 +268,22 @@ export default function Trip() {
                 <IconButton icon="message" label={`Message ${current.customer_name}`} onPress={message} />
               </View>
               {current.notes ? <DetailRow icon="notes" primary={current.notes} /> : null}
-              <View style={{ gap: space[2] }}>
-                <Button icon="check" label="Complete stop" loading={busy === 'completed'} onPress={() => mark('completed')} />
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Button variant="danger" label="No-show" loading={busy === 'no_show'} onPress={() => mark('no_show')} />
-                  <Button variant="text" icon="skip" label="Skip or defer" onPress={() => router.push(`/skip/${current.id}`)} />
+              {choosing ? (
+                <View style={{ gap: space[2] }}>
+                  <Button icon="check" label="Complete" loading={busy === 'completed'} onPress={() => mark('completed')} />
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Button variant="text" label="No show" loading={busy === 'no_show'} onPress={() => mark('no_show')} />
+                    <Button variant="text" label="Skip" onPress={() => router.push(`/skip/${current.id}`)} />
+                  </View>
                 </View>
-              </View>
+              ) : (
+                <View style={{ gap: space[2] }}>
+                  <Button icon="check" label="Complete stop" onPress={() => setChoosing(true)} />
+                  {/* Arrived by mistake: back to on the way. */}
+                  <Button variant="text" label="Cancel" loading={busy === 'undo'}
+                    onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
+                </View>
+              )}
               <Text style={[type.caption, { textAlign: 'center' }]}>Mark this stop to start your next trip.</Text>
             </View>
           ) : null}
