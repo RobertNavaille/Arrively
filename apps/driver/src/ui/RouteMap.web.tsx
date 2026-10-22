@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, G, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { MAPBOX_TOKEN } from '../lib/config';
+import { PUCK_SIZE, PuckShapes, puckSvg } from './DriverPuck';
 import { color, font } from './theme';
 import { FOLLOW_ZOOM, MARKER, byDrawOrder, framePoints, type MapStop, type RouteMapProps } from './RouteMap.types';
 
@@ -32,15 +33,12 @@ function pinEl(label?: string) {
   return el;
 }
 
-// The driver's dot; with a heading, a triangle on its rim points the way they face
-// (the marker is turned by Mapbox, relative to north, so it stays right as the map turns).
+// The driver's puck (DriverPuck); Mapbox turns the marker by the heading,
+// relative to north, so the beam stays right as the map turns.
 function driverEl(facing: boolean) {
   const el = document.createElement('div');
-  el.style.cssText = 'position:relative;width:40px;height:40px;border-radius:50%;background:rgba(0,157,254,.18);display:grid;place-items:center;';
-  el.innerHTML = (facing
-    ? `<span style="position:absolute;top:1px;left:50%;margin-left:-7px;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:10px solid ${color.brand}"></span>`
-    : '')
-    + `<span style="width:16px;height:16px;border-radius:50%;background:${color.brand};border:3px solid #fff;box-shadow:0 1px 4px rgba(26,26,26,.3)"></span>`;
+  el.style.cssText = `width:${PUCK_SIZE}px;height:${PUCK_SIZE}px;pointer-events:none;`;
+  el.innerHTML = puckSvg(facing);
   return el;
 }
 
@@ -209,11 +207,8 @@ function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset, follow,
           ) : null}
           {driver && showDriver ? (
             <G transform={`translate(${X(driver.lng)} ${Y(driver.lat)})`}>
-              <Circle r={20} fill={color.brand} opacity={0.18} />
-              {/* Facing: drawn in map space, so it turns with a turned map. */}
-              {driverHeading != null ? <Path d="M0 -19 L-7 -9 L7 -9 Z" fill={color.brand} transform={`rotate(${driverHeading})`} /> : null}
-              <Circle r={9} fill={color.surface} />
-              <Circle r={6.5} fill={color.brand} />
+              {/* Drawn in map space, so the beam turns with a turned map. */}
+              <PuckShapes heading={driverHeading} id="drawn-driver-beam" />
             </G>
           ) : null}
         </G>

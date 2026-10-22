@@ -2,6 +2,8 @@ import Mapbox from '@rnmapbox/maps';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { MAPBOX_TOKEN } from '../lib/config';
+import Svg from 'react-native-svg';
+import { PUCK_SIZE, PuckShapes } from './DriverPuck';
 import { color, font, shadow } from './theme';
 import { FOLLOW_ZOOM, MARKER, byDrawOrder, framePoints, type RouteMapProps } from './RouteMap.types';
 
@@ -82,16 +84,11 @@ export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inse
         ) : null}
         {driver ? (
           <Mapbox.MarkerView coordinate={[driver.lng, driver.lat]} allowOverlap>
-            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,157,254,0.18)', alignItems: 'center', justifyContent: 'center',
-              // Facing, relative to the screen: the map itself is turned by the camera heading while following.
-              transform: [{ rotate: `${(driverHeading ?? 0) - (following ? bearing : 0)}deg` }] }}>
-              {driverHeading != null ? (
-                <View style={{ position: 'absolute', top: 1, width: 0, height: 0, borderLeftWidth: 7, borderRightWidth: 7, borderBottomWidth: 10, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: color.brand }} />
-              ) : null}
-              <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center' }}>
-                <View style={{ width: 13, height: 13, borderRadius: 6.5, backgroundColor: color.brand }} />
-              </View>
-            </View>
+            {/* Facing, relative to the screen: the map itself is turned by the camera heading while following. */}
+            <Svg width={PUCK_SIZE} height={PUCK_SIZE} viewBox={`${-PUCK_SIZE / 2} ${-PUCK_SIZE / 2} ${PUCK_SIZE} ${PUCK_SIZE}`}
+              style={{ transform: [{ rotate: `${(driverHeading ?? 0) - (following ? bearing : 0)}deg` }] }}>
+              <PuckShapes heading={driverHeading != null ? 0 : null} />
+            </Svg>
           </Mapbox.MarkerView>
         ) : null}
       </Mapbox.MapView>
