@@ -2,7 +2,7 @@
 export const color = {
   brand: '#009DFE',
   brandTint: '#D2ECFF',
-  action: '#0077CC',
+  action: '#009DFF',
   actionInk: '#0072C6',
   onTint: '#005FA8',
   onAction: '#FFFFFF',

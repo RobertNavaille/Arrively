@@ -294,7 +294,7 @@ function Stops({ org, day, setDay, routes, drivers, locations, reload }: {
           </select>
         </label>
         <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: 12, borderRadius: 8, background: 'var(--surface-muted)' }}>
-          <input type="checkbox" checked={f.consent} onChange={(e) => setF({ ...f, consent: e.target.checked })} style={{ width: 20, height: 20, margin: 0, accentColor: '#0077CC' }} />
+          <input type="checkbox" checked={f.consent} onChange={(e) => setF({ ...f, consent: e.target.checked })} style={{ width: 20, height: 20, margin: 0, accentColor: '#009DFF' }} />
           <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span className="body" style={{ fontWeight: 600 }}>Customer agreed to get texts about this visit</span>
             <span className="caption">Required for texts. Without it, share the tracking link another way.</span>
@@ -495,7 +495,7 @@ function Settings({ org, reload }: { org: Org; reload: () => Promise<void> }) {
       <label className="field"><span className="label">Business name (shown to customers)</span><input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
       <label className="field"><span className="label">Business phone (the Call button)</span><input className="input" type="tel" value={f.phone ?? ''} onChange={(e) => setF({ ...f, phone: e.target.value })} /></label>
       <label style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <input type="checkbox" checked={f.drivers_can_add_stops} onChange={(e) => setF({ ...f, drivers_can_add_stops: e.target.checked })} style={{ width: 20, height: 20, accentColor: '#0077CC' }} />
+        <input type="checkbox" checked={f.drivers_can_add_stops} onChange={(e) => setF({ ...f, drivers_can_add_stops: e.target.checked })} style={{ width: 20, height: 20, accentColor: '#009DFF' }} />
         <span className="body">Drivers can add stops from the app</span>
       </label>
       <p className="caption" style={{ margin: 0 }}>Customers get three texts per stop: when it&apos;s scheduled, when they&apos;re next (both with the tracking link), and when the driver arrives.</p>

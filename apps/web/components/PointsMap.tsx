@@ -18,7 +18,7 @@ function markerEl(p: MapPoint) {
       <span style="width:18px;height:18px;border-radius:50%;background:${p.kind === 'driver' ? '#009DFE' : '#6B717B'};border:3px solid #fff;box-shadow:0 4px 12px rgba(26,26,26,.12)"></span>
       <span style="padding:3px 10px;border-radius:999px;background:#3C4043;color:#fff;font:500 11px/16px Poppins,sans-serif;white-space:nowrap">${p.label}</span></div>`;
   } else {
-    el.innerHTML = `<span style="display:grid;place-items:center;min-width:22px;height:22px;padding:0 4px;box-sizing:border-box;border-radius:999px;border:2px solid ${p.kind === 'done' ? '#fff' : '#0077CC'};background:${p.kind === 'done' ? '#6B717B' : '#fff'};color:${p.kind === 'done' ? '#fff' : '#0072C6'};font:600 11px Poppins,sans-serif">${p.label}</span>`;
+    el.innerHTML = `<span style="display:grid;place-items:center;min-width:22px;height:22px;padding:0 4px;box-sizing:border-box;border-radius:999px;border:2px solid ${p.kind === 'done' ? '#fff' : '#009DFF'};background:${p.kind === 'done' ? '#6B717B' : '#fff'};color:${p.kind === 'done' ? '#fff' : '#0072C6'};font:600 11px Poppins,sans-serif">${p.label}</span>`;
   }
   return el;
 }
@@ -78,7 +78,7 @@ function Drawn({ height, points }: { height: number; points: MapPoint[] }) {
         {[90, 290, 490, 690].map((x) => <path key={x} d={`M${x} -20 L${x + 25} 520`} stroke="#fff" strokeWidth={10} />)}
         {points.filter((p) => p.kind === 'stop' || p.kind === 'done').map((p) => (
           <g key={p.id} transform={`translate(${X(p.lng)} ${Y(p.lat)})`}>
-            <rect x={-Math.max(11, p.label.length * 4 + 4)} y={-11} width={Math.max(22, p.label.length * 8 + 8)} height={22} rx={11} fill={p.kind === 'done' ? '#6B717B' : '#fff'} stroke={p.kind === 'done' ? '#fff' : '#0077CC'} strokeWidth={2.5} />
+            <rect x={-Math.max(11, p.label.length * 4 + 4)} y={-11} width={Math.max(22, p.label.length * 8 + 8)} height={22} rx={11} fill={p.kind === 'done' ? '#6B717B' : '#fff'} stroke={p.kind === 'done' ? '#fff' : '#009DFF'} strokeWidth={2.5} />
             <text y={4} textAnchor="middle" fontSize={11} fontWeight={600} fill={p.kind === 'done' ? '#fff' : '#0072C6'} fontFamily="Poppins, sans-serif">{p.label}</text>
           </g>
         ))}
