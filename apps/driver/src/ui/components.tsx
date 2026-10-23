@@ -9,7 +9,7 @@ export function Button({ label, onPress, variant = 'primary', icon, size = 'md',
   /** Round button showing just the icon; the label is still read out. */
   iconOnly?: boolean; disabled?: boolean; loading?: boolean; style?: StyleProp<ViewStyle>;
 }) {
-  const fg = variant === 'primary' ? color.onAction : variant === 'secondary' ? color.onTint
+  const fg = variant === 'primary' ? color.onAction : variant === 'secondary' ? color.action
     : variant === 'danger' ? color.danger : color.actionInk;
   return (
     <Pressable
@@ -41,7 +41,7 @@ export function Button({ label, onPress, variant = 'primary', icon, size = 'md',
 export function IconButton({ icon, label, onPress, variant = 'tint' }: {
   icon: IconName; label: string; onPress?: () => void; variant?: 'tint' | 'plain' | 'solid';
 }) {
-  const fg = variant === 'tint' ? color.onTint : variant === 'solid' ? color.onAction : color.ink;
+  const fg = variant === 'tint' ? color.action : variant === 'solid' ? color.onAction : color.ink;
   return (
     <Pressable
       accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={6}
