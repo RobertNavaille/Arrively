@@ -1,7 +1,7 @@
 // Arrively design tokens (mirrors the Arrively design system's tokens.json).
 export const color = {
   brand: '#009DFE',
-  brandTint: '#D2ECFF',
+  brandTint: '#D1EDFF',
   action: '#009DFF',
   actionInk: '#0072C6',
   onTint: '#005FA8',
