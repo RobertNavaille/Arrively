@@ -20,7 +20,7 @@ export function Button({ label, onPress, variant = 'primary', icon, size = 'md',
       style={({ pressed }) => [
         styles.btn,
         size === 'sm' && styles.btnSm,
-        iconOnly && { width: size === 'sm' ? 32 : 44, paddingHorizontal: 0 },
+        iconOnly && { width: size === 'sm' ? 32 : 56, paddingHorizontal: 0 },
         variant === 'primary' && { backgroundColor: color.action },
         variant === 'secondary' && { backgroundColor: color.brandTint },
         (variant === 'text' || variant === 'danger') && styles.btnText,
@@ -136,7 +136,8 @@ export function Banner({ tone = 'success', title, meta, icon = 'check' }: { tone
 }
 
 export const styles = StyleSheet.create({
-  btn: { height: 44, borderRadius: radius.full, paddingHorizontal: space[6], flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2] },
+  // 56px: easy to hit from a phone mount while driving.
+  btn: { height: 56, borderRadius: radius.full, paddingHorizontal: space[6], flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2] },
   btnSm: { height: 32, paddingHorizontal: space[4] },
   btnText: { backgroundColor: 'transparent', paddingHorizontal: space[3] },
   btnLabel: { fontFamily: font.semibold, fontSize: 14, lineHeight: 20 },
