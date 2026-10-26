@@ -11,7 +11,7 @@ export const color = {
   surface: '#FFFFFF',
   surfaceMuted: '#F4F5F7',
   // Fill of gray (neutral) buttons, like the floating Optimize route.
-  neutralFill: '#E9EBEE',
+  neutralFill: '#50555E',
   divider: '#E6E8EB',
   controlBorder: '#8A9099',
   danger: '#D92D20',

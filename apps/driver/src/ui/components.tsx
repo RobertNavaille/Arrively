@@ -12,7 +12,7 @@ export function Button({ label, onPress, variant = 'primary', icon, size = 'md',
   iconOnly?: boolean; disabled?: boolean; loading?: boolean; style?: StyleProp<ViewStyle>;
 }) {
   const fg = variant === 'primary' ? color.onAction : variant === 'secondary' ? color.action
-    : variant === 'neutral' ? color.ink : variant === 'danger' ? color.danger : color.actionInk;
+    : variant === 'neutral' ? color.onAction : variant === 'danger' ? color.danger : color.actionInk;
   return (
     <Pressable
       accessibilityRole="button"
