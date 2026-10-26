@@ -364,7 +364,7 @@ export default function Trip() {
       {/* Reviewing: Confirm route takes Optimize route's place, in blue. */}
       {phase === 'review' && review ? (
         <View style={[styles.floatBar, { bottom: bottomInset + space[4] }]}>
-          <Button compact icon="check" label="Confirm route" loading={busy === 'apply'} onPress={useOrder} style={shadow.float} />
+          <Button size="compact" icon="check" label="Confirm route" loading={busy === 'apply'} onPress={useOrder} style={shadow.float} />
         </View>
       ) : null}
       {/* Optimize route floats at the bottom, over the trip list, wherever it's scrolled. */}

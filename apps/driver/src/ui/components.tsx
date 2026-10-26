@@ -3,13 +3,13 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, t
 import { color, font, radius, space, type } from './theme';
 import { Icon, type IconName } from './Icon';
 
-/** neutral: gray and a bit smaller (44px), for a supporting action that floats over content (Optimize route). */
+/** neutral: dark gray with a white label, compact (44px) by default, for a supporting action (Optimize route). */
 type ButtonVariant = 'primary' | 'secondary' | 'neutral' | 'text' | 'danger';
 
-export function Button({ label, onPress, variant = 'primary', icon, size = 'md', compact, iconOnly, disabled, loading, style }: {
-  label: string; onPress?: () => void; variant?: ButtonVariant; icon?: IconName; size?: 'md' | 'sm';
-  /** 44px tall, like neutral: for a button floating over content (Confirm route). */
-  compact?: boolean;
+export function Button({ label, onPress, variant = 'primary', icon, size = variant === 'neutral' ? 'compact' : 'md', iconOnly, disabled, loading, style }: {
+  label: string; onPress?: () => void; variant?: ButtonVariant; icon?: IconName;
+  /** md 56px (the default), compact 44px (neutral's default; e.g. Confirm route), sm 32px. */
+  size?: 'md' | 'compact' | 'sm';
   /** Round button showing just the icon; the label is still read out. */
   iconOnly?: boolean; disabled?: boolean; loading?: boolean; style?: StyleProp<ViewStyle>;
 }) {
@@ -24,11 +24,11 @@ export function Button({ label, onPress, variant = 'primary', icon, size = 'md',
       style={({ pressed }) => [
         styles.btn,
         size === 'sm' && styles.btnSm,
-        iconOnly && { width: size === 'sm' ? 32 : 56, paddingHorizontal: 0 },
+        iconOnly && { width: size === 'sm' ? 32 : size === 'compact' ? 44 : 56, paddingHorizontal: 0 },
         variant === 'primary' && { backgroundColor: color.action },
         variant === 'secondary' && { backgroundColor: color.brandTint },
         variant === 'neutral' && styles.btnNeutral,
-        (compact || variant === 'neutral') && styles.btnCompact,
+        size === 'compact' && styles.btnCompact,
         (variant === 'text' || variant === 'danger') && styles.btnText,
         (pressed || disabled) && { opacity: disabled ? 0.45 : 0.85 },
         style,
