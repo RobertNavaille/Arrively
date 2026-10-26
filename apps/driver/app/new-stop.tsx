@@ -17,29 +17,45 @@ const field = {
   paddingHorizontal: space[3], fontFamily: font.regular, fontSize: 16, color: color.ink,
 } as const;
 
-/** Add a stop: the address picked in My day's search, plus a name and notes (DRV-24). */
+/**
+ * Add a stop: the address picked in My day's search, plus a name and notes
+ * (DRV-24). With `id`, the same form edits that stop: name, address, notes.
+ */
 export default function NewStop() {
-  const params = useLocalSearchParams<{ day: string; name: string; detail: string; lat: string; lng: string }>();
+  const params = useLocalSearchParams<{ id?: string; day: string; name: string; detail: string; lat: string; lng: string }>();
   const router = useRouter();
-  const { refresh } = useDriverData();
+  const { refresh, stopById } = useDriverData();
   const bottomInset = useBottomInset();
-  const [place, setPlace] = useState<Place>({
-    id: 'picked', name: String(params.name ?? ''), detail: String(params.detail ?? ''), lat: Number(params.lat), lng: Number(params.lng),
+  const editing = params.id ? stopById(String(params.id))?.stop ?? null : null;
+  const [place, setPlace] = useState<Place>(() => {
+    if (editing) {
+      const [first, ...rest] = editing.address.split(',');
+      return { id: 'current', name: first.trim(), detail: rest.join(',').trim(), lat: editing.lat, lng: editing.lng };
+    }
+    return { id: 'picked', name: String(params.name ?? ''), detail: String(params.detail ?? ''), lat: Number(params.lat), lng: Number(params.lng) };
   });
-  const [name, setName] = useState('');
-  const [notes, setNotes] = useState('');
+  const [name, setName] = useState(editing?.customer_name ?? '');
+  const [notes, setNotes] = useState(editing?.notes ?? '');
   const [busy, setBusy] = useState(false);
 
   const day = String(params.day);
+  const label = (p: Place) => (p.detail ? `${p.name}, ${p.detail}` : p.name);
 
   async function save() {
     setBusy(true);
     try {
-      await backend.addStop(day, place.detail ? `${place.name}, ${place.detail}` : place.name, place, { name, notes });
+      if (editing) {
+        if (place.id !== 'current') await backend.updateAddress(editing.id, label(place), place);
+        if (name.trim() !== editing.customer_name || (notes.trim() || null) !== (editing.notes || null)) {
+          await backend.updateDetails(editing.id, { name, notes });
+        }
+      } else {
+        await backend.addStop(day, label(place), place, { name, notes });
+      }
       await refresh();
       router.back();
     } catch (e) {
-      showMessage('Could not add the stop', e instanceof Error ? e.message : String(e));
+      showMessage(editing ? 'Could not save the changes' : 'Could not add the stop', e instanceof Error ? e.message : String(e));
       setBusy(false);
     }
   }
@@ -55,7 +71,7 @@ export default function NewStop() {
             <View style={{ gap: space[2] }}>
               <Text style={[type.label, { textTransform: 'uppercase' }]}>Name</Text>
               <TextInput value={name} onChangeText={setName} placeholder="Customer or place name" placeholderTextColor={color.inkMuted}
-                autoFocus autoCapitalize="words" textContentType="name" returnKeyType="next" accessibilityLabel="Name" style={field} />
+                autoFocus={!editing} autoCapitalize="words" textContentType="name" returnKeyType="next" accessibilityLabel="Name" style={field} />
             </View>
 
             <AddressField place={place} onChange={setPlace} />
@@ -68,7 +84,7 @@ export default function NewStop() {
           </View>
         </ScrollView>
         <View style={{ padding: space[4], paddingBottom: space[6] + bottomInset, gap: space[2], borderTopWidth: 1, borderTopColor: color.divider }}>
-          <Button label="Add stop" onPress={save} loading={busy} />
+          <Button label={editing ? 'Save changes' : 'Add stop'} onPress={save} loading={busy} />
           <Button variant="text" label="Cancel" onPress={() => router.back()} />
         </View>
       </KeyboardAvoidingView>

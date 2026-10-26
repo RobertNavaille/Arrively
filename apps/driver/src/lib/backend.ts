@@ -30,6 +30,8 @@ export interface Backend {
   markStop(stopId: string, outcome: MarkOutcome, reason: string | null, at: LatLng | null): Promise<void>;
   addStop(day: string, address: string, at: LatLng, details?: StopDetails): Promise<void>;
   updateAddress(stopId: string, address: string, at: LatLng): Promise<void>;
+  /** A stop's name and notes (Edit details). */
+  updateDetails(stopId: string, details: StopDetails): Promise<void>;
   /** Removes a stop that isn't in progress, finished or not (it's kept as cancelled). */
   removeStop(stopId: string): Promise<void>;
   reportLocation(p: LatLng & { heading?: number | null; speed?: number | null; accuracy?: number | null; at?: string }): Promise<void>;
@@ -146,6 +148,9 @@ const supabaseBackend: Backend = {
   async updateAddress(stopId, address, at) {
     check(await supabase().rpc('update_stop_address', { p_stop: stopId, p_address: address, p_lat: at.lat, p_lng: at.lng }));
     refreshEtas(true);
+  },
+  async updateDetails(stopId, details) {
+    check(await supabase().rpc('update_stop_details', { p_stop: stopId, p_name: details.name?.trim() || null, p_notes: details.notes?.trim() || null }));
   },
   async removeStop(stopId) {
     check(await supabase().rpc('remove_stop', { p_stop: stopId }));
@@ -283,6 +288,10 @@ const offlineBackend: Backend = {
     emit();
   },
   async updateAddress(stopId, address, at) { const [, s] = findStop(stopId); s.address = address; s.lat = at.lat; s.lng = at.lng; emit(); },
+  async updateDetails(stopId, details) {
+    const [, s] = findStop(stopId);
+    s.customer_name = details.name?.trim() || s.customer_name; s.notes = details.notes?.trim() || null; emit();
+  },
   async removeStop(stopId) {
     const [r, s] = findStop(stopId);
     if (s.status === 'en_route' || s.status === 'arrived') throw new Error('Mark this stop before removing it.');

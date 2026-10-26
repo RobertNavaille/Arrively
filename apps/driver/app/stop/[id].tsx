@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Linking, ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { backend } from '../../src/lib/backend';
 import { confirmAction, showMessage } from '../../src/lib/dialog';
@@ -12,7 +12,8 @@ import { isDone } from '../../src/lib/types';
 import { Banner, Button, IconButton, InfoRow, StatusPill } from '../../src/ui/components';
 import { RouteMap } from '../../src/ui/RouteMap';
 import { TripBar } from '../../src/ui/TripBar';
-import { color, font, radius, space, type } from '../../src/ui/theme';
+import { Icon, type IconName } from '../../src/ui/Icon';
+import { color, font, radius, shadow, space, type } from '../../src/ui/theme';
 
 /**
  * A stop's details, opened from My day or the trip's list. The drive, arrival
@@ -26,6 +27,7 @@ export default function StopScreen() {
   const found = stopById(String(id));
   const trip = useActiveTrip();
   const [busy, setBusy] = useState<string | null>(null);
+  const [menu, setMenu] = useState(false);
   // An open stop's map shows the drive to it from where you are.
   const open = !!found && !isDone(found.stop);
   const pos = useLivePosition(open);
@@ -49,9 +51,10 @@ export default function StopScreen() {
   }
 
   async function remove() {
-    const ok = await confirmAction(`Remove ${stop.customer_name}?`, isDone(stop)
+    setMenu(false);
+    const ok = await confirmAction(`Delete ${stop.customer_name}?`, isDone(stop)
       ? `This job comes off your day. Your business keeps a record that it was removed.`
-      : `${stop.address.split(',')[0]} comes off your route. The customer won't get any more texts about this visit.`, 'Remove');
+      : `${stop.address.split(',')[0]} comes off your route. The customer won't get any more texts about this visit.`, 'Delete');
     if (!ok) return;
     await run('remove', async () => { await backend.removeStop(stop.id); router.replace('/'); });
   }
@@ -70,7 +73,7 @@ export default function StopScreen() {
           <Text style={type.heading}>{parseDay(route.day).toLocaleDateString('en-US', { weekday: 'long' })}</Text>
           <Text style={type.caption}>{parseDay(route.day).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</Text>
         </View>
-        <View style={{ width: 40 }} />
+        <IconButton icon="more" label="More options" variant="plain" onPress={() => setMenu((m) => !m)} />
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: space[6] }}>
@@ -116,13 +119,39 @@ export default function StopScreen() {
             <InfoRow icon="notes" title="Description" body={stop.notes || 'No notes for this stop.'} />
           </View>
 
-          <View style={{ flexDirection: 'row', justifyContent: done ? 'flex-start' : 'space-between', alignItems: 'center' }}>
-            {!done ? <Button variant="text" size="sm" label="Wrong address? Edit it" onPress={() => router.push(`/edit/${stop.id}`)} style={{ paddingHorizontal: 0 }} /> : null}
-            <Button variant="danger" size="sm" label={done ? 'Remove job' : 'Remove stop'} loading={busy === 'remove'} onPress={remove} style={{ paddingHorizontal: 0 }} />
-          </View>
         </View>
       </ScrollView>
       {!done && trip ? <TripBar route={trip} /> : null}
+
+      {/* The overflow menu: edit the stop's details, or delete it */}
+      {menu ? (
+        <>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setMenu(false)} accessibilityLabel="Close menu" />
+          <View style={[styles.menu, shadow.float]} accessibilityRole="menu">
+            {!done ? (
+              <MenuItem icon="edit" label="Edit details"
+                onPress={() => { setMenu(false); router.push({ pathname: '/new-stop', params: { id: stop.id, day: route.day } }); }} />
+            ) : null}
+            <MenuItem icon="trash" label="Delete stop" danger onPress={remove} />
+          </View>
+        </>
+      ) : null}
     </SafeAreaView>
   );
 }
+
+function MenuItem({ icon, label, danger, onPress }: { icon: IconName; label: string; danger?: boolean; onPress: () => void }) {
+  const tint = danger ? color.danger : color.ink;
+  return (
+    <Pressable accessibilityRole="menuitem" onPress={onPress}
+      style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: color.surfaceMuted }]}>
+      <Icon name={icon} size={20} color={tint} />
+      <Text style={[type.body, { fontSize: 16, color: tint }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  menu: { position: 'absolute', top: 56, right: space[3], minWidth: 200, paddingVertical: space[1], borderRadius: radius.md, backgroundColor: color.surface },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 48, paddingHorizontal: space[4] },
+});

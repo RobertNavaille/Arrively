@@ -18,6 +18,8 @@ const PATHS = {
   alert: ['M12 4l9 16H3z', 'M12 10v4.5', 'M12 17.2v.3'],
   search: ['M11 4.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13z', 'M20 20l-4.4-4.4'],
   flag: ['M6 21V4', 'M6 4.5h11l-2 4 2 4H6'],
+  edit: ['M4.5 19.5h4l10.5-10.5-4-4L4.5 15.5z', 'M13 7l4 4'],
+  trash: ['M5 7h14', 'M10 7V4.5h4V7', 'M7 7l1 13h8l1-13', 'M10.5 11v5.5', 'M13.5 11v5.5'],
 } as const;
 
 export type IconName = keyof typeof PATHS | 'more';
