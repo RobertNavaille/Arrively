@@ -10,6 +10,7 @@ import type { RoutePlan } from '../src/lib/routing';
 import { currentStop, lastMarked, useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
+import { AutoButton } from '../src/ui/AutoButton';
 import { BottomSheet } from '../src/ui/BottomSheet';
 import { ReorderList } from '../src/ui/ReorderList';
 import { Banner, Button, DetailRow, IconButton, StatusPill } from '../src/ui/components';
@@ -246,8 +247,8 @@ export default function Trip() {
                   {fmtDuration(Math.max(1, tripMin))} · {miles(tripMeters).toFixed(1)} mi
                 </Text>
               </View>
-              {/* Auto: back to the suggested best order, undoing any dragging. */}
-              <Button variant="secondary" size="sm" label="Auto" onPress={() => setCustom(null)} style={{ marginTop: 1 }} />
+              {/* Auto: back to the suggested best order; only while the order differs from it. */}
+              <AutoButton visible={!!custom && custom.join() !== review.plan.order.join()} onPress={() => setCustom(null)} />
             </View>
           ) : null}
 
