@@ -222,6 +222,7 @@ function Stops({ org, day, setDay, routes, drivers, locations, reload }: {
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
+    if (!f.name.trim()) { setMsg("Add the customer's name."); return; }
     if (!f.place) { setMsg('Pick an address from the list.'); return; }
     if (!f.driver) { setMsg('Invite a driver first.'); return; }
     setBusy(true); setMsg(null);

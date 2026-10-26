@@ -37,11 +37,14 @@ export default function NewStop() {
   const [name, setName] = useState(editing?.customer_name ?? '');
   const [notes, setNotes] = useState(editing?.notes ?? '');
   const [busy, setBusy] = useState(false);
+  const [nameMissing, setNameMissing] = useState(false);
 
   const day = String(params.day);
   const label = (p: Place) => (p.detail ? `${p.name}, ${p.detail}` : p.name);
 
   async function save() {
+    // The customer's name is required.
+    if (!name.trim()) { setNameMissing(true); return; }
     setBusy(true);
     try {
       if (editing) {
@@ -69,9 +72,12 @@ export default function NewStop() {
 
           <View style={{ padding: space[4], gap: space[6] }}>
             <View style={{ gap: space[2] }}>
-              <Text style={[type.label, { textTransform: 'uppercase' }]}>Name</Text>
-              <TextInput value={name} onChangeText={setName} placeholder="Customer or place name" placeholderTextColor={color.inkMuted}
-                autoFocus={!editing} autoCapitalize="words" textContentType="name" returnKeyType="next" accessibilityLabel="Name" style={field} />
+              <Text style={[type.label, { textTransform: 'uppercase' }]}>Customer name</Text>
+              <TextInput value={name} onChangeText={(t) => { setName(t); if (t.trim()) setNameMissing(false); }}
+                placeholder="Customer or place name" placeholderTextColor={color.inkMuted}
+                autoFocus={!editing} autoCapitalize="words" textContentType="name" returnKeyType="next" accessibilityLabel="Customer name"
+                style={[field, nameMissing && { borderColor: color.danger }]} />
+              {nameMissing ? <Text style={[type.caption, { color: color.danger }]} accessibilityLiveRegion="polite">Add the customer's name.</Text> : null}
             </View>
 
             <AddressField place={place} onChange={setPlace} />
