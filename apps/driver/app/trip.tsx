@@ -247,7 +247,7 @@ export default function Trip() {
                 </Text>
               </View>
               {/* Auto: back to the suggested best order, undoing any dragging. */}
-              <Button variant="text" size="sm" label="Auto" onPress={() => setCustom(null)} style={{ paddingHorizontal: 0, height: 34 }} />
+              <Button variant="secondary" size="sm" label="Auto" onPress={() => setCustom(null)} style={{ marginTop: 1 }} />
             </View>
           ) : null}
 
