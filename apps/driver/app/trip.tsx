@@ -226,7 +226,7 @@ export default function Trip() {
       ) : null}
 
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
-      <BottomSheet top={MAP_STRIP} rest={peek} resetKey={phase} bottomInset={bottomInset + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
+      <BottomSheet top={MAP_STRIP} rest={peek} resetKey={phase} startOpen={phase === 'review'} bottomInset={bottomInset + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
         <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH) setCardH(h); }}
           style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' || phase === 'next' || phase === 'review' ? 0 : 1, borderBottomColor: color.divider }}>
