@@ -66,7 +66,7 @@ export function ReorderList<T>({ items, keyOf, onReorder, hold, renderRow }: {
   );
 }
 
-/** The ⠿ grip a row is dragged by. */
+/** The ≡ grip a row is dragged by. */
 function Grip({ onStart, onMove, onEnd }: { label: string; onStart: () => void; onMove: (dy: number) => void; onEnd: () => void }) {
   const calls = useRef({ onStart, onMove, onEnd });
   calls.current = { onStart, onMove, onEnd };
@@ -83,11 +83,7 @@ function Grip({ onStart, onMove, onEnd }: { label: string; onStart: () => void; 
   })).current;
   return (
     <View {...pan.panHandlers} style={styles.grip} accessibilityLabel="Drag to reorder" accessibilityRole="adjustable">
-      {[0, 1, 2].map((r) => (
-        <View key={r} style={{ flexDirection: 'row', gap: 5 }}>
-          <View style={styles.dot} /><View style={styles.dot} />
-        </View>
-      ))}
+      {[0, 1, 2].map((r) => <View key={r} style={styles.bar} />)}
     </View>
   );
 }
@@ -98,5 +94,5 @@ function Grip({ onStart, onMove, onEnd }: { label: string; onStart: () => void; 
 const styles = StyleSheet.create({
   held: { zIndex: 2, backgroundColor: color.surface, borderRadius: radius.md, marginHorizontal: -8, paddingHorizontal: 8 },
   grip: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center', gap: 4, marginTop: 2, ...({ touchAction: 'none', cursor: 'grab' } as unknown as ViewStyle) },
-  dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: color.inkMuted },
+  bar: { width: 18, height: 2, borderRadius: 1, backgroundColor: color.inkMuted },
 });
