@@ -6,8 +6,10 @@ import { Icon, type IconName } from './Icon';
 /** neutral: gray and a bit smaller (44px), for a supporting action that floats over content (Optimize route). */
 type ButtonVariant = 'primary' | 'secondary' | 'neutral' | 'text' | 'danger';
 
-export function Button({ label, onPress, variant = 'primary', icon, size = 'md', iconOnly, disabled, loading, style }: {
+export function Button({ label, onPress, variant = 'primary', icon, size = 'md', compact, iconOnly, disabled, loading, style }: {
   label: string; onPress?: () => void; variant?: ButtonVariant; icon?: IconName; size?: 'md' | 'sm';
+  /** 44px tall, like neutral: for a button floating over content (Confirm route). */
+  compact?: boolean;
   /** Round button showing just the icon; the label is still read out. */
   iconOnly?: boolean; disabled?: boolean; loading?: boolean; style?: StyleProp<ViewStyle>;
 }) {
@@ -26,6 +28,7 @@ export function Button({ label, onPress, variant = 'primary', icon, size = 'md',
         variant === 'primary' && { backgroundColor: color.action },
         variant === 'secondary' && { backgroundColor: color.brandTint },
         variant === 'neutral' && styles.btnNeutral,
+        (compact || variant === 'neutral') && styles.btnCompact,
         (variant === 'text' || variant === 'danger') && styles.btnText,
         (pressed || disabled) && { opacity: disabled ? 0.45 : 0.85 },
         style,
@@ -156,7 +159,8 @@ export function Banner({ tone = 'success', title, meta, icon = 'check' }: { tone
 export const styles = StyleSheet.create({
   // 56px: easy to hit from a phone mount while driving.
   btn: { height: 56, borderRadius: radius.full, paddingHorizontal: space[6], flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2] },
-  btnNeutral: { height: 44, paddingHorizontal: space[6] - 4, backgroundColor: color.neutralFill },
+  btnNeutral: { backgroundColor: color.neutralFill },
+  btnCompact: { height: 44, paddingHorizontal: space[6] - 4 },
   btnSm: { height: 32, paddingHorizontal: space[4] },
   btnText: { backgroundColor: 'transparent', paddingHorizontal: space[3] },
   btnLabel: { fontFamily: font.semibold, fontSize: 14, lineHeight: 20 },

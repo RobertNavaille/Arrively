@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
@@ -11,6 +11,7 @@ import { currentStop, lastMarked, useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
 import { BottomSheet } from '../src/ui/BottomSheet';
+import { ReorderList } from '../src/ui/ReorderList';
 import { Banner, Button, DetailRow, IconButton, StatusPill } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
@@ -45,6 +46,10 @@ export default function Trip() {
   const compass = useCompassHeading();
   const route = routeFor(dayKey(new Date()));
   const [review, setReview] = useState<{ plan: RoutePlan; from: LatLng | null } | null>(null);
+  // In review the driver can drag the stops into their own order; null = the suggested one.
+  const [custom, setCustom] = useState<string[] | null>(null);
+  // Set while a stop is held by its grip, so the sheet doesn't move with the drag.
+  const holding = useRef(false);
   const [busy, setBusy] = useState<string | null>(null);
   // The height of the sheet's top card (measured) and what's covered at the
   // bottom of the screen (home indicator, Safari's floating bar), so each step
@@ -63,7 +68,7 @@ export default function Trip() {
   const current = currentStop(route);
   const phase = !current ? 'finished' : review ? 'review' : current.status === 'en_route' ? 'onroute' : current.status === 'arrived' ? 'arrived' : 'next';
   // In review the whole suggested order is listed; otherwise the stops after the current one.
-  const reviewOrder = review ? review.plan.order.map((id) => byId.get(id)).filter((s): s is Stop => !!s) : null;
+  const reviewOrder = review ? (custom ?? review.plan.order).map((id) => byId.get(id)).filter((s): s is Stop => !!s) : null;
   const ahead = reviewOrder ?? remaining;
   const after = reviewOrder ?? remaining.filter((s) => s.id !== current?.id);
   const was = new Map((review?.plan.current.order ?? []).map((id, i) => [id, i]));
@@ -109,12 +114,14 @@ export default function Trip() {
   }
   const optimize = () => run('plan', async () => {
     const here = pos ?? (await currentPosition());
+    setCustom(null);
     setReview({ plan: await backend.planRoute(route.id, here), from: here });
   });
   const useOrder = () => run('apply', async () => {
     if (!review) return;
-    await backend.applyPlan(route.id, review.plan.order, review.from);
+    await backend.applyPlan(route.id, custom ?? review.plan.order, review.from);
     setReview(null);
+    setCustom(null);
     await refresh();
   });
   const startDriving = () => run('start', async () => {
@@ -197,7 +204,7 @@ export default function Trip() {
       ) : null}
 
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
-      <BottomSheet top={MAP_STRIP} rest={peek} resetKey={phase} bottomInset={bottomInset + (floatOptimize ? OPTIMIZE_SPACE : 0)} header={
+      <BottomSheet top={MAP_STRIP} rest={peek} resetKey={phase} bottomInset={bottomInset + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
         <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH) setCardH(h); }}
           style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' || phase === 'next' ? 0 : 1, borderBottomColor: color.divider }}>
@@ -231,20 +238,14 @@ export default function Trip() {
           ) : null}
 
           {phase === 'review' && review ? (
-            <>
+            <View style={{ gap: space[2] }}>
               <View style={{ gap: 2, padding: space[3], borderRadius: radius.md, backgroundColor: color.brandTint }}>
-                <Text style={[type.bodyStrong, { color: color.onTint }]}>{reviewHeadline(review.plan)}</Text>
-                <Text style={[type.caption, { color: color.onTint }]}>From your location. Stops that move are marked below.</Text>
+                <Text style={[type.bodyStrong, { color: color.onTint }]}>{reviewHeadline(review.plan, custom, byId, review.from)}</Text>
+                <Text style={[type.caption, { color: color.onTint }]}>Stops moved earlier are in blue. Drag any stop to set your own order.</Text>
               </View>
-              {review.plan.order.join() === review.plan.current.order.join() ? (
-                <Button label="Done" onPress={useOrder} loading={busy === 'apply'} />
-              ) : (
-                <View style={{ flexDirection: 'row', gap: space[3] }}>
-                  <Button label="Use this order" onPress={useOrder} loading={busy === 'apply'} style={{ flex: 1 }} />
-                  <Button variant="text" label="Keep my order" onPress={() => setReview(null)} />
-                </View>
-              )}
-            </>
+              <Button variant="text" size="sm" label="Keep my order" onPress={() => { setReview(null); setCustom(null); }}
+                style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
+            </View>
           ) : null}
 
           {/* On the way: the drive leads; who it's to comes second. */}
@@ -325,12 +326,18 @@ export default function Trip() {
                 </View>
               ) : null}
               <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
-                {after.map((s, i) => {
-                  const before = was.get(s.id);
-                  const moved = review && before != null && before !== i ? (before > i ? 'Moved earlier · ' : 'Moved later · ') : '';
-                  return <AheadRow key={s.id} stop={s} detail={`${moved}${s.address.split(',')[0]}`} last={i === after.length - 1}
-                    onPress={() => router.push(`/stop/${s.id}`)} />;
-                })}
+                {review ? (
+                  // Reviewing: drag stops by their grip; ones now earlier than the driver's order are in blue.
+                  <ReorderList items={after} keyOf={(s) => s.id} hold={holding} onReorder={(list) => setCustom(list.map((s) => s.id))}
+                    renderRow={(s, i, grip) => {
+                      const before = was.get(s.id);
+                      return <AheadRow stop={s} detail={s.address.split(',')[0]} last={i === after.length - 1}
+                        highlight={before != null && i < before} trailing={grip} />;
+                    }} />
+                ) : after.map((s, i) => (
+                  <AheadRow key={s.id} stop={s} detail={s.address.split(',')[0]} last={i === after.length - 1}
+                    onPress={() => router.push(`/stop/${s.id}`)} />
+                ))}
               </View>
               {done.length && !review ? (
                 <>
@@ -354,6 +361,12 @@ export default function Trip() {
         </View>
       </BottomSheet>
 
+      {/* Reviewing: Confirm route takes Optimize route's place, in blue. */}
+      {phase === 'review' && review ? (
+        <View style={[styles.floatBar, { bottom: bottomInset + space[4] }]}>
+          <Button compact icon="check" label="Confirm route" loading={busy === 'apply'} onPress={useOrder} style={shadow.float} />
+        </View>
+      ) : null}
       {/* Optimize route floats at the bottom, over the trip list, wherever it's scrolled. */}
       {floatOptimize ? (
         <View style={[styles.floatBar, { bottom: bottomInset + space[4] }]}>
@@ -373,7 +386,13 @@ const styles = StyleSheet.create({
   floatBar: { position: 'absolute', left: 0, right: 0, alignItems: 'center', pointerEvents: 'box-none' },
 });
 
-function reviewHeadline(plan: RoutePlan) {
+function reviewHeadline(plan: RoutePlan, custom: string[] | null, byId: Map<string, Stop>, from: LatLng | null) {
+  if (custom && custom.join() !== plan.order.join()) {
+    // The driver's own order, against the best one (straight-line estimates for both).
+    const stops = (ids: string[]) => ids.map((id) => byId.get(id)).filter((s): s is Stop => !!s);
+    const more = routeTotals(stops(custom), from).driveMin - routeTotals(stops(plan.order), from).driveMin;
+    return more >= 1 ? `Your order · ${fmtDuration(more)} more driving than the best` : 'Your order · about the same drive time';
+  }
   if (plan.order.join() === plan.current.order.join()) return 'Your order is already the best';
   const saved = Math.round((plan.current.drive_s - plan.drive_s) / 60);
   return saved >= 1 ? `Best order saves ${fmtDuration(saved)} of driving` : 'About the same drive time';
@@ -394,18 +413,25 @@ function StopHeading({ eyebrow, stop, onCall, onMessage }: { eyebrow?: string; s
   );
 }
 
-function AheadRow({ stop, detail, last, onPress }: { stop: Stop; detail: string; last: boolean; onPress: () => void }) {
+function AheadRow({ stop, detail, last, onPress, highlight, trailing }: {
+  stop: Stop; detail: string; last: boolean; onPress?: () => void;
+  /** Moved earlier in a new order: the name is blue. */
+  highlight?: boolean;
+  trailing?: ReactNode;
+}) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${stop.customer_name}, ${detail}`}
+    <Pressable onPress={onPress} disabled={!onPress} accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={`${stop.customer_name}, ${detail}${highlight ? ', moved earlier' : ''}`}
       style={({ pressed }) => [{ flexDirection: 'row', gap: space[3] }, pressed && { opacity: 0.6 }]}>
       <View style={{ width: 20, alignItems: 'center' }}>
         <View style={{ marginTop: 5, width: 16, height: 16, borderRadius: 8, backgroundColor: color.surface, borderWidth: 3, borderColor: color.action }} />
         {last ? null : <View style={{ flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider }} />}
       </View>
       <View style={{ flex: 1, paddingBottom: 20 }}>
-        <Text style={{ fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: color.ink }}>{stop.customer_name}</Text>
+        <Text style={{ fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: highlight ? color.actionInk : color.ink }}>{stop.customer_name}</Text>
         <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }}>{detail}</Text>
       </View>
+      {trailing}
     </Pressable>
   );
 }

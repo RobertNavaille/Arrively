@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
 import { Animated, PanResponder, Platform, ScrollView, StyleSheet, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import { color, radius, shadow } from './theme';
 
@@ -9,8 +9,10 @@ import { color, radius, shadow } from './theme';
  * put inside the sheet; the list scrolls only once the sheet is open. The map
  * above the sheet gets every touch, since nothing covers it.
  */
-export function BottomSheet({ top, rest, resetKey, bottomInset = 0, header, children }: {
+export function BottomSheet({ top, rest, resetKey, bottomInset = 0, hold, header, children }: {
   top: number; rest: number; resetKey: string;
+  /** True while something inside (a row being dragged) owns the touch: the sheet stays put. */
+  hold?: MutableRefObject<boolean>;
   /** Covered at the bottom of the screen: the list's end scrolls clear of it. */
   bottomInset?: number;
   header: ReactNode; children: ReactNode;
@@ -26,6 +28,8 @@ export function BottomSheet({ top, rest, resetKey, bottomInset = 0, header, chil
   const topRef = useRef(top);
   topRef.current = top;
   const listRef = useRef<ScrollView>(null);
+  const holdRef = useRef(hold);
+  holdRef.current = hold;
   const sheetRef = useRef<View>(null);
 
   const snap = useCallback((toOpen: boolean) => {
@@ -44,7 +48,7 @@ export function BottomSheet({ top, rest, resetKey, bottomInset = 0, header, chil
   const pan = useRef(PanResponder.create({
     // Vertical drags move the sheet. While it's open, a pull down on its header
     // closes it; on the list, only once the list is back at its top.
-    onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx)
+    onMoveShouldSetPanResponderCapture: (_, g) => !holdRef.current?.current && Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx)
       && (!openRef.current || (g.dy > 0 && (listAtTop.current || g.y0 - topRef.current < headerH.current))),
     onPanResponderGrant: () => { offset.stopAnimation((v) => { start.current = v; }); },
     onPanResponderMove: (_, g) => offset.setValue(Math.min(Math.max(start.current + g.dy, 0), restRef.current)),
