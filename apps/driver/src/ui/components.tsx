@@ -3,7 +3,8 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, t
 import { color, font, radius, space, type } from './theme';
 import { Icon, type IconName } from './Icon';
 
-type ButtonVariant = 'primary' | 'secondary' | 'text' | 'danger';
+/** neutral: gray and a bit smaller (48px), for a supporting action that floats over content (Optimize route). */
+type ButtonVariant = 'primary' | 'secondary' | 'neutral' | 'text' | 'danger';
 
 export function Button({ label, onPress, variant = 'primary', icon, size = 'md', iconOnly, disabled, loading, style }: {
   label: string; onPress?: () => void; variant?: ButtonVariant; icon?: IconName; size?: 'md' | 'sm';
@@ -11,7 +12,7 @@ export function Button({ label, onPress, variant = 'primary', icon, size = 'md',
   iconOnly?: boolean; disabled?: boolean; loading?: boolean; style?: StyleProp<ViewStyle>;
 }) {
   const fg = variant === 'primary' ? color.onAction : variant === 'secondary' ? color.action
-    : variant === 'danger' ? color.danger : color.actionInk;
+    : variant === 'neutral' ? color.ink : variant === 'danger' ? color.danger : color.actionInk;
   return (
     <Pressable
       accessibilityRole="button"
@@ -24,6 +25,7 @@ export function Button({ label, onPress, variant = 'primary', icon, size = 'md',
         iconOnly && { width: size === 'sm' ? 32 : 56, paddingHorizontal: 0 },
         variant === 'primary' && { backgroundColor: color.action },
         variant === 'secondary' && { backgroundColor: color.brandTint },
+        variant === 'neutral' && styles.btnNeutral,
         (variant === 'text' || variant === 'danger') && styles.btnText,
         (pressed || disabled) && { opacity: disabled ? 0.45 : 0.85 },
         style,
@@ -154,6 +156,7 @@ export function Banner({ tone = 'success', title, meta, icon = 'check' }: { tone
 export const styles = StyleSheet.create({
   // 56px: easy to hit from a phone mount while driving.
   btn: { height: 56, borderRadius: radius.full, paddingHorizontal: space[6], flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2] },
+  btnNeutral: { height: 48, paddingHorizontal: space[6] - 4, backgroundColor: color.neutralFill },
   btnSm: { height: 32, paddingHorizontal: space[4] },
   btnText: { backgroundColor: 'transparent', paddingHorizontal: space[3] },
   btnLabel: { fontFamily: font.semibold, fontSize: 14, lineHeight: 20 },

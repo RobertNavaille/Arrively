@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Linking, Platform, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
@@ -82,6 +82,8 @@ export default function Trip() {
   const marked = lastMarked(route);
   const justMarked = phase === 'next' && marked?.marked_at && Date.now() - Date.parse(marked.marked_at) < 15 * 60 * 1000;
   const canOptimize = !!route && route.status !== 'completed' && remaining.filter((s) => s.status === 'scheduled' || s.status === 'queued').length >= 2;
+  // Optimize route floats over the list while the next stop is up (not mid-drive, at a stop or in review).
+  const floatOptimize = phase === 'next' && canOptimize;
   // Each step starts with the sheet at its resting height.
   // Each step follows the driver again (the sheet itself goes back to rest on its own).
   useEffect(() => { setFreeMap(false); setChoosing(false); }, [phase]);
@@ -195,7 +197,7 @@ export default function Trip() {
       ) : null}
 
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
-      <BottomSheet top={MAP_STRIP} rest={peek} resetKey={phase} bottomInset={bottomInset} header={
+      <BottomSheet top={MAP_STRIP} rest={peek} resetKey={phase} bottomInset={bottomInset + (floatOptimize ? OPTIMIZE_SPACE : 0)} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
         <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH) setCardH(h); }}
           style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' ? 0 : 1, borderBottomColor: color.divider }}>
@@ -215,13 +217,7 @@ export default function Trip() {
                 ) : null}
                 {current.notes ? <Text style={[type.body, { flex: 1, color: color.inkMuted }]} numberOfLines={1}>{current.notes}</Text> : null}
               </View>
-              <View style={{ flexDirection: 'row', gap: space[3] }}>
-                <Button label="Start driving" onPress={startDriving} loading={busy === 'start'} style={{ flex: 1 }} />
-                {canOptimize ? (
-                  <Button variant="secondary" icon="route" label={route.optimized_at ? 'Optimize again' : 'Optimize'}
-                    iconOnly={!!route.optimized_at} loading={busy === 'plan'} onPress={optimize} />
-                ) : null}
-              </View>
+              <Button label="Start driving" onPress={startDriving} loading={busy === 'start'} />
             </>
           ) : null}
 
@@ -344,9 +340,22 @@ export default function Trip() {
           ) : null}
         </View>
       </BottomSheet>
+
+      {/* Optimize route floats at the bottom, over the trip list, wherever it's scrolled. */}
+      {floatOptimize ? (
+        <View style={[styles.floatBar, { bottom: bottomInset + space[4] }]}>
+          <Button variant="neutral" icon="route" label="Optimize route" loading={busy === 'plan'} onPress={optimize} style={shadow.float} />
+        </View>
+      ) : null}
     </View>
   );
 }
+
+// Room at the end of the list so its last stop can scroll clear of the floating button.
+const OPTIMIZE_SPACE = 48 + space[4] * 2;
+const styles = StyleSheet.create({
+  floatBar: { position: 'absolute', left: 0, right: 0, alignItems: 'center', pointerEvents: 'box-none' },
+});
 
 function reviewHeadline(plan: RoutePlan) {
   if (plan.order.join() === plan.current.order.join()) return 'Your order is already the best';
