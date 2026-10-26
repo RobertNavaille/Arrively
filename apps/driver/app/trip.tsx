@@ -345,7 +345,7 @@ export default function Trip() {
                   {/* While the next stop is up, the trip's line passes beside the heading. */}
                   {phase === 'next' ? <View style={{ width: 20, alignItems: 'center' }}><View style={[styles.line, { marginTop: 0 }]} /></View> : null}
                   <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: space[4], paddingBottom: space[3] }}>
-                    <Text style={type.heading}>{review ? 'New order' : 'After this'} · {after.length} {after.length === 1 ? 'stop' : 'stops'}</Text>
+                    <Text style={[type.bodyStrong, { color: color.inkMuted }]}>{after.length} more {after.length === 1 ? 'stop' : 'stops'}</Text>
                     <Text style={type.caption}>{fmtDuration(Math.max(1, tripMin))} · {miles(tripMeters).toFixed(1)} mi</Text>
                   </View>
                 </View>
