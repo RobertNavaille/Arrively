@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { color, font, radius, space, type } from './theme';
 import { Icon, type IconName } from './Icon';
@@ -98,6 +99,20 @@ export function DetailRow({ icon, primary, secondary }: { icon: IconName; primar
   );
 }
 
+/** A titled detail with its icon in a tinted circle (stop details). */
+export function InfoRow({ icon, title, body, trailing }: { icon: IconName; title: string; body?: string | null; trailing?: ReactNode }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: space[4], alignItems: 'flex-start' }}>
+      <View style={styles.infoIcon}><Icon name={icon} size={20} color={color.action} /></View>
+      <View style={{ flex: 1, paddingTop: 2 }}>
+        <Text style={[type.heading, { fontSize: 17 }]}>{title}</Text>
+        {body ? <Text style={[type.body, { fontSize: 15, lineHeight: 21, color: color.inkMuted }]}>{body}</Text> : null}
+      </View>
+      {trailing}
+    </View>
+  );
+}
+
 export function Avatar({ name, size = 32 }: { name: string; size?: number }) {
   const initials = name.split(/\s+/).map((p) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
   return (
@@ -145,6 +160,7 @@ export const styles = StyleSheet.create({
   iconBtn: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   // Call, message, directions: 56px like the buttons, for use while driving (plain ones are header chrome).
   iconBtnLarge: { width: 56, height: 56 },
+  infoIcon: { width: 40, height: 40, borderRadius: radius.full, backgroundColor: color.brandTint, alignItems: 'center', justifyContent: 'center' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 2, borderRadius: radius.full, alignSelf: 'flex-start' },
   pillText: { fontFamily: font.medium, fontSize: 11, lineHeight: 18, letterSpacing: 0.2 },
   banner: { flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3], borderRadius: radius.md, backgroundColor: color.surfaceMuted },
