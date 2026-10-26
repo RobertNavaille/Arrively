@@ -93,8 +93,9 @@ function Grip({ onStart, onMove, onEnd }: { label: string; onStart: () => void; 
 }
 
 // The grip takes touches itself on the web too (no browser scrolling from it).
+// Its 44px box is centred on a row's name and address (48px of text): 2px down.
 const styles = StyleSheet.create({
   held: { zIndex: 2, backgroundColor: color.surface, borderRadius: radius.md, marginHorizontal: -8, paddingHorizontal: 8 },
-  grip: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: -6, ...({ touchAction: 'none', cursor: 'grab' } as unknown as ViewStyle) },
+  grip: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 2, ...({ touchAction: 'none', cursor: 'grab' } as unknown as ViewStyle) },
   dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: color.inkMuted },
 });
