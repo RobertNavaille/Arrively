@@ -5,7 +5,7 @@ import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
 import { bearingDeg, dayKey, distanceM, pathAhead, estimateDriveMin, fmtDuration, fmtTime, miles, routeTotals } from '../src/lib/geo';
-import { currentPosition, enableCompass, startSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
+import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
 import type { RoutePlan } from '../src/lib/routing';
 import { currentStop, lastMarked, useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
@@ -260,7 +260,7 @@ export default function Trip() {
                   onPress={() => run('arrived', async () => { await backend.markArrived(current.id); await refresh(); })} />
                 {/* Started by mistake, or plans changed: back to the trip view. */}
                 <Button variant="text" label="Cancel route" loading={busy === 'cancel'}
-                  onPress={() => run('cancel', async () => { await backend.cancelTrip(current.id); await refresh(); })} />
+                  onPress={() => run('cancel', async () => { await backend.cancelTrip(current.id); await stopSharing(); await refresh(); })} />
               </View>
             </>
           ) : null}

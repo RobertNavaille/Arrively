@@ -25,7 +25,7 @@ export interface Backend {
   markArrived(stopId: string): Promise<void>;
   /** Back to on the way, for an arrival marked by mistake. */
   undoArrived(stopId: string): Promise<void>;
-  /** Back from on the way to the trip view: the stop waits, next in line. */
+  /** Cancel route: ends the trip (the route is no longer under way); its open stops wait, this one still next. */
   cancelTrip(stopId: string): Promise<void>;
   markStop(stopId: string, outcome: MarkOutcome, reason: string | null, at: LatLng | null): Promise<void>;
   addStop(day: string, address: string, at: LatLng, details?: StopDetails): Promise<void>;
@@ -260,7 +260,14 @@ const offlineBackend: Backend = {
   },
   async markArrived(stopId) { const [, s] = findStop(stopId); if (s.status === 'arrived') return; s.status = 'arrived'; s.arrived_at = new Date().toISOString(); emit(); },
   async undoArrived(stopId) { const [, s] = findStop(stopId); s.status = 'en_route'; s.arrived_at = null; emit(); },
-  async cancelTrip(stopId) { const [, s] = findStop(stopId); s.status = 'queued'; s.arrived_at = null; emit(); },
+  async cancelTrip(stopId) {
+    // Ends the trip: the route is no longer under way and its open stops go back to scheduled.
+    const [r, s] = findStop(stopId);
+    s.arrived_at = null;
+    r.stops.forEach((x) => { if (x.status === 'en_route' || x.status === 'arrived' || x.status === 'queued') x.status = 'scheduled'; });
+    if (r.status === 'active') r.status = 'planned';
+    emit();
+  },
   async markStop(stopId, outcome, reason, at) {
     const [r, s] = findStop(stopId);
     const outside = at ? distanceM(at, s) > RADIUS * 2 : false;
