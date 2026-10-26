@@ -6,13 +6,15 @@ import { color, radius, shadow } from './theme';
  * A list whose rows the driver drags into a new order by their grip. The row
  * moves with the finger and the others make way as it passes their middle.
  * `hold` is set while a row is held, so a sheet around the list leaves the
- * drag alone.
+ * drag alone. `fixed` rows (locked stops) have no grip and keep their place:
+ * a held row passes over them.
  */
-export function ReorderList<T>({ items, keyOf, onReorder, hold, renderRow }: {
+export function ReorderList<T>({ items, keyOf, onReorder, hold, fixed, renderRow }: {
   items: T[];
   keyOf: (item: T) => string;
   onReorder: (items: T[]) => void;
   hold?: MutableRefObject<boolean>;
+  fixed?: (item: T) => boolean;
   renderRow: (item: T, index: number, grip: ReactNode, held: boolean) => ReactNode;
 }) {
   const heights = useRef(new Map<string, number>());
@@ -31,17 +33,18 @@ export function ReorderList<T>({ items, keyOf, onReorder, hold, renderRow }: {
     let offset = dy - passed.current;
     let i = list.findIndex((x) => keyOf(x) === key);
     const h = (j: number) => heights.current.get(keyOf(list[j])) ?? 64;
+    const stays = (j: number) => !!fixed?.(list[j]);
+    // The next row it can trade places with, past any fixed ones, and how far
+    // away its middle is; the fixed rows between stay put.
+    const target = (dir: 1 | -1) => {
+      let j = i + dir, gap = 0;
+      while (j >= 0 && j < list.length && stays(j)) { gap += h(j); j += dir; }
+      return j >= 0 && j < list.length ? { j, mid: gap + h(j) / 2, step: gap + h(j) } : null;
+    };
+    const swap = (j: number) => { list = [...list]; [list[i], list[j]] = [list[j], list[i]]; i = j; };
     // Past the middle of the row below (or above): swap places with it.
-    while (i < list.length - 1 && offset > h(i + 1) / 2) {
-      const step = h(i + 1);
-      list = [...list]; [list[i], list[i + 1]] = [list[i + 1], list[i]];
-      i += 1; offset -= step; passed.current += step;
-    }
-    while (i > 0 && offset < -h(i - 1) / 2) {
-      const step = h(i - 1);
-      list = [...list]; [list[i], list[i - 1]] = [list[i - 1], list[i]];
-      i -= 1; offset += step; passed.current -= step;
-    }
+    for (let t = target(1); t && offset > t.mid; t = target(1)) { swap(t.j); offset -= t.step; passed.current += t.step; }
+    for (let t = target(-1); t && offset < -t.mid; t = target(-1)) { swap(t.j); offset += t.step; passed.current -= t.step; }
     if (list !== order.current) { order.current = list; onReorder(list); }
     setHeld({ key, offset });
   };
@@ -58,7 +61,8 @@ export function ReorderList<T>({ items, keyOf, onReorder, hold, renderRow }: {
         return (
           <View key={key} onLayout={(e) => { heights.current.set(key, e.nativeEvent.layout.height); }}
             style={isHeld ? [styles.held, shadow.float, { transform: [{ translateY: held!.offset }] }] : undefined}>
-            {renderRow(item, i, <Grip label={key} onStart={() => start(key)} onMove={(dy) => move(key, dy)} onEnd={end} />, isHeld)}
+            {renderRow(item, i, fixed?.(item) ? <View style={{ width: 44 }} />
+              : <Grip label={key} onStart={() => start(key)} onMove={(dy) => move(key, dy)} onEnd={end} />, isHeld)}
           </View>
         );
       })}

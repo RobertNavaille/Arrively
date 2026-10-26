@@ -10,6 +10,7 @@ export interface SolverStop {
   windowStart?: number | null; // epoch seconds
   windowEnd?: number | null;
   fixed?: boolean; // stays in front, in the given order (the stop the driver is heading to)
+  slot?: number | null; // locked by the driver at this place in the order (0 = first); the rest go around it
 }
 
 export interface Schedule {
@@ -74,14 +75,47 @@ function scorer(stops: SolverStop[], matrix: number[][], start: number, fixed: n
   };
 }
 
-/** Best order for the stops. Fixed stops stay first; the rest are sequenced. */
+/** Best order for the stops. Fixed stops stay first; locked ones keep their slot; the rest are sequenced. */
 export function solve(stops: SolverStop[], matrix: number[][], start: number): Schedule {
   const fixed = stops.map((_, i) => i).filter((i) => stops[i].fixed);
-  const free = stops.map((_, i) => i).filter((i) => !stops[i].fixed);
-  const score = scorer(stops, matrix, start, fixed);
+  const pins = lockedSlots(stops, fixed.length);
+  const free = stops.map((_, i) => i).filter((i) => !stops[i].fixed && !pins.includes(i));
+  const fill = filler(pins);
+  const base = scorer(stops, matrix, start, fixed);
+  const score: Score = pins.length ? (tail) => base(fill(tail)) : base;
   const from = fixed.length ? fixed[fixed.length - 1] + 1 : 0;
   const tail = free.length <= 1 ? free : free.length <= 8 ? exact(free, score) : search(free, stops, matrix, from, score);
-  return evaluate(stops, matrix, start, [...fixed, ...tail]);
+  return evaluate(stops, matrix, start, [...fixed, ...(pins.length ? [...fill(tail)] : tail)]);
+}
+
+/**
+ * The locked stops by place after the fixed ones: `pins[k]` is the stop that
+ * must be k-th, or -1. Slots are kept in order and in range, so two locks on one
+ * slot or a slot past the end still give a valid order.
+ */
+function lockedSlots(stops: SolverStop[], nFixed: number): number[] {
+  const locked = stops.map((s, i) => [s.slot, i] as const)
+    .filter(([slot, i]) => slot != null && !stops[i].fixed)
+    .sort((a, b) => a[0]! - b[0]!);
+  if (!locked.length) return [];
+  const n = stops.length - nFixed;
+  const pins = new Array<number>(n).fill(-1);
+  let next = 0;
+  locked.forEach(([slot, i], k) => {
+    // Room for the locks still to come, and after the one before.
+    const at = Math.min(Math.max(slot! - nFixed, next), n - (locked.length - k));
+    pins[at] = i; next = at + 1;
+  });
+  return pins;
+}
+
+/** Lays the free stops (`tail`) into the places the locked ones leave open. */
+function filler(pins: number[]): (tail: number[]) => number[] {
+  const out = new Array<number>(pins.length);
+  return (tail) => {
+    for (let p = 0, k = 0; p < pins.length; p++) out[p] = pins[p] >= 0 ? pins[p] : tail[k++];
+    return out;
+  };
 }
 
 function exact(free: number[], score: Score): number[] {
@@ -219,11 +253,21 @@ export interface PlanStop {
   id: string; position: number | null; status: string; lat: number; lng: number; service_minutes: number;
   window_start: string | null; window_end: string | null; arrived_at: string | null;
 }
+/** What a plan was solved from, so the app can solve it again around the stops the driver locks. */
+export interface PlanProblem { stops: SolverStop[]; durations: number[][]; t0: number }
+
+/** The best order with `locked` stops (id → place in the order) kept where they are. */
+export function solveLocked(problem: PlanProblem, locked: Record<string, number>): string[] {
+  const stops = problem.stops.map((s) => ({ ...s, slot: locked[s.id] ?? null }));
+  return solve(stops, problem.durations, problem.t0).order;
+}
+
 export interface PlanSummary { order: string[]; drive_s: number; distance_m: number; late: string[]; finish: string }
 export interface RoutePlan extends PlanSummary {
   etas: Record<string, string>; current: PlanSummary; approximate: boolean;
   /** Where the plan starts: the driver's location, the stop they're at, their last stop, or the best first stop. */
   start?: "location" | "current_stop" | "last_stop" | "anywhere";
+  problem?: PlanProblem;
 }
 
 const UPCOMING = ["scheduled", "queued", "en_route", "arrived"];
@@ -271,6 +315,7 @@ export function straightLinePlan(stops: PlanStop[], day: string, from: Point | n
     current: { order: cur.order, late: cur.late, drive_s: Math.round(cur.driveS), finish: isoOf(cur.finish), distance_m: distanceAlong(dist, all) },
     approximate: true,
     start: startKind,
+    problem: { stops: solverStops, durations: m, t0 },
   };
 }
 

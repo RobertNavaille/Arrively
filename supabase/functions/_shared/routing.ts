@@ -152,6 +152,8 @@ export async function plan(loaded: Loaded, nowS = Date.now() / 1000, from: Point
     },
     approximate,
     start: startKind,
+    // Lets the app re-solve around the stops the driver locks, without asking again.
+    problem: { stops: solverStops, durations: durations.map((r) => r.map(Math.round)), t0: Math.round(t0) },
   };
 }
 

@@ -73,3 +73,24 @@ Deno.test("24 stops solve quickly and beat the given order", () => {
   check(s.driveS < given.driveS * 0.6, "should cut drive time well below a random order");
   check(new Set(s.order).size === 24, "every stop exactly once");
 });
+
+Deno.test("locked stops keep their place; the rest are ordered around them", () => {
+  const pts = [0, 4, 1, 3, 2].map((k) => ({ lat: 41.82, lng: -71.41 + k * 0.01 }));
+  const m = straightLineMatrix([{ lat: 41.82, lng: -71.42 }, ...pts]);
+  // s1 is the farthest east; locked first, the others follow it back west.
+  const stops: SolverStop[] = pts.map((_, i) => ({ id: `s${i}`, serviceS: 600, slot: i === 1 ? 0 : null }));
+  check(solve(stops, m, T0).order.join() === "s1,s3,s4,s2,s0", `got ${solve(stops, m, T0).order}`);
+  // Two locks, the second past the end: both stay in order, in range.
+  const two: SolverStop[] = pts.map((_, i) => ({ id: `s${i}`, serviceS: 600, slot: i === 0 ? 2 : i === 2 ? 9 : null }));
+  const o = solve(two, m, T0).order;
+  check(o[2] === "s0" && o[4] === "s2" && new Set(o).size === 5, `got ${o}`);
+});
+
+Deno.test("locks hold on the local search path too (more than 8 free stops)", () => {
+  const r = rng(7);
+  const pts = Array.from({ length: 12 }, () => ({ lat: 41.8 + r() * 0.1, lng: -71.45 + r() * 0.1 }));
+  const m = straightLineMatrix([{ lat: 41.82, lng: -71.42 }, ...pts]);
+  const stops: SolverStop[] = pts.map((_, i) => ({ id: `s${i}`, serviceS: 300, slot: i === 5 ? 1 : i === 9 ? 10 : null }));
+  const o = solve(stops, m, T0).order;
+  check(o[1] === "s5" && o[10] === "s9" && new Set(o).size === 12, `got ${o}`);
+});

@@ -1,12 +1,12 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
 import { bearingDeg, dayKey, distanceM, pathAhead, estimateDriveMin, fmtDuration, fmtTime, miles, routeTotals } from '../src/lib/geo';
 import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
-import type { RoutePlan } from '../src/lib/routing';
+import { lockedOrder, type RoutePlan } from '../src/lib/routing';
 import { currentStop, lastMarked, useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
@@ -49,6 +49,8 @@ export default function Trip() {
   const [review, setReview] = useState<{ plan: RoutePlan; from: LatLng | null } | null>(null);
   // In review the driver can drag the stops into their own order; null = the suggested one.
   const [custom, setCustom] = useState<string[] | null>(null);
+  // Stops the driver locked in place (tapping their circle); the rest are optimized around them.
+  const [locked, setLocked] = useState<string[]>([]);
   // Set while a stop is held by its grip, so the sheet doesn't move with the drag.
   const holding = useRef(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -69,10 +71,16 @@ export default function Trip() {
   const current = currentStop(route);
   const phase = !current ? 'finished' : review ? 'review' : current.status === 'en_route' ? 'onroute' : current.status === 'arrived' ? 'arrived' : 'next';
   // In review the whole suggested order is listed; otherwise the stops after the current one.
-  const reviewOrder = review ? (custom ?? review.plan.order).map((id) => byId.get(id)).filter((s): s is Stop => !!s) : null;
+  const shown = review ? custom ?? review.plan.order : null;
+  const reviewOrder = shown ? shown.map((id) => byId.get(id)).filter((s): s is Stop => !!s) : null;
   const ahead = reviewOrder ?? remaining;
   const after = reviewOrder ?? remaining.filter((s) => s.id !== current?.id);
   const was = new Map((review?.plan.current.order ?? []).map((id, i) => [id, i]));
+  // Where each locked stop sits, and the best order that keeps them there (Auto's order).
+  const slots = Object.fromEntries(locked.map((id) => [id, shown?.indexOf(id) ?? -1]).filter(([, i]) => (i as number) >= 0));
+  const slotsKey = JSON.stringify(slots);
+  const best = useMemo(() => review && route ? lockedOrder(review.plan, route, review.from, slots) : null,
+    [review, slotsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The road route for the whole trip ahead, and for the leg to the current stop.
   const road = useRoadPath(pos, ahead);
@@ -116,6 +124,7 @@ export default function Trip() {
   const optimize = () => run('plan', async () => {
     const here = pos ?? (await currentPosition());
     setCustom(null);
+    setLocked([]);
     setReview({ plan: await backend.planRoute(route.id, here), from: here });
   });
   const useOrder = () => run('apply', async () => {
@@ -123,8 +132,20 @@ export default function Trip() {
     await backend.applyPlan(route.id, custom ?? review.plan.order, review.from);
     setReview(null);
     setCustom(null);
+    setLocked([]);
     await refresh();
   });
+  // The suggested order is shown as null (no custom order).
+  const showOrder = (order: string[]) => setCustom(review && order.join() === review.plan.order.join() ? null : order);
+  // Locking keeps the stop where it is now and re-optimizes the others around it; unlocking
+  // leaves the order alone (Auto then offers the best order without that lock).
+  const toggleLock = (id: string) => {
+    if (!review || !shown) return;
+    if (locked.includes(id)) { setLocked(locked.filter((x) => x !== id)); return; }
+    const next = [...locked, id];
+    setLocked(next);
+    showOrder(lockedOrder(review.plan, route, review.from, Object.fromEntries(next.map((x) => [x, shown.indexOf(x)]))));
+  };
   const startDriving = () => run('start', async () => {
     if (!current) return;
     // Asked from this tap: iPhone browsers share the compass only once allowed.
@@ -248,7 +269,7 @@ export default function Trip() {
                 </Text>
               </View>
               {/* Auto: back to the suggested best order; only while the order differs from it. */}
-              <AutoButton visible={!!custom && custom.join() !== review.plan.order.join()} onPress={() => setCustom(null)} />
+              <AutoButton visible={!!best && !!shown && shown.join() !== best.join()} onPress={() => best && showOrder(best)} />
             </View>
           ) : null}
 
@@ -332,11 +353,14 @@ export default function Trip() {
               <View accessibilityRole="list" style={{ paddingHorizontal: space[4], paddingTop: review ? space[2] : 0 }}>
                 {review ? (
                   // Reviewing: drag stops by their grip; ones now earlier than the driver's order are in blue.
-                  <ReorderList items={after} keyOf={(s) => s.id} hold={holding} onReorder={(list) => setCustom(list.map((s) => s.id))}
+                  // Locked stops have no grip and stay put while others are dragged past them.
+                  <ReorderList items={after} keyOf={(s) => s.id} hold={holding} fixed={(s) => locked.includes(s.id)}
+                    onReorder={(list) => setCustom(list.map((s) => s.id))}
                     renderRow={(s, i, grip) => {
                       const before = was.get(s.id);
                       return <AheadRow stop={s} detail={s.address.split(',')[0]} last={i === after.length - 1}
-                        highlight={before != null && i < before} trailing={grip} />;
+                        highlight={before != null && i < before} trailing={grip}
+                        lock={{ on: locked.includes(s.id), toggle: () => toggleLock(s.id) }} />;
                     }} />
                 ) : after.map((s, i) => (
                   <AheadRow key={s.id} stop={s} detail={s.address.split(',')[0]} last={i === after.length - 1}
@@ -405,18 +429,28 @@ function StopHeading({ eyebrow, stop, onCall, onMessage }: { eyebrow?: string; s
   );
 }
 
-function AheadRow({ stop, detail, last, onPress, highlight, trailing }: {
+function AheadRow({ stop, detail, last, onPress, highlight, trailing, lock }: {
   stop: Stop; detail: string; last: boolean; onPress?: () => void;
   /** Moved earlier in a new order: the name is blue. */
   highlight?: boolean;
   trailing?: ReactNode;
+  /** Reviewing: the circle locks the stop in place, and shows a lock while it is. */
+  lock?: { on: boolean; toggle: () => void };
 }) {
-  return (
-    <Pressable onPress={onPress} disabled={!onPress} accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={`${stop.customer_name}, ${detail}${highlight ? ', moved earlier' : ''}`}
-      style={({ pressed }) => [{ flexDirection: 'row', gap: space[3] }, pressed && { opacity: 0.6 }]}>
+  const marker = lock?.on
+    ? <View style={{ marginTop: 3, height: 20, alignItems: 'center', justifyContent: 'center' }}><Icon name="lock" size={20} color={color.action} strokeWidth={2} /></View>
+    : <View style={{ marginTop: 5, width: 16, height: 16, borderRadius: 8, backgroundColor: color.surface, borderWidth: 3, borderColor: color.action }} />;
+  const label = `${stop.customer_name}, ${detail}${highlight ? ', moved earlier' : ''}`;
+  const content = (
+    <>
       <View style={{ width: 20, alignItems: 'center' }}>
-        <View style={{ marginTop: 5, width: 16, height: 16, borderRadius: 8, backgroundColor: color.surface, borderWidth: 3, borderColor: color.action }} />
+        {lock ? (
+          <Pressable onPress={lock.toggle} hitSlop={12} accessibilityRole="button"
+            accessibilityLabel={lock.on ? `Unlock ${stop.customer_name}` : `Lock ${stop.customer_name} in this place`}
+            accessibilityState={{ selected: lock.on }}>
+            {marker}
+          </Pressable>
+        ) : marker}
         {last ? null : <View style={{ flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider }} />}
       </View>
       <View style={{ flex: 1, paddingBottom: 20 }}>
@@ -424,6 +458,14 @@ function AheadRow({ stop, detail, last, onPress, highlight, trailing }: {
         <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }}>{detail}</Text>
       </View>
       {trailing}
+    </>
+  );
+  // Without a press (reviewing) it's a plain row, so its lock button stays enabled.
+  if (!onPress) return <View accessibilityLabel={label} style={{ flexDirection: 'row', gap: space[3] }}>{content}</View>;
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label}
+      style={({ pressed }) => [{ flexDirection: 'row', gap: space[3] }, pressed && { opacity: 0.6 }]}>
+      {content}
     </Pressable>
   );
 }
