@@ -207,7 +207,7 @@ export default function Trip() {
       <BottomSheet top={MAP_STRIP} rest={peek} resetKey={phase} bottomInset={bottomInset + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
         <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH) setCardH(h); }}
-          style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' || phase === 'next' ? 0 : 1, borderBottomColor: color.divider }}>
+          style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' || phase === 'next' || phase === 'review' ? 0 : 1, borderBottomColor: color.divider }}>
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: color.divider, alignSelf: 'center' }} />
 
           {phase === 'next' && current ? (
@@ -238,13 +238,16 @@ export default function Trip() {
           ) : null}
 
           {phase === 'review' && review ? (
-            <View style={{ gap: space[2] }}>
-              <View style={{ gap: 2, padding: space[3], borderRadius: radius.md, backgroundColor: color.brandTint }}>
-                <Text style={[type.bodyStrong, { color: color.onTint }]}>{reviewHeadline(review.plan, custom, byId, review.from)}</Text>
-                <Text style={[type.caption, { color: color.onTint }]}>Stops moved earlier are in blue. Drag any stop to set your own order.</Text>
+            // Optimize route: the trip's drive time and distance under it follow the order as stops are dragged.
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space[3] }}>
+              <View style={{ flex: 1, gap: 6 }}>
+                <Text style={{ fontFamily: font.semibold, fontSize: 28, lineHeight: 34, color: color.ink }} accessibilityRole="header">Optimize route</Text>
+                <Text style={[type.body, { fontSize: 16, lineHeight: 24, color: color.inkMuted }]}>
+                  {fmtDuration(Math.max(1, tripMin))} · {miles(tripMeters).toFixed(1)} mi
+                </Text>
               </View>
-              <Button variant="text" size="sm" label="Keep my order" onPress={() => { setReview(null); setCustom(null); }}
-                style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
+              {/* Auto: back to the suggested best order, undoing any dragging. */}
+              <Button variant="text" size="sm" label="Auto" onPress={() => setCustom(null)} style={{ paddingHorizontal: 0, height: 34 }} />
             </View>
           ) : null}
 
@@ -315,7 +318,7 @@ export default function Trip() {
         <View style={{ paddingBottom: space[8] }}>
           {phase !== 'arrived' ? (
             <>
-              {after.length ? (
+              {after.length && !review ? (
                 <View style={{ flexDirection: 'row', gap: space[3], paddingHorizontal: space[4] }}>
                   {/* While the next stop is up, the trip's line passes beside the heading. */}
                   {phase === 'next' ? <View style={{ width: 20, alignItems: 'center' }}><View style={[styles.line, { marginTop: 0 }]} /></View> : null}
@@ -325,7 +328,7 @@ export default function Trip() {
                   </View>
                 </View>
               ) : null}
-              <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
+              <View accessibilityRole="list" style={{ paddingHorizontal: space[4], paddingTop: review ? space[2] : 0 }}>
                 {review ? (
                   // Reviewing: drag stops by their grip; ones now earlier than the driver's order are in blue.
                   <ReorderList items={after} keyOf={(s) => s.id} hold={holding} onReorder={(list) => setCustom(list.map((s) => s.id))}
@@ -385,18 +388,6 @@ const styles = StyleSheet.create({
   nextDot: { marginTop: 5, width: 20, height: 20, borderRadius: 10, backgroundColor: color.action, borderWidth: 4, borderColor: color.brandTint },
   floatBar: { position: 'absolute', left: 0, right: 0, alignItems: 'center', pointerEvents: 'box-none' },
 });
-
-function reviewHeadline(plan: RoutePlan, custom: string[] | null, byId: Map<string, Stop>, from: LatLng | null) {
-  if (custom && custom.join() !== plan.order.join()) {
-    // The driver's own order, against the best one (straight-line estimates for both).
-    const stops = (ids: string[]) => ids.map((id) => byId.get(id)).filter((s): s is Stop => !!s);
-    const more = routeTotals(stops(custom), from).driveMin - routeTotals(stops(plan.order), from).driveMin;
-    return more >= 1 ? `Your order · ${fmtDuration(more)} more driving than the best` : 'Your order · about the same drive time';
-  }
-  if (plan.order.join() === plan.current.order.join()) return 'Your order is already the best';
-  const saved = Math.round((plan.current.drive_s - plan.drive_s) / 60);
-  return saved >= 1 ? `Best order saves ${fmtDuration(saved)} of driving` : 'About the same drive time';
-}
 
 function StopHeading({ eyebrow, stop, onCall, onMessage }: { eyebrow?: string; stop: Stop; onCall?: () => void; onMessage: () => void }) {
   return (
