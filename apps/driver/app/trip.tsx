@@ -352,7 +352,7 @@ export default function Trip() {
 }
 
 // Room at the end of the list so its last stop can scroll clear of the floating button.
-const OPTIMIZE_SPACE = 48 + space[4] * 2;
+const OPTIMIZE_SPACE = 44 + space[4] * 2;
 const styles = StyleSheet.create({
   floatBar: { position: 'absolute', left: 0, right: 0, alignItems: 'center', pointerEvents: 'box-none' },
 });

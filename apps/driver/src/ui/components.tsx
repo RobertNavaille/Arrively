@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, t
 import { color, font, radius, space, type } from './theme';
 import { Icon, type IconName } from './Icon';
 
-/** neutral: gray and a bit smaller (48px), for a supporting action that floats over content (Optimize route). */
+/** neutral: gray and a bit smaller (44px), for a supporting action that floats over content (Optimize route). */
 type ButtonVariant = 'primary' | 'secondary' | 'neutral' | 'text' | 'danger';
 
 export function Button({ label, onPress, variant = 'primary', icon, size = 'md', iconOnly, disabled, loading, style }: {
@@ -156,7 +156,7 @@ export function Banner({ tone = 'success', title, meta, icon = 'check' }: { tone
 export const styles = StyleSheet.create({
   // 56px: easy to hit from a phone mount while driving.
   btn: { height: 56, borderRadius: radius.full, paddingHorizontal: space[6], flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2] },
-  btnNeutral: { height: 48, paddingHorizontal: space[6] - 4, backgroundColor: color.neutralFill },
+  btnNeutral: { height: 44, paddingHorizontal: space[6] - 4, backgroundColor: color.neutralFill },
   btnSm: { height: 32, paddingHorizontal: space[4] },
   btnText: { backgroundColor: 'transparent', paddingHorizontal: space[3] },
   btnLabel: { fontFamily: font.semibold, fontSize: 14, lineHeight: 20 },
