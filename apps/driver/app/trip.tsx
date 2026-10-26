@@ -200,7 +200,7 @@ export default function Trip() {
       <BottomSheet top={MAP_STRIP} rest={peek} resetKey={phase} bottomInset={bottomInset + (floatOptimize ? OPTIMIZE_SPACE : 0)} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
         <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH) setCardH(h); }}
-          style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' ? 0 : 1, borderBottomColor: color.divider }}>
+          style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' || phase === 'next' ? 0 : 1, borderBottomColor: color.divider }}>
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: color.divider, alignSelf: 'center' }} />
 
           {phase === 'next' && current ? (
@@ -209,15 +209,24 @@ export default function Trip() {
                 <Banner title={marked.status === 'completed' ? 'Stop complete' : marked.status === 'no_show' ? 'Marked no-show' : 'Stop skipped'}
                   meta={`${marked.customer_name} · ${fmtTime(marked.marked_at)}`} />
               ) : null}
-              <StopHeading eyebrow="Next stop" stop={current} onCall={call} onMessage={message} />
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[3] }}>
-                {legMin != null ? (
-                  <Text style={type.body}><Text style={type.bodyStrong}>{legMin} min</Text>
-                    <Text style={{ color: color.inkMuted }}> · {miles(legMeters!).toFixed(1)} mi</Text></Text>
-                ) : null}
-                {current.notes ? <Text style={[type.body, { flex: 1, color: color.inkMuted }]} numberOfLines={1}>{current.notes}</Text> : null}
+              {/* The next stop sits on the trip's line: its circle and line run on into the stops after it. */}
+              <View style={{ flexDirection: 'row', gap: space[3] }}>
+                <View style={{ width: 20, alignItems: 'center' }} importantForAccessibility="no-hide-descendants">
+                  <View style={styles.nextDot} />
+                  {after.length ? <View style={[styles.line, { marginBottom: -space[4] }]} /> : null}
+                </View>
+                <View style={{ flex: 1, gap: space[3] }}>
+                  <StopHeading stop={current} onCall={call} onMessage={message} />
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[3] }}>
+                    {legMin != null ? (
+                      <Text style={type.body}><Text style={type.bodyStrong}>{legMin} min</Text>
+                        <Text style={{ color: color.inkMuted }}> · {miles(legMeters!).toFixed(1)} mi</Text></Text>
+                    ) : null}
+                    {current.notes ? <Text style={[type.body, { flex: 1, color: color.inkMuted }]} numberOfLines={1}>{current.notes}</Text> : null}
+                  </View>
+                  <Button label="Start driving" onPress={startDriving} loading={busy === 'start'} />
+                </View>
               </View>
-              <Button label="Start driving" onPress={startDriving} loading={busy === 'start'} />
             </>
           ) : null}
 
@@ -306,9 +315,13 @@ export default function Trip() {
           {phase !== 'arrived' ? (
             <>
               {after.length ? (
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', padding: space[4], paddingBottom: space[3] }}>
-                  <Text style={type.heading}>{review ? 'New order' : 'After this'} · {after.length} {after.length === 1 ? 'stop' : 'stops'}</Text>
-                  <Text style={type.caption}>{fmtDuration(Math.max(1, tripMin))} · {miles(tripMeters).toFixed(1)} mi</Text>
+                <View style={{ flexDirection: 'row', gap: space[3], paddingHorizontal: space[4] }}>
+                  {/* While the next stop is up, the trip's line passes beside the heading. */}
+                  {phase === 'next' ? <View style={{ width: 20, alignItems: 'center' }}><View style={[styles.line, { marginTop: 0 }]} /></View> : null}
+                  <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: space[4], paddingBottom: space[3] }}>
+                    <Text style={type.heading}>{review ? 'New order' : 'After this'} · {after.length} {after.length === 1 ? 'stop' : 'stops'}</Text>
+                    <Text style={type.caption}>{fmtDuration(Math.max(1, tripMin))} · {miles(tripMeters).toFixed(1)} mi</Text>
+                  </View>
                 </View>
               ) : null}
               <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
@@ -354,6 +367,9 @@ export default function Trip() {
 // Room at the end of the list so its last stop can scroll clear of the floating button.
 const OPTIMIZE_SPACE = 44 + space[4] * 2;
 const styles = StyleSheet.create({
+  // The trip's line, shared by the next stop, the list heading and the stops after it.
+  line: { flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider },
+  nextDot: { marginTop: 5, width: 20, height: 20, borderRadius: 10, backgroundColor: color.action, borderWidth: 4, borderColor: color.brandTint },
   floatBar: { position: 'absolute', left: 0, right: 0, alignItems: 'center', pointerEvents: 'box-none' },
 });
 
@@ -363,12 +379,13 @@ function reviewHeadline(plan: RoutePlan) {
   return saved >= 1 ? `Best order saves ${fmtDuration(saved)} of driving` : 'About the same drive time';
 }
 
-function StopHeading({ eyebrow, stop, onCall, onMessage }: { eyebrow: string; stop: Stop; onCall?: () => void; onMessage: () => void }) {
+function StopHeading({ eyebrow, stop, onCall, onMessage }: { eyebrow?: string; stop: Stop; onCall?: () => void; onMessage: () => void }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space[3] }}>
       <View style={{ flex: 1 }}>
-        <Text style={[type.label, { textTransform: 'uppercase', color: color.actionInk }]}>{eyebrow}</Text>
-        <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]} accessibilityRole="header">{stop.customer_name}</Text>
+        {eyebrow ? <Text style={[type.label, { textTransform: 'uppercase', color: color.actionInk }]}>{eyebrow}</Text> : null}
+        <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]} accessibilityRole="header"
+          accessibilityLabel={eyebrow ? undefined : `Next stop: ${stop.customer_name}`}>{stop.customer_name}</Text>
         <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]}>{stop.address.split(',')[0]}</Text>
       </View>
       {onCall ? <IconButton icon="phone" label={`Call ${stop.customer_name}`} onPress={onCall} /> : null}
