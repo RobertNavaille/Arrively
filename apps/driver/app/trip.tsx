@@ -95,9 +95,8 @@ export default function Trip() {
   const legMeters = leg ? leg.distanceM : pos && current ? distanceM(pos, current) : null;
   const legMin = leg ? Math.max(1, Math.round(leg.durationS / 60)) : legMeters != null ? estimateDriveMin(legMeters) : null;
   // Without road routes (offline): straight lines at the travel mode's usual speed.
-  const totals = routeTotals(ahead, pos);
-  const straightMeters = totals.meters + (back ? distanceM(ahead[ahead.length - 1], pos!) : 0);
-  const straight = { ...totals, meters: straightMeters, driveMin: Math.max(1, Math.round((straightMeters * 1.3) / SPEED[options.mode ?? 'drive'] / 60)) };
+  const straightMeters = routeTotals(ahead, pos).meters + (back ? distanceM(ahead[ahead.length - 1], pos!) : 0);
+  const straight = { meters: straightMeters, driveMin: Math.max(1, Math.round((straightMeters * 1.3) / SPEED[options.mode ?? 'drive'] / 60)) };
   const tripMin = road ? Math.round(road.durationS / 60) : straight.driveMin;
   const tripMeters = road ? road.distanceM : straight.meters;
 
@@ -253,7 +252,7 @@ export default function Trip() {
 
           {phase === 'next' && current ? (
             <>
-              <TripTotals driveMin={tripMin} serviceMin={straight.serviceMin} meters={tripMeters} stops={ahead.length} />
+              <TripTotals travelMin={tripMin} meters={tripMeters} stops={ahead.length} />
               {/* The next stop sits on the trip's line: its circle and line run on into the stops after it. */}
               <View style={{ flexDirection: 'row', gap: space[3] }}>
                 <View style={{ width: 20, alignItems: 'center' }} importantForAccessibility="no-hide-descendants">
@@ -278,7 +277,7 @@ export default function Trip() {
           {/* Optimize route: the same totals as the trip, following the order as stops are dragged. */}
           {phase === 'review' && review ? (
             <>
-              <TripTotals driveMin={tripMin} serviceMin={straight.serviceMin} meters={tripMeters} stops={ahead.length} />
+              <TripTotals travelMin={tripMin} meters={tripMeters} stops={ahead.length} />
               {/* How to plan it: each change re-plans the route. Walking and biking don't take the avoid options. */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space[4] }}
                 contentContainerStyle={{ gap: space[2], paddingHorizontal: space[4] }}>
@@ -444,9 +443,9 @@ const styles = StyleSheet.create({
   floatStart: { position: 'absolute', left: space[4], top: 0, bottom: 0, justifyContent: 'center' },
 });
 
-/** The whole trip ahead, as the sheet's heading: time (driving and work at each stop), miles, and stops left. */
-function TripTotals({ driveMin, serviceMin, meters, stops }: { driveMin: number; serviceMin: number; meters: number; stops: number }) {
-  const total = Math.max(1, driveMin + serviceMin);
+/** The whole trip ahead, as the sheet's heading: travel time only (no time at the stops), miles, and stops left. */
+function TripTotals({ travelMin, meters, stops }: { travelMin: number; meters: number; stops: number }) {
+  const total = Math.max(1, travelMin);
   const mi = miles(meters);
   const items = [
     total < 60 ? { value: String(total), label: 'Minutes' } : { value: `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`, label: 'Hours' },
