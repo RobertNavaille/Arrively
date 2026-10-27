@@ -22,6 +22,9 @@ export const color = {
   mapBlock: '#E1E3E6',
   mapRoad: '#FFFFFF',
   mapLabel: '#3C4043',
+  // The route line runs from deep blue where the trip starts to pale blue where it ends.
+  routeStart: '#0059A3',
+  routeEnd: '#A6DCFF',
   scrim: 'rgba(26, 26, 26, 0.4)',
 } as const;
 

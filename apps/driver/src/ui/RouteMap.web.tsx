@@ -1,11 +1,11 @@
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import Svg, { Circle, G, Path, Rect, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { MAPBOX_TOKEN } from '../lib/config';
 import { PUCK_SIZE, PuckShapes, puckSvg } from './DriverPuck';
 import { color, font } from './theme';
-import { FOLLOW_ZOOM, MARKER, byDrawOrder, framePoints, type MapStop, type RouteMapProps } from './RouteMap.types';
+import { FOLLOW_ZOOM, MARKER, ROUTE_GRADIENT, byDrawOrder, framePoints, routeColorAt, type MapStop, type RouteMapProps } from './RouteMap.types';
 
 // Browser map: real Mapbox GL when a token is set, otherwise a drawn stand-in
 // (offline demo, screenshots).
@@ -93,9 +93,10 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
       m.on('zoomstart', (e) => { if (!followingRef.current) byHand(e); });
       m.on('zoomend', (e) => { if (e.originalEvent && followingRef.current) followZoom.current = m.getZoom(); });
       m.on('load', () => {
-        m.addSource('route', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        // lineMetrics: the line is drawn as a gradient along its length (deep blue at the start, pale at the end).
+        m.addSource('route', { type: 'geojson', lineMetrics: true, data: { type: 'FeatureCollection', features: [] } });
         m.addLayer({ id: 'route-casing', type: 'line', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 7 } });
-        m.addLayer({ id: 'route-line', type: 'line', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': color.brand, 'line-width': 3.5, 'line-opacity': 0.85 } });
+        m.addLayer({ id: 'route-line', type: 'line', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-gradient': ROUTE_GRADIENT as never, 'line-width': 4 } });
         setReady(true);
       });
       map.current = m;
@@ -206,6 +207,18 @@ function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset, follow,
   const showDriver = !!driver && (following || pts.includes(driver));
   const path = (line ?? []).filter((p) => p !== driver || showDriver);
   const d = path.length > 1 ? path.map((p, i) => `${i ? 'L' : 'M'}${X(p.lng)} ${Y(p.lat)}`).join(' ') : null;
+  // The line in straight pieces, each with how far along the whole line it starts and ends (0–1).
+  const legs = (() => {
+    if (path.length < 2) return [];
+    const xy = path.map((p) => [X(p.lng), Y(p.lat)]);
+    const len = xy.slice(1).map(([x, y], i) => Math.hypot(x - xy[i][0], y - xy[i][1]));
+    const total = len.reduce((a, b) => a + b, 0) || 1;
+    let run = 0;
+    return len.map((l, i) => {
+      const t1 = run / total; run += l;
+      return { x1: xy[i][0], y1: xy[i][1], x2: xy[i + 1][0], y2: xy[i + 1][1], t1, t2: run / total };
+    });
+  })();
 
   return (
     <View style={{ height, backgroundColor: color.mapGround, overflow: 'hidden' }}
@@ -226,7 +239,22 @@ function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset, follow,
             {roads.map((p, i) => <Path key={`r${i}`} d={p} stroke={color.mapRoad} strokeWidth={9} fill="none" />)}
           </G>
           {d ? <Path d={d} stroke={color.surface} strokeWidth={7} fill="none" strokeLinecap="round" strokeLinejoin="round" /> : null}
-          {d ? <Path d={d} stroke={color.brand} strokeWidth={3.5} strokeOpacity={0.85} fill="none" strokeLinecap="round" strokeLinejoin="round" /> : null}
+          {/* Deep blue at the start to pale blue at the end: each leg shades on from where the last one left off. */}
+          {legs.length ? (
+            <>
+              <Defs>
+                {legs.map((l, i) => (
+                  <LinearGradient key={i} id={`route-leg-${i}`} gradientUnits="userSpaceOnUse" x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}>
+                    <Stop offset={0} stopColor={routeColorAt(l.t1)} />
+                    <Stop offset={1} stopColor={routeColorAt(l.t2)} />
+                  </LinearGradient>
+                ))}
+              </Defs>
+              {legs.map((l, i) => (
+                <Path key={i} d={`M${l.x1} ${l.y1} L${l.x2} ${l.y2}`} stroke={`url(#route-leg-${i})`} strokeWidth={4} fill="none" strokeLinecap="round" />
+              ))}
+            </>
+          ) : null}
           {byDrawOrder(stops).map((st) => {
             const { size, ring } = MARKER[st.state];
             return (

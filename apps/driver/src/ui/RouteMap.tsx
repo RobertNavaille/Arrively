@@ -5,7 +5,7 @@ import { MAPBOX_TOKEN } from '../lib/config';
 import Svg from 'react-native-svg';
 import { PUCK_SIZE, PuckShapes } from './DriverPuck';
 import { color, font, shadow } from './theme';
-import { FOLLOW_ZOOM, MARKER, byDrawOrder, framePoints, type RouteMapProps } from './RouteMap.types';
+import { FOLLOW_ZOOM, MARKER, ROUTE_GRADIENT, byDrawOrder, framePoints, type RouteMapProps } from './RouteMap.types';
 
 if (MAPBOX_TOKEN) Mapbox.setAccessToken(MAPBOX_TOKEN);
 
@@ -55,9 +55,10 @@ export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inse
           />
         )}
         {lineShape ? (
-          <Mapbox.ShapeSource id="route" shape={lineShape}>
+          // Deep blue where the trip starts to pale blue where it ends, so the line shows which way it runs.
+          <Mapbox.ShapeSource id="route" shape={lineShape} lineMetrics>
             <Mapbox.LineLayer id="route-casing" style={{ lineColor: color.surface, lineWidth: 7, lineCap: 'round', lineJoin: 'round' }} />
-            <Mapbox.LineLayer id="route-line" aboveLayerID="route-casing" style={{ lineColor: color.brand, lineWidth: 3.5, lineOpacity: 0.85, lineCap: 'round', lineJoin: 'round' }} />
+            <Mapbox.LineLayer id="route-line" aboveLayerID="route-casing" style={{ lineGradient: ROUTE_GRADIENT as never, lineWidth: 4, lineCap: 'round', lineJoin: 'round' }} />
           </Mapbox.ShapeSource>
         ) : null}
         {byDrawOrder(stops).map((s) => (

@@ -1,4 +1,5 @@
 import type { LatLng } from '../lib/types';
+import { color } from './theme';
 
 export type MapStopState = 'next' | 'upcoming' | 'done';
 
@@ -64,3 +65,13 @@ export const MARKER = {
 } as const;
 const ORDER = { done: 0, upcoming: 1, next: 2 } as const;
 export const byDrawOrder = (stops: MapStop[]) => [...stops].sort((a, b) => ORDER[a.state] - ORDER[b.state]);
+
+/** The route line's color `t` of the way along (0 = start, 1 = end), for drawing it as a gradient. */
+export function routeColorAt(t: number): string {
+  const a = hex(color.routeStart), b = hex(color.routeEnd), k = Math.min(1, Math.max(0, t));
+  return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * k).toString(16).padStart(2, '0')).join('');
+}
+const hex = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+
+/** Mapbox paint for the gradient (the source needs lineMetrics). */
+export const ROUTE_GRADIENT = ['interpolate', ['linear'], ['line-progress'], 0, color.routeStart, 1, color.routeEnd];

@@ -7,7 +7,7 @@ import { useRoadPath, useRoadRoute } from '../src/lib/directions';
 import { bearingDeg, dayKey, distanceM, pathAhead, estimateDriveMin, fmtDuration, fmtTime, miles, routeTotals } from '../src/lib/geo';
 import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
 import { lockedOrder, type RoutePlan } from '../src/lib/routing';
-import { currentStop, lastMarked, useDriverData } from '../src/lib/store';
+import { currentStop, useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
 import { AutoButton } from '../src/ui/AutoButton';
@@ -93,8 +93,6 @@ export default function Trip() {
   const tripMeters = road ? road.distanceM : straight.meters;
 
   const away = current && pos ? distanceM(pos, current) > RADIUS_M * 2 : false;
-  const marked = lastMarked(route);
-  const justMarked = phase === 'next' && marked?.marked_at && Date.now() - Date.parse(marked.marked_at) < 15 * 60 * 1000;
   const canOptimize = !!route && route.status !== 'completed' && remaining.filter((s) => s.status === 'scheduled' || s.status === 'queued').length >= 2;
   // Optimize route floats over the list while the next stop is up (not mid-drive, at a stop or in review).
   const floatOptimize = phase === 'next' && canOptimize;
@@ -234,11 +232,7 @@ export default function Trip() {
 
           {phase === 'next' && current ? (
             <>
-              <TripTotals driveMin={tripMin} serviceMin={straight.serviceMin} meters={tripMeters} />
-              {justMarked && marked ? (
-                <Banner title={marked.status === 'completed' ? 'Stop complete' : marked.status === 'no_show' ? 'Marked no-show' : 'Stop skipped'}
-                  meta={`${marked.customer_name} · ${fmtTime(marked.marked_at)}`} />
-              ) : null}
+              <TripTotals driveMin={tripMin} serviceMin={straight.serviceMin} meters={tripMeters} stops={ahead.length} />
               {/* The next stop sits on the trip's line: its circle and line run on into the stops after it. */}
               <View style={{ flexDirection: 'row', gap: space[3] }}>
                 <View style={{ width: 20, alignItems: 'center' }} importantForAccessibility="no-hide-descendants">
@@ -414,31 +408,24 @@ const styles = StyleSheet.create({
   line: { flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider },
   nextDot: { marginTop: 5, width: 20, height: 20, borderRadius: 10, backgroundColor: color.action, borderWidth: 4, borderColor: color.brandTint },
   // Full width under the trip totals, like the step dividers.
-  totals: { flexDirection: 'row', marginHorizontal: -space[4], paddingHorizontal: space[4], paddingTop: space[1], paddingBottom: space[4], borderBottomWidth: 1, borderBottomColor: color.divider, marginBottom: space[1] },
+  totals: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: -space[4], paddingHorizontal: space[8], paddingTop: space[1], paddingBottom: space[4], borderBottomWidth: 1, borderBottomColor: color.divider, marginBottom: space[1] },
   floatBar: { position: 'absolute', left: 0, right: 0, alignItems: 'center', pointerEvents: 'box-none' },
 });
 
-/** The whole trip ahead, as the sheet's heading: time (driving and work at each stop), miles, and when it ends. */
-function TripTotals({ driveMin, serviceMin, meters }: { driveMin: number; serviceMin: number; meters: number }) {
+/** The whole trip ahead, as the sheet's heading: time (driving and work at each stop), miles, and stops left. */
+function TripTotals({ driveMin, serviceMin, meters, stops }: { driveMin: number; serviceMin: number; meters: number; stops: number }) {
   const total = Math.max(1, driveMin + serviceMin);
-  const time = total < 60 ? { value: String(total), label: 'minutes' }
-    : { value: `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`, label: 'hours' };
   const mi = miles(meters);
-  const [clock, meridiem] = fmtTime(new Date(Date.now() + total * 60_000)).split(' ');
   const items = [
-    { value: time.value, label: time.label },
-    { value: mi < 10 ? mi.toFixed(1) : String(Math.round(mi)), label: 'miles' },
-    { value: clock, suffix: meridiem, label: 'eta' },
+    total < 60 ? { value: String(total), label: 'Minutes' } : { value: `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`, label: 'Hours' },
+    { value: mi < 10 ? mi.toFixed(1) : String(Math.round(mi)), label: 'Miles' },
+    { value: String(stops), label: stops === 1 ? 'Stop' : 'Stops' },
   ];
   return (
-    <View style={styles.totals} accessible
-      accessibilityLabel={`Trip: ${fmtDuration(total)}, ${mi.toFixed(1)} miles, done around ${clock} ${meridiem ?? ''}`}>
+    <View style={styles.totals} accessible accessibilityLabel={`Trip: ${fmtDuration(total)}, ${mi.toFixed(1)} miles, ${stops} ${stops === 1 ? 'stop' : 'stops'}`}>
       {items.map((it) => (
-        <View key={it.label} style={{ flex: 1, alignItems: 'flex-start' }}>
-          <Text style={[type.stat, { fontVariant: ['tabular-nums'] }]}>{it.value}
-            {it.suffix ? <Text style={[type.body, { fontFamily: font.semibold, fontSize: 16 }]}> {it.suffix}</Text> : null}</Text>
-          <Text style={[type.body, { fontSize: 16, lineHeight: 22, color: color.inkMuted }]}>{it.label}</Text>
-        </View>
+        <Text key={it.label} style={[type.stat, { fontVariant: ['tabular-nums'] }]}>{it.value}
+          <Text style={{ fontFamily: font.medium, fontSize: 18, color: color.inkMuted }}> {it.label}</Text></Text>
       ))}
     </View>
   );
