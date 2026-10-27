@@ -424,8 +424,8 @@ function TripTotals({ driveMin, serviceMin, meters, stops }: { driveMin: number;
   return (
     <View style={styles.totals} accessible accessibilityLabel={`Trip: ${fmtDuration(total)}, ${mi.toFixed(1)} miles, ${stops} ${stops === 1 ? 'stop' : 'stops'}`}>
       {items.map((it) => (
-        <Text key={it.label} style={[type.stat, { fontVariant: ['tabular-nums'] }]}>{it.value}
-          <Text style={{ fontFamily: font.medium, fontSize: 18, color: color.inkMuted }}> {it.label}</Text></Text>
+        <Text key={it.label} style={[type.stat, { fontSize: 24, lineHeight: 30, fontVariant: ['tabular-nums'] }]}>{it.value}
+          <Text style={{ fontFamily: font.medium, fontSize: 16, color: color.inkMuted }}> {it.label}</Text></Text>
       ))}
     </View>
   );
