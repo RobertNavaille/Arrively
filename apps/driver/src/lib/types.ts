@@ -31,6 +31,11 @@ export interface Route {
   status: 'planned' | 'active' | 'completed';
   optimized_at?: string | null; // set once the driver uses a suggested order
   drive_s?: number | null; // remaining drive time at the last ETA refresh
+  // Options from Optimize route (missing on an older server: the defaults).
+  round_trip?: boolean;
+  avoid_highways?: boolean;
+  avoid_tolls?: boolean;
+  travel_mode?: 'drive' | 'walk' | 'bike';
   stops: Stop[];
 }
 

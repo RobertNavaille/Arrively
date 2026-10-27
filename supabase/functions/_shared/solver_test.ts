@@ -94,3 +94,19 @@ Deno.test("locks hold on the local search path too (more than 8 free stops)", ()
   const o = solve(stops, m, T0).order;
   check(o[1] === "s5" && o[10] === "s9" && new Set(o).size === 12, `got ${o}`);
 });
+
+Deno.test("round trip: the drive back counts, and can change the order", () => {
+  // Start at 0; A is near, B far. One way: A then B. Back home, the order costs the same both ways,
+  // and the drive back is included in drive time.
+  const m = [
+    [0, 100, 500],
+    [100, 0, 450],
+    [500, 450, 0],
+  ];
+  const stops: SolverStop[] = [{ id: "A", serviceS: 0 }, { id: "B", serviceS: 0 }];
+  const oneWay = solve(stops, m, T0);
+  const round = solve(stops, m, T0, true);
+  check(oneWay.order.join() === "A,B" && oneWay.driveS === 550, `one way ${oneWay.order} ${oneWay.driveS}`);
+  check(round.driveS === 1050, `round trip drive ${round.driveS}`);
+  check(evaluate(stops, m, T0, [0, 1], true).finish === T0 + 1050, "finish is when they're back");
+});

@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import { OFFLINE_DEMO, SUPABASE_ANON_KEY, SUPABASE_URL } from './config';
 import { addDays, dayKey, distanceM } from './geo';
-import { localEtas, localPlan, type RoutePlan } from './routing';
+import { localEtas, localPlan, type RouteOptions, type RoutePlan } from './routing';
 import type { LatLng, MarkOutcome, Profile, Route, Stop } from './types';
 
 /** Everything the app does against the server. Two implementations: Supabase and an offline demo. */
@@ -37,9 +37,11 @@ export interface Backend {
   reportLocation(p: LatLng & { heading?: number | null; speed?: number | null; accuracy?: number | null; at?: string }): Promise<void>;
   createDemoDay(at: LatLng, phone: string | null): Promise<void>;
   /** The best order for the stops left, starting where the driver is (`from`), next to the current order (RTE-4). */
-  planRoute(routeId: string, from: LatLng | null): Promise<RoutePlan>;
+  /** `options`: the ones being tried in Optimize route (else the route's own). */
+  planRoute(routeId: string, from: LatLng | null, options?: RouteOptions): Promise<RoutePlan>;
   /** Saves an order the driver accepted, then refreshes ETAs from `from`. */
-  applyPlan(routeId: string, order: string[], from: LatLng | null): Promise<void>;
+  /** Saves the order, and the options with it when given. */
+  applyPlan(routeId: string, order: string[], from: LatLng | null, options?: RouteOptions): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,7 +116,7 @@ const supabaseBackend: Backend = {
   },
   async routes(fromDay, toDay) {
     const { data: u } = await supabase().auth.getUser();
-    const rows = check(await supabase().from('routes').select('id,day,status,optimized_at,drive_s,stops(*)')
+    const rows = check(await supabase().from('routes').select('id,day,status,optimized_at,drive_s,round_trip,avoid_highways,avoid_tolls,travel_mode,stops(*)')
       .eq('driver_id', u.user?.id ?? '').gte('day', fromDay).lte('day', toDay).order('day'));
     return (rows ?? []).map((r) => ({
       ...(r as unknown as Route),
@@ -163,8 +165,8 @@ const supabaseBackend: Backend = {
     }));
     refreshEtas(false);
   },
-  planRoute(routeId, from) { return invoke<RoutePlan>('route-plan', { route_id: routeId, from }); },
-  async applyPlan(routeId, order, from) { await invoke('route-plan', { route_id: routeId, apply: order, from }); },
+  planRoute(routeId, from, options) { return invoke<RoutePlan>('route-plan', { route_id: routeId, from, options }); },
+  async applyPlan(routeId, order, from, options) { await invoke('route-plan', { route_id: routeId, apply: order, from, options }); },
   async createDemoDay(at, phone) {
     check(await supabase().rpc('create_demo_day', { p_lat: at.lat, p_lng: at.lng, p_stop_count: 6, p_customer_phone: phone }));
   },
@@ -322,13 +324,17 @@ const offlineBackend: Backend = {
     if (i >= 0) routes[i] = fresh; else routes.push(fresh);
     emit();
   },
-  async planRoute(routeId, from) {
+  async planRoute(routeId, from, options) {
     const r = ensureDemo().find((x) => x.id === routeId); if (!r) throw new Error('Route not found');
-    return localPlan(r, from ?? lastPos);
+    return localPlan(r, from ?? lastPos, options);
   },
-  async applyPlan(routeId, order, from) {
+  async applyPlan(routeId, order, from, options) {
     if (from) lastPos = from;
     const r = ensureDemo().find((x) => x.id === routeId); if (!r) throw new Error('Route not found');
+    if (options) {
+      r.round_trip = !!options.roundTrip; r.avoid_highways = !!options.avoidHighways;
+      r.avoid_tolls = !!options.avoidTolls; r.travel_mode = options.mode ?? 'drive';
+    }
     // Same rule as reorder_route: upcoming stops take the slots upcoming stops hold.
     const movable = order.map((id) => r.stops.find((s) => s.id === id)).filter((s): s is Stop => !!s && (s.status === 'scheduled' || s.status === 'queued'));
     const slots = movable.map((s) => s.position).sort((a, b) => a - b);

@@ -13,12 +13,21 @@ export interface SolverStop {
   slot?: number | null; // locked by the driver at this place in the order (0 = first); the rest go around it
 }
 
+/** How the driver wants the route planned (set from Optimize route, stored on the route). */
+export interface RouteOptions {
+  roundTrip?: boolean; // come back to where the trip starts
+  avoidHighways?: boolean;
+  avoidTolls?: boolean;
+  mode?: TravelMode;
+}
+export type TravelMode = "drive" | "walk" | "bike";
+
 export interface Schedule {
   order: string[];
   driveS: number;
   waitS: number;
   lateS: number;
-  finish: number; // epoch seconds when the last stop's work ends
+  finish: number; // epoch seconds when the last stop's work ends (or, on a round trip, when they're back)
   etas: Record<string, number>; // when work at each stop can begin
   late: string[]; // stops reached after their window ends
 }
@@ -28,7 +37,8 @@ export interface Schedule {
 const LATE_WEIGHT = 20;
 const WAIT_WEIGHT = 0.5;
 
-export function evaluate(stops: SolverStop[], matrix: number[][], start: number, order: number[]): Schedule {
+/** `back`: a round trip, ending with the drive from the last stop back to the start (matrix index 0). */
+export function evaluate(stops: SolverStop[], matrix: number[][], start: number, order: number[], back = false): Schedule {
   let t = start, prev = 0, driveS = 0, waitS = 0, lateS = 0;
   const etas: Record<string, number> = {};
   const late: string[] = [];
@@ -43,6 +53,7 @@ export function evaluate(stops: SolverStop[], matrix: number[][], start: number,
     t += s.serviceS;
     prev = i + 1;
   }
+  if (back && order.length) { driveS += matrix[prev][0]; t += matrix[prev][0]; }
   return { order: order.map((i) => stops[i].id), driveS, waitS, lateS, finish: t, etas, late };
 }
 
@@ -51,7 +62,7 @@ const cost = (s: Schedule) => s.driveS + WAIT_WEIGHT * s.waitS + LATE_WEIGHT * s
 type Score = (tail: number[]) => number;
 
 /** Fast cost of the fixed stops followed by `tail`; no allocation, for the search loops. */
-function scorer(stops: SolverStop[], matrix: number[][], start: number, fixed: number[]): Score {
+function scorer(stops: SolverStop[], matrix: number[][], start: number, fixed: number[], back = false): Score {
   let t0 = start, p0 = 0, c0 = 0;
   for (const i of fixed) {
     const s = stops[i];
@@ -71,21 +82,21 @@ function scorer(stops: SolverStop[], matrix: number[][], start: number, fixed: n
       if (s.windowEnd != null && t > s.windowEnd) c += LATE_WEIGHT * (t - s.windowEnd);
       t += s.serviceS; prev = i + 1;
     }
-    return c;
+    return back ? c + matrix[prev][0] : c;
   };
 }
 
 /** Best order for the stops. Fixed stops stay first; locked ones keep their slot; the rest are sequenced. */
-export function solve(stops: SolverStop[], matrix: number[][], start: number): Schedule {
+export function solve(stops: SolverStop[], matrix: number[][], start: number, back = false): Schedule {
   const fixed = stops.map((_, i) => i).filter((i) => stops[i].fixed);
   const pins = lockedSlots(stops, fixed.length);
   const free = stops.map((_, i) => i).filter((i) => !stops[i].fixed && !pins.includes(i));
   const fill = filler(pins);
-  const base = scorer(stops, matrix, start, fixed);
+  const base = scorer(stops, matrix, start, fixed, back);
   const score: Score = pins.length ? (tail) => base(fill(tail)) : base;
   const from = fixed.length ? fixed[fixed.length - 1] + 1 : 0;
   const tail = free.length <= 1 ? free : free.length <= 8 ? exact(free, score) : search(free, stops, matrix, from, score);
-  return evaluate(stops, matrix, start, [...fixed, ...(pins.length ? [...fill(tail)] : tail)]);
+  return evaluate(stops, matrix, start, [...fixed, ...(pins.length ? [...fill(tail)] : tail)], back);
 }
 
 /**
@@ -239,8 +250,11 @@ export function distanceM(a: Point, b: Point): number {
   return 2 * r * Math.asin(Math.sqrt(h));
 }
 
-export function straightLineMatrix(points: Point[]): number[][] {
-  return points.map((a) => points.map((b) => (distanceM(a, b) * 1.3) / 11.176));
+/** Typical speeds for straight-line estimates, m/s: 25 mph driving, 10 mph biking, 3 mph walking. */
+export const SPEED: Record<TravelMode, number> = { drive: 11.176, bike: 4.47, walk: 1.34 };
+
+export function straightLineMatrix(points: Point[], speed = SPEED.drive): number[][] {
+  return points.map((a) => points.map((b) => (distanceM(a, b) * 1.3) / speed));
 }
 
 
@@ -254,12 +268,12 @@ export interface PlanStop {
   window_start: string | null; window_end: string | null; arrived_at: string | null;
 }
 /** What a plan was solved from, so the app can solve it again around the stops the driver locks. */
-export interface PlanProblem { stops: SolverStop[]; durations: number[][]; t0: number }
+export interface PlanProblem { stops: SolverStop[]; durations: number[][]; t0: number; roundTrip?: boolean }
 
 /** The best order with `locked` stops (id → place in the order) kept where they are. */
 export function solveLocked(problem: PlanProblem, locked: Record<string, number>): string[] {
   const stops = problem.stops.map((s) => ({ ...s, slot: locked[s.id] ?? null }));
-  return solve(stops, problem.durations, problem.t0).order;
+  return solve(stops, problem.durations, problem.t0, !!problem.roundTrip).order;
 }
 
 export interface PlanSummary { order: string[]; drive_s: number; distance_m: number; late: string[]; finish: string }
@@ -274,7 +288,7 @@ const UPCOMING = ["scheduled", "queued", "en_route", "arrived"];
 const isoOf = (t: number) => new Date(t * 1000).toISOString();
 const secOf = (s: string | null) => (s ? Date.parse(s) / 1000 : null);
 
-function localProblem(stops: PlanStop[], day: string, from: Point | null, now: number) {
+function localProblem(stops: PlanStop[], day: string, from: Point | null, now: number, options: RouteOptions = {}) {
   const left = stops.filter((s) => UPCOMING.includes(s.status)).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   const at = left.find((s) => s.status === "arrived");
   const heading = left.find((s) => s.status === "en_route");
@@ -290,38 +304,41 @@ function localProblem(stops: PlanStop[], day: string, from: Point | null, now: n
     id: s.id, serviceS: s.service_minutes * 60, windowStart: secOf(s.window_start), windowEnd: secOf(s.window_end), fixed: s === heading,
   }));
   const pts = start ? [start, ...seq] : seq;
-  let m = straightLineMatrix(pts);
+  const speed = SPEED[options.mode ?? "drive"];
+  let m = straightLineMatrix(pts, speed);
   if (!start) m = [new Array(m.length + 1).fill(0), ...m.map((r) => [0, ...r])];
-  const dist = m.map((r) => r.map((v) => v * 11.176)); // back to meters at 25 mph
+  const dist = m.map((r) => r.map((v) => v * speed)); // back to meters
   return { solverStops, m, dist, t0, startKind: (at ? 'current_stop' : from ? 'location' : 'anywhere') as RoutePlan['start'] };
 }
 
-function distanceAlong(dist: number[][], order: number[]) {
+function distanceAlong(dist: number[][], order: number[], back = false) {
   let d = 0, prev = 0;
   for (const i of order) { d += dist[prev][i + 1]; prev = i + 1; }
+  if (back && order.length) d += dist[prev][0];
   return Math.round(d);
 }
 
-export function straightLinePlan(stops: PlanStop[], day: string, from: Point | null, now = Date.now() / 1000): RoutePlan {
-  const { solverStops, m, dist, t0, startKind } = localProblem(stops, day, from, now);
+export function straightLinePlan(stops: PlanStop[], day: string, from: Point | null, now = Date.now() / 1000, options: RouteOptions = {}): RoutePlan {
+  const { solverStops, m, dist, t0, startKind } = localProblem(stops, day, from, now, options);
+  const back = !!options.roundTrip;
   const all = solverStops.map((_, i) => i);
-  const cur = evaluate(solverStops, m, t0, all);
-  const best = solve(solverStops, m, t0);
+  const cur = evaluate(solverStops, m, t0, all, back);
+  const best = solve(solverStops, m, t0, back);
   const idx = new Map(solverStops.map((s, i) => [s.id, i]));
   return {
     order: best.order, late: best.late, drive_s: Math.round(best.driveS), finish: isoOf(best.finish),
-    distance_m: distanceAlong(dist, best.order.map((id) => idx.get(id)!)),
+    distance_m: distanceAlong(dist, best.order.map((id) => idx.get(id)!), back),
     etas: Object.fromEntries(Object.entries(best.etas).map(([k, v]) => [k, isoOf(v)])),
-    current: { order: cur.order, late: cur.late, drive_s: Math.round(cur.driveS), finish: isoOf(cur.finish), distance_m: distanceAlong(dist, all) },
+    current: { order: cur.order, late: cur.late, drive_s: Math.round(cur.driveS), finish: isoOf(cur.finish), distance_m: distanceAlong(dist, all, back) },
     approximate: true,
     start: startKind,
-    problem: { stops: solverStops, durations: m, t0 },
+    problem: { stops: solverStops, durations: m, t0, roundTrip: back },
   };
 }
 
 /** ETAs for the stops left, in route order. */
-export function straightLineEtas(stops: PlanStop[], day: string, from: Point | null, now = Date.now() / 1000) {
-  const { solverStops, m, t0 } = localProblem(stops, day, from, now);
+export function straightLineEtas(stops: PlanStop[], day: string, from: Point | null, now = Date.now() / 1000, options: RouteOptions = {}) {
+  const { solverStops, m, t0 } = localProblem(stops, day, from, now, options);
   const s = evaluate(solverStops, m, t0, solverStops.map((_, i) => i));
   return { etas: Object.fromEntries(Object.entries(s.etas).map(([k, v]) => [k, isoOf(v)])), drive_s: Math.round(s.driveS) };
 }

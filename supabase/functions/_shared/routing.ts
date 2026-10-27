@@ -3,14 +3,35 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
 import { admin } from "./admin.ts";
 import { legs, matrix, MATRIX_MAX } from "./mapbox.ts";
-import { distanceM, evaluate, solve, straightLineMatrix, type Point, type SolverStop } from "./solver.ts";
+import { distanceM, evaluate, solve, SPEED, straightLineMatrix, type Point, type RouteOptions, type SolverStop, type TravelMode } from "./solver.ts";
 
 export interface StopRow {
   id: string; position: number | null; status: string; lat: number; lng: number;
   service_minutes: number; window_start: string | null; window_end: string | null;
   arrived_at: string | null; marked_at: string | null;
 }
-export interface RouteRow { id: string; org_id: string; driver_id: string | null; day: string; status: string; etas_at: string | null }
+export interface RouteRow {
+  id: string; org_id: string; driver_id: string | null; day: string; status: string; etas_at: string | null;
+  round_trip: boolean; avoid_highways: boolean; avoid_tolls: boolean; travel_mode: TravelMode;
+}
+
+const MODES: TravelMode[] = ["drive", "walk", "bike"];
+
+/** The route's stored options. */
+export const optionsOf = (r: RouteRow): RouteOptions => ({
+  roundTrip: !!r.round_trip, avoidHighways: !!r.avoid_highways, avoidTolls: !!r.avoid_tolls,
+  mode: MODES.includes(r.travel_mode) ? r.travel_mode : "drive",
+});
+
+/** Options the caller sent (Optimize route, before they're saved), if well formed. */
+export function asOptions(v: unknown): RouteOptions | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  return {
+    roundTrip: o.roundTrip === true, avoidHighways: o.avoidHighways === true, avoidTolls: o.avoidTolls === true,
+    mode: MODES.includes(o.mode as TravelMode) ? o.mode as TravelMode : "drive",
+  };
+}
 
 /** The most stops one optimization can sequence (one Matrix call, plus the start). */
 export const MAX_STOPS = MATRIX_MAX - 1;
@@ -27,7 +48,7 @@ export function asCaller(req: Request): SupabaseClient {
 
 /** Loads a route the caller can see (their own, or any in their business if admin). */
 export async function loadRoute(caller: SupabaseClient, routeId: string) {
-  const { data: route } = await caller.from("routes").select("id, org_id, driver_id, day, status, etas_at").eq("id", routeId).maybeSingle();
+  const { data: route } = await caller.from("routes").select("id, org_id, driver_id, day, status, etas_at, round_trip, avoid_highways, avoid_tolls, travel_mode").eq("id", routeId).maybeSingle();
   if (!route) return null;
   const [{ data: stops }, { data: loc }, { data: org }] = await Promise.all([
     admin.from("stops").select("id, position, status, lat, lng, service_minutes, window_start, window_end, arrived_at, marked_at")
@@ -103,73 +124,83 @@ export function remaining({ route, stops, loc, tz }: Loaded, nowS: number, from:
 }
 
 /** Matrix for [start, ...stops]; a missing start is a free starting point (zero row and column). */
-async function travelMatrix(start: Point | null, seq: Point[]) {
+async function travelMatrix(start: Point | null, seq: Point[], o: RouteOptions) {
   const pts = start ? [start, ...seq] : seq;
-  let approximate = false;
+  let approximate = false, avoided = false;
   let durations: number[][], distances: number[][];
   try {
-    ({ durations, distances } = pts.length > 1 ? await matrix(pts) : { durations: [[0]], distances: [[0]] });
+    ({ durations, distances, avoided } = pts.length > 1 ? await matrix(pts, o) : { durations: [[0]], distances: [[0]], avoided: false });
   } catch (e) {
     console.error("matrix failed, using straight-line estimates", e);
     approximate = true;
-    durations = straightLineMatrix(pts);
+    durations = straightLineMatrix(pts, SPEED[o.mode ?? "drive"]);
     distances = pts.map((a) => pts.map((b) => distanceM(a, b) * 1.3));
   }
   if (!start) {
     const pad = (m: number[][]) => [new Array(m.length + 1).fill(0), ...m.map((row) => [0, ...row])];
     durations = pad(durations); distances = pad(distances);
   }
-  return { durations, distances, approximate };
+  return { durations, distances, approximate, avoided };
 }
 
-const distanceOf = (distances: number[][], order: number[]) => {
+const distanceOf = (distances: number[][], order: number[], back = false) => {
   let d = 0, prev = 0;
   for (const i of order) { d += distances[prev][i + 1]; prev = i + 1; }
+  if (back && order.length) d += distances[prev][0];
   return Math.round(d);
 };
 const iso = (t: number) => new Date(t * 1000).toISOString();
 
-/** The best order for what's left, next to the current order (RTE-4). */
-export async function plan(loaded: Loaded, nowS = Date.now() / 1000, from: Point | null = null) {
+/**
+ * The best order for what's left, next to the current order (RTE-4). `options`
+ * are the ones being tried in Optimize route; otherwise the route's own.
+ */
+export async function plan(loaded: Loaded, nowS = Date.now() / 1000, from: Point | null = null, options: RouteOptions | null = null) {
+  const o = options ?? optionsOf(loaded.route);
+  const back = !!o.roundTrip;
   const { seq, start, startKind, t0, solverStops } = remaining(loaded, nowS, from);
   if (seq.length > MAX_STOPS) {
     return { error: `Optimizing works on up to ${MAX_STOPS} stops at a time. This route has ${seq.length} left.` };
   }
-  const { durations, distances, approximate } = await travelMatrix(start, seq);
-  const current = evaluate(solverStops, durations, t0, solverStops.map((_, i) => i));
-  const best = solve(solverStops, durations, t0);
+  const { durations, distances, approximate, avoided } = await travelMatrix(start, seq, o);
+  const current = evaluate(solverStops, durations, t0, solverStops.map((_, i) => i), back);
+  const best = solve(solverStops, durations, t0, back);
   const idx = new Map(solverStops.map((s, i) => [s.id, i]));
   return {
     order: best.order,
     etas: Object.fromEntries(Object.entries(best.etas).map(([k, v]) => [k, iso(v)])),
     late: best.late,
     drive_s: Math.round(best.driveS),
-    distance_m: distanceOf(distances, best.order.map((id) => idx.get(id)!)),
+    distance_m: distanceOf(distances, best.order.map((id) => idx.get(id)!), back),
     finish: iso(best.finish),
     current: {
       order: current.order, drive_s: Math.round(current.driveS), late: current.late, finish: iso(current.finish),
-      distance_m: distanceOf(distances, solverStops.map((_, i) => i)),
+      distance_m: distanceOf(distances, solverStops.map((_, i) => i), back),
     },
     approximate,
     start: startKind,
     // Lets the app re-solve around the stops the driver locks, without asking again.
-    problem: { stops: solverStops, durations: durations.map((r) => r.map(Math.round)), t0: Math.round(t0) },
+    problem: { stops: solverStops, durations: durations.map((r) => r.map(Math.round)), t0: Math.round(t0), roundTrip: back },
+    options: o,
+    // Whether the order itself was planned around highways / tolls (Matrix may not take them).
+    avoided,
   };
 }
 
 /** Traffic-aware ETAs for every stop left, in route order (ETA-1), written to the stops. */
 export async function refreshEtas(loaded: Loaded, nowS = Date.now() / 1000, from: Point | null = null) {
   const { seq, start, t0, solverStops } = remaining(loaded, nowS, from);
+  const o = optionsOf(loaded.route);
   if (!seq.length) return { updated: 0 };
   const pts: Point[] = start ? [start, ...seq] : seq;
   let into: number[]; // drive time into each stop
   let approximate = false;
   try {
-    into = pts.length > 1 ? (await legs(pts)).durations : [];
+    into = pts.length > 1 ? (await legs(pts, o)).durations : [];
   } catch (e) {
     console.error("directions failed, using straight-line estimates", e);
     approximate = true;
-    into = pts.slice(1).map((p, i) => straightLineMatrix([pts[i], p])[0][1]);
+    into = pts.slice(1).map((p, i) => straightLineMatrix([pts[i], p], SPEED[o.mode ?? "drive"])[0][1]);
   }
   if (!start) into = [0, ...into];
   // A chain matrix: row k holds the leg from the k-th point to the next.

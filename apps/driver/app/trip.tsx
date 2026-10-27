@@ -1,18 +1,19 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
 import { bearingDeg, dayKey, distanceM, pathAhead, estimateDriveMin, fmtDuration, fmtTime, miles, routeTotals } from '../src/lib/geo';
 import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
-import { lockedOrder, type RoutePlan } from '../src/lib/routing';
+import { lockedOrder, optionsOf, SPEED, type RouteOptions, type RoutePlan, type TravelMode } from '../src/lib/routing';
 import { currentStop, useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
 import { AutoButton } from '../src/ui/AutoButton';
 import { BottomSheet } from '../src/ui/BottomSheet';
 import { ReorderList } from '../src/ui/ReorderList';
+import { SelectChip, ToggleChip } from '../src/ui/Chips';
 import { Banner, Button, DetailRow, IconButton, StatusPill } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
@@ -51,6 +52,8 @@ export default function Trip() {
   const [custom, setCustom] = useState<string[] | null>(null);
   // Stops the driver locked in place (tapping their circle); the rest are optimized around them.
   const [locked, setLocked] = useState<string[]>([]);
+  // The options being tried in review (round trip, avoid highways / tolls, travel mode); saved with Confirm route.
+  const [tryOptions, setTryOptions] = useState<RouteOptions | null>(null);
   // Set while a stop is held by its grip, so the sheet doesn't move with the drag.
   const holding = useRef(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -82,13 +85,19 @@ export default function Trip() {
   const best = useMemo(() => review && route ? lockedOrder(review.plan, route, review.from, slots) : null,
     [review, slotsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The road route for the whole trip ahead, and for the leg to the current stop.
-  const road = useRoadPath(pos, ahead);
+  // How the trip is travelled: the options being tried in review, else the route's own.
+  const options: RouteOptions = (review && tryOptions) || (route ? optionsOf(route) : {});
+  const back = !!options.roundTrip && !!pos && ahead.length > 0;
+  // The road route for the whole trip ahead (back to the start on a round trip), and for the leg to the current stop.
+  const road = useRoadPath(pos, ahead, options);
   const heading = phase === 'next' || phase === 'onroute';
-  const leg = useRoadRoute(heading ? pos : null, heading && current ? current : null);
+  const leg = useRoadRoute(heading ? pos : null, heading && current ? current : null, options);
   const legMeters = leg ? leg.distanceM : pos && current ? distanceM(pos, current) : null;
   const legMin = leg ? Math.max(1, Math.round(leg.durationS / 60)) : legMeters != null ? estimateDriveMin(legMeters) : null;
-  const straight = routeTotals(ahead, pos);
+  // Without road routes (offline): straight lines at the travel mode's usual speed.
+  const totals = routeTotals(ahead, pos);
+  const straightMeters = totals.meters + (back ? distanceM(ahead[ahead.length - 1], pos!) : 0);
+  const straight = { ...totals, meters: straightMeters, driveMin: Math.max(1, Math.round((straightMeters * 1.3) / SPEED[options.mode ?? 'drive'] / 60)) };
   const tripMin = road ? Math.round(road.durationS / 60) : straight.driveMin;
   const tripMeters = road ? road.distanceM : straight.meters;
 
@@ -123,15 +132,27 @@ export default function Trip() {
     const here = pos ?? (await currentPosition());
     setCustom(null);
     setLocked([]);
-    setReview({ plan: await backend.planRoute(route.id, here), from: here });
+    setTryOptions(optionsOf(route));
+    setReview({ plan: await backend.planRoute(route.id, here, optionsOf(route)), from: here });
   });
   const useOrder = () => run('apply', async () => {
     if (!review) return;
-    await backend.applyPlan(route.id, custom ?? review.plan.order, review.from);
+    await backend.applyPlan(route.id, custom ?? review.plan.order, review.from, tryOptions ?? undefined);
     setReview(null);
     setCustom(null);
     setLocked([]);
+    setTryOptions(null);
     await refresh();
+  });
+  // A changed option plans the route again with it; locked stops stay where they are.
+  const changeOptions = (next: RouteOptions) => run('options', async () => {
+    if (!review || !shown) return;
+    setTryOptions(next);
+    const plan = await backend.planRoute(route.id, review.from, next);
+    setReview({ plan, from: review.from });
+    const pins = Object.fromEntries(locked.map((id) => [id, shown.indexOf(id)]));
+    const order = lockedOrder(plan, route, review.from, pins);
+    setCustom(order.join() === plan.order.join() ? null : order);
   });
   // The suggested order is shown as null (no custom order).
   const showOrder = (order: string[]) => setCustom(review && order.join() === review.plan.order.join() ? null : order);
@@ -183,7 +204,7 @@ export default function Trip() {
   const trimmed = (path: LatLng[]) => (pos ? [pos, ...pathAhead(path, pos)] : path);
   const line = phase === 'arrived' ? undefined
     : phase === 'onroute' && current ? trimmed([...(leg ? leg.path : []), current])
-    : road ? trimmed(road.path) : [...(pos ? [pos] : []), ...ahead];
+    : road ? trimmed(road.path) : [...(pos ? [pos] : []), ...ahead, ...(back ? [pos!] : [])];
   // The sheet rests a third of the way down, or lower on the way: just low
   // enough that the step's card (with Arrived) sits above what's covered at the
   // bottom. Never so low that the card would slip under it.
@@ -256,7 +277,21 @@ export default function Trip() {
 
           {/* Optimize route: the same totals as the trip, following the order as stops are dragged. */}
           {phase === 'review' && review ? (
-            <TripTotals driveMin={tripMin} serviceMin={straight.serviceMin} meters={tripMeters} stops={ahead.length} />
+            <>
+              <TripTotals driveMin={tripMin} serviceMin={straight.serviceMin} meters={tripMeters} stops={ahead.length} />
+              {/* How to plan it: each change re-plans the route. Walking and biking don't take the avoid options. */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space[4] }}
+                contentContainerStyle={{ gap: space[2], paddingHorizontal: space[4] }}>
+                <ToggleChip label="Round trip" selected={!!options.roundTrip} onPress={() => changeOptions({ ...options, roundTrip: !options.roundTrip })} />
+                <ToggleChip label="Avoid highways" selected={!!options.avoidHighways} disabled={options.mode !== 'drive' && !!options.mode}
+                  onPress={() => changeOptions({ ...options, avoidHighways: !options.avoidHighways })} />
+                <ToggleChip label="Avoid tolls" selected={!!options.avoidTolls} disabled={options.mode !== 'drive' && !!options.mode}
+                  onPress={() => changeOptions({ ...options, avoidTolls: !options.avoidTolls })} />
+                <SelectChip<TravelMode> label="Vehicle type" value={options.mode ?? 'drive'}
+                  options={[{ value: 'drive', label: 'Drive' }, { value: 'walk', label: 'Walk' }, { value: 'bike', label: 'Bike' }]}
+                  onChange={(mode) => changeOptions({ ...options, mode })} />
+              </ScrollView>
+            </>
           ) : null}
 
           {/* On the way: the drive leads; who it's to comes second. */}
