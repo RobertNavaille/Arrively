@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
   line: { flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider },
   nextDot: { marginTop: 5, width: 20, height: 20, borderRadius: 10, backgroundColor: color.action, borderWidth: 4, borderColor: color.brandTint },
   // Full width under the trip totals, like the step dividers.
-  totals: { flexDirection: 'row', marginHorizontal: -space[4], paddingTop: space[1], paddingBottom: space[4], borderBottomWidth: 1, borderBottomColor: color.divider, marginBottom: space[1] },
+  totals: { flexDirection: 'row', marginHorizontal: -space[4], paddingHorizontal: space[4], paddingTop: space[1], paddingBottom: space[4], borderBottomWidth: 1, borderBottomColor: color.divider, marginBottom: space[1] },
   floatBar: { position: 'absolute', left: 0, right: 0, alignItems: 'center', pointerEvents: 'box-none' },
 });
 
@@ -434,7 +434,7 @@ function TripTotals({ driveMin, serviceMin, meters }: { driveMin: number; servic
     <View style={styles.totals} accessible
       accessibilityLabel={`Trip: ${fmtDuration(total)}, ${mi.toFixed(1)} miles, done around ${clock} ${meridiem ?? ''}`}>
       {items.map((it) => (
-        <View key={it.label} style={{ flex: 1, alignItems: 'center' }}>
+        <View key={it.label} style={{ flex: 1, alignItems: 'flex-start' }}>
           <Text style={[type.stat, { fontVariant: ['tabular-nums'] }]}>{it.value}
             {it.suffix ? <Text style={[type.body, { fontFamily: font.semibold, fontSize: 16 }]}> {it.suffix}</Text> : null}</Text>
           <Text style={[type.body, { fontSize: 16, lineHeight: 22, color: color.inkMuted }]}>{it.label}</Text>
