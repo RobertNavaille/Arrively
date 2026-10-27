@@ -254,18 +254,9 @@ export default function Trip() {
             </>
           ) : null}
 
+          {/* Optimize route: the same totals as the trip, following the order as stops are dragged. */}
           {phase === 'review' && review ? (
-            // Optimize route: the trip's drive time and distance under it follow the order as stops are dragged.
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space[3] }}>
-              <View style={{ flex: 1, gap: 6 }}>
-                <Text style={{ fontFamily: font.semibold, fontSize: 28, lineHeight: 34, color: color.ink }} accessibilityRole="header">Optimize route</Text>
-                <Text style={[type.body, { fontSize: 16, lineHeight: 24, color: color.inkMuted }]}>
-                  {fmtDuration(Math.max(1, tripMin))} · {miles(tripMeters).toFixed(1)} mi
-                </Text>
-              </View>
-              {/* Auto: back to the suggested best order; only while the order differs from it. */}
-              <AutoButton visible={!!best && !!shown && shown.join() !== best.join()} onPress={() => best && showOrder(best)} />
-            </View>
+            <TripTotals driveMin={tripMin} serviceMin={straight.serviceMin} meters={tripMeters} stops={ahead.length} />
           ) : null}
 
           {/* On the way: the drive leads; who it's to comes second. */}
@@ -389,6 +380,10 @@ export default function Trip() {
       {phase === 'review' && review ? (
         <View style={[styles.floatBar, { bottom: bottomInset + space[4] }]}>
           <Button size="compact" icon="check" label="Confirm route" loading={busy === 'apply'} onPress={useOrder} style={shadow.float} />
+          {/* Auto: back to the suggested best order (keeping locked stops); only while the order differs from it. */}
+          <View style={styles.floatStart} pointerEvents="box-none">
+            <AutoButton floating visible={!!best && !!shown && shown.join() !== best.join()} onPress={() => best && showOrder(best)} />
+          </View>
         </View>
       ) : null}
       {/* Optimize route floats at the bottom, over the trip list, wherever it's scrolled. */}
@@ -410,6 +405,8 @@ const styles = StyleSheet.create({
   // Full width under the trip totals, like the step dividers.
   totals: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: -space[4], paddingHorizontal: space[8], paddingTop: space[1], paddingBottom: space[4], borderBottomWidth: 1, borderBottomColor: color.divider, marginBottom: space[1] },
   floatBar: { position: 'absolute', left: 0, right: 0, alignItems: 'center', pointerEvents: 'box-none' },
+  // Beside the centred button, at the sheet's left margin.
+  floatStart: { position: 'absolute', left: space[4], top: 0, bottom: 0, justifyContent: 'center' },
 });
 
 /** The whole trip ahead, as the sheet's heading: time (driving and work at each stop), miles, and stops left. */
@@ -471,8 +468,9 @@ function AheadRow({ stop, detail, last, onPress, highlight, trailing, lock }: {
         {last ? null : <View style={{ flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider }} />}
       </View>
       <View style={{ flex: 1, paddingBottom: 20 }}>
-        <Text style={{ fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: highlight ? color.actionInk : color.ink }}>{stop.customer_name}</Text>
-        <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }}>{detail}</Text>
+        {/* Draggable rows (reviewing): no text selection, which a mouse drag on the web would start. */}
+        <Text selectable={!lock} style={{ fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: highlight ? color.actionInk : color.ink }}>{stop.customer_name}</Text>
+        <Text selectable={!lock} style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }}>{detail}</Text>
       </View>
       {trailing}
     </>

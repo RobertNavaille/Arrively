@@ -1,5 +1,5 @@
 import { useRef, useState, type MutableRefObject, type ReactNode } from 'react';
-import { PanResponder, StyleSheet, View, type ViewStyle } from 'react-native';
+import { PanResponder, Platform, StyleSheet, View, type ViewStyle } from 'react-native';
 import { color, radius, shadow } from './theme';
 
 /**
