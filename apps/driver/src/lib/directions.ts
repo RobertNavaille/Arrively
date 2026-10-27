@@ -41,19 +41,11 @@ export async function fetchRoadRoute(from: LatLng, to: LatLng, signal?: AbortSig
 
 /** The road route from `from` to `to`, refreshed as the driver moves; null until known or without a Mapbox token. */
 export function useRoadRoute(from: LatLng | null, to: LatLng | null, options: RouteOptions = {}): RoadRoute | null {
-  const [route, setRoute] = useState<RoadRoute | null>(null);
-  const asked = useRef<{ from: LatLng; to: LatLng; opts: string } | null>(null);
   const opts = optionsKey(options);
-  useEffect(() => {
-    if (!from || !to || !MAPBOX_TOKEN) return;
-    const last = asked.current;
-    if (last && last.opts === opts && last.to.lat === to.lat && last.to.lng === to.lng && distanceM(last.from, from) < REFETCH_AFTER_M) return;
-    asked.current = { from, to, opts };
-    const ctrl = new AbortController();
-    fetchRoadRoute(from, to, ctrl.signal, options).then(setRoute).catch(() => { /* keep the last route, or the straight line */ });
-    return () => ctrl.abort();
-  }, [from?.lat, from?.lng, to?.lat, to?.lng, opts]); // eslint-disable-line react-hooks/exhaustive-deps
-  return route;
+  const want = from && to && MAPBOX_TOKEN ? { from, to, opts } : null;
+  return useLoaded(want && `${opts}|${keyOf([from!, to!])}`, want,
+    (a, b) => a.opts === b.opts && a.to.lat === b.to.lat && a.to.lng === b.to.lng && distanceM(a.from, b.from) < REFETCH_AFTER_M,
+    (w) => fetchRoadRoute(w.from, w.to, undefined, options));
 }
 
 // Directions takes at most 25 points per request; longer days are split into
@@ -89,20 +81,65 @@ export async function fetchRoadPath(points: LatLng[], signal?: AbortSignal, opti
  * a round trip, back to it); null until known or without a token.
  */
 export function useRoadPath(start: LatLng | null, stops: LatLng[], options: RouteOptions = {}): RoadRoute | null {
-  const [route, setRoute] = useState<RoadRoute | null>(null);
-  const asked = useRef<{ start: LatLng | null; key: string } | null>(null);
   const key = `${optionsKey(options)}|${keyOf(stops)}`;
+  const pts = [...(start ? [start] : []), ...stops, ...(start && options.roundTrip && stops.length ? [start] : [])];
+  const want = MAPBOX_TOKEN && pts.length >= 2 ? { start, key, pts } : null;
+  return useLoaded(want && `${key}|${start ? keyOf([start]) : ''}`, want,
+    (a, b) => a.key === b.key && (a.start && b.start ? distanceM(a.start, b.start) < REFETCH_AFTER_M : a.start === b.start),
+    (w) => fetchRoadPath(w.pts, undefined, options));
+}
+
+// Retries after a failed request (network blip, rate limit), then gives up until
+// something changes, the browser comes back online or the page is shown again.
+const RETRY_MS = [1000, 3000, 8000, 20000, 45000];
+
+/**
+ * Loads what `want` describes and keeps the last result. Asks again when `want`
+ * changes, unless `same(last, want)` says the last one still serves (the driver
+ * moved only a little). A request is never cancelled part way: a newer one just
+ * replaces it, so a moving driver can't keep the route from ever arriving.
+ * Failures (and empty answers) are retried with backoff.
+ */
+function useLoaded<W, T>(key: string | null, want: W | null, same: (a: W, b: W) => boolean, load: (w: W) => Promise<T | null>): T | null {
+  const [data, setData] = useState<T | null>(null);
+  const [tick, setTick] = useState(0);
+  const last = useRef<{ want: W; state: 'pending' | 'ok' | 'failed'; tries: number } | null>(null);
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
+
+  // Back online, or back to the page: try again if the last request failed.
   useEffect(() => {
-    if (!MAPBOX_TOKEN) return;
-    const last = asked.current;
-    const sameStart = last && (last.start && start ? distanceM(last.start, start) < REFETCH_AFTER_M : last.start === start);
-    if (last && last.key === key && sameStart) return;
-    asked.current = { start, key };
-    const pts = [...(start ? [start] : []), ...stops, ...(start && options.roundTrip && stops.length ? [start] : [])];
-    if (pts.length < 2) { setRoute(null); return; }
-    const ctrl = new AbortController();
-    fetchRoadPath(pts, ctrl.signal, options).then(setRoute).catch(() => { /* keep the last route, or the straight line */ });
-    return () => ctrl.abort();
-  }, [key, start?.lat, start?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
-  return route;
+    if (typeof window === 'undefined' || !window.addEventListener) return;
+    const again = () => { if (last.current?.state === 'failed') { last.current.tries = 0; setTick((t) => t + 1); } };
+    const shown = () => { if (document.visibilityState === 'visible') again(); };
+    window.addEventListener('online', again);
+    document.addEventListener?.('visibilitychange', shown);
+    return () => { window.removeEventListener('online', again); document.removeEventListener?.('visibilitychange', shown); };
+  }, []);
+
+  useEffect(() => {
+    if (want == null) return;
+    const prev = last.current;
+    const sameWant = !!prev && same(prev.want, want);
+    if (sameWant && prev!.state !== 'failed') return;
+    const req = { want, state: 'pending' as 'pending' | 'ok' | 'failed', tries: sameWant ? prev!.tries : 0 };
+    last.current = req;
+    load(want)
+      .then((r) => {
+        if (!r) throw new Error('no route');
+        if (!alive.current || last.current !== req) return;
+        req.state = 'ok';
+        setData(r);
+      })
+      .catch(() => {
+        if (!alive.current || last.current !== req) return;
+        req.state = 'failed';
+        // Until it loads, the map keeps the last route it had, or straight lines.
+        if (req.tries < RETRY_MS.length) {
+          const wait = RETRY_MS[req.tries++];
+          setTimeout(() => { if (alive.current && last.current === req) setTick((t) => t + 1); }, wait);
+        }
+      });
+  }, [key, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  return data;
 }
