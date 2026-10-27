@@ -234,6 +234,7 @@ export default function Trip() {
 
           {phase === 'next' && current ? (
             <>
+              <TripTotals driveMin={tripMin} serviceMin={straight.serviceMin} meters={tripMeters} />
               {justMarked && marked ? (
                 <Banner title={marked.status === 'completed' ? 'Stop complete' : marked.status === 'no_show' ? 'Marked no-show' : 'Stop skipped'}
                   meta={`${marked.customer_name} · ${fmtTime(marked.marked_at)}`} />
@@ -346,7 +347,8 @@ export default function Trip() {
                   {phase === 'next' ? <View style={{ width: 20, alignItems: 'center' }}><View style={[styles.line, { marginTop: 0 }]} /></View> : null}
                   <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: space[4], paddingBottom: space[3] }}>
                     <Text style={[type.bodyStrong, { color: color.inkMuted }]}>{after.length} more {after.length === 1 ? 'stop' : 'stops'}</Text>
-                    <Text style={type.caption}>{fmtDuration(Math.max(1, tripMin))} · {miles(tripMeters).toFixed(1)} mi</Text>
+                    {/* While the next stop is up, the totals head the sheet instead. */}
+                    {phase !== 'next' ? <Text style={type.caption}>{fmtDuration(Math.max(1, tripMin))} · {miles(tripMeters).toFixed(1)} mi</Text> : null}
                   </View>
                 </View>
               ) : null}
@@ -411,8 +413,36 @@ const styles = StyleSheet.create({
   // The trip's line, shared by the next stop, the list heading and the stops after it.
   line: { flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider },
   nextDot: { marginTop: 5, width: 20, height: 20, borderRadius: 10, backgroundColor: color.action, borderWidth: 4, borderColor: color.brandTint },
+  // Full width under the trip totals, like the step dividers.
+  totals: { flexDirection: 'row', marginHorizontal: -space[4], paddingTop: space[1], paddingBottom: space[4], borderBottomWidth: 1, borderBottomColor: color.divider, marginBottom: space[1] },
   floatBar: { position: 'absolute', left: 0, right: 0, alignItems: 'center', pointerEvents: 'box-none' },
 });
+
+/** The whole trip ahead, as the sheet's heading: time (driving and work at each stop), miles, and when it ends. */
+function TripTotals({ driveMin, serviceMin, meters }: { driveMin: number; serviceMin: number; meters: number }) {
+  const total = Math.max(1, driveMin + serviceMin);
+  const time = total < 60 ? { value: String(total), label: 'minutes' }
+    : { value: `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`, label: 'hours' };
+  const mi = miles(meters);
+  const [clock, meridiem] = fmtTime(new Date(Date.now() + total * 60_000)).split(' ');
+  const items = [
+    { value: time.value, label: time.label },
+    { value: mi < 10 ? mi.toFixed(1) : String(Math.round(mi)), label: 'miles' },
+    { value: clock, suffix: meridiem, label: 'eta' },
+  ];
+  return (
+    <View style={styles.totals} accessible
+      accessibilityLabel={`Trip: ${fmtDuration(total)}, ${mi.toFixed(1)} miles, done around ${clock} ${meridiem ?? ''}`}>
+      {items.map((it) => (
+        <View key={it.label} style={{ flex: 1, alignItems: 'center' }}>
+          <Text style={[type.stat, { fontVariant: ['tabular-nums'] }]}>{it.value}
+            {it.suffix ? <Text style={[type.body, { fontFamily: font.semibold, fontSize: 16 }]}> {it.suffix}</Text> : null}</Text>
+          <Text style={[type.body, { fontSize: 16, lineHeight: 22, color: color.inkMuted }]}>{it.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 function StopHeading({ eyebrow, stop, onCall, onMessage }: { eyebrow?: string; stop: Stop; onCall?: () => void; onMessage: () => void }) {
   return (
