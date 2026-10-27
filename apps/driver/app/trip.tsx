@@ -14,6 +14,7 @@ import { AutoButton } from '../src/ui/AutoButton';
 import { BottomSheet } from '../src/ui/BottomSheet';
 import { ReorderList } from '../src/ui/ReorderList';
 import { SelectChip, ToggleChip } from '../src/ui/Chips';
+import { useCountTo } from '../src/ui/useCountTo';
 import { Banner, Button, DetailRow, IconButton, StatusPill } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
@@ -447,15 +448,19 @@ const styles = StyleSheet.create({
 function TripTotals({ travelMin, meters, stops }: { travelMin: number; meters: number; stops: number }) {
   const total = Math.max(1, travelMin);
   const mi = miles(meters);
+  // When a total changes (an option, a dragged stop) its number counts quickly to the new one.
+  const t = Math.round(useCountTo(total));
+  const m = useCountTo(mi);
+  const n = Math.round(useCountTo(stops));
   const items = [
-    total < 60 ? { value: String(total), label: 'Minutes' } : { value: `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`, label: 'Hours' },
-    { value: mi < 10 ? mi.toFixed(1) : String(Math.round(mi)), label: 'Miles' },
-    { value: String(stops), label: stops === 1 ? 'Stop' : 'Stops' },
+    t < 60 ? { value: String(t), label: 'Minutes' } : { value: `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`, label: 'Hours' },
+    { value: mi < 10 ? m.toFixed(1) : String(Math.round(m)), label: 'Miles' },
+    { value: String(n), label: n === 1 ? 'Stop' : 'Stops' },
   ];
   return (
     <View style={styles.totals} accessible accessibilityLabel={`Trip: ${fmtDuration(total)}, ${mi.toFixed(1)} miles, ${stops} ${stops === 1 ? 'stop' : 'stops'}`}>
-      {items.map((it) => (
-        <Text key={it.label} style={[type.stat, { fontSize: 24, lineHeight: 30, fontVariant: ['tabular-nums'] }]}>{it.value}
+      {items.map((it, i) => (
+        <Text key={i} style={[type.stat, { fontSize: 24, lineHeight: 30, fontVariant: ['tabular-nums'] }]}>{it.value}
           <Text style={{ fontFamily: font.medium, fontSize: 16, color: color.inkMuted }}> {it.label}</Text></Text>
       ))}
     </View>
