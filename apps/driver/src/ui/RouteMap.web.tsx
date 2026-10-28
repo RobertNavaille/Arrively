@@ -56,7 +56,6 @@ function fitPadding(m: import('mapbox-gl').Map, top: number, bottom: number, sid
 function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, driverHeading, onUserMove, hold }: RouteMapProps) {
   const host = useRef<View>(null);
   const map = useRef<import('mapbox-gl').Map | null>(null);
-  const markers = useRef<import('mapbox-gl').Marker[]>([]);
   const [ready, setReady] = useState(false);
   // The map's size: a hidden screen's map (My day under the trip) is 0 × 0, and
   // Mapbox can't fit a camera into that, so camera moves wait until it has one.
@@ -107,25 +106,54 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
     return () => { cancelled = true; observer?.disconnect(); map.current?.remove(); map.current = null; };
   }, []);
 
-  // Markers and the route line.
+  // Markers and the route line, each touched only when it changes. The screen
+  // re-renders many times a second (compass, location); replacing the line's
+  // data that often makes Mapbox drop it while it redraws, so it flickers.
+  const stopsKey = stops.map((s) => `${s.id}:${s.state}:${s.n}:${s.lat},${s.lng}`).join('|');
+  const pinKey = pin ? `${pin.lat},${pin.lng}:${pinLabel ?? ''}` : '';
+  const lineKey = path.length > 1 ? path.map((p) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(';') : '';
+  const stopMarkers = useRef<import('mapbox-gl').Marker[]>([]);
+  const pinMarker = useRef<import('mapbox-gl').Marker | null>(null);
+  const driverMarker = useRef<{ marker: import('mapbox-gl').Marker; pointer: boolean } | null>(null);
+  // The Mapbox library, once loaded (the map itself loads it first, so this is quick).
+  const mapboxgl = useRef<typeof import('mapbox-gl') | null>(null);
+  const [lib, setLib] = useState(false);
+  useEffect(() => { if (ready) import('mapbox-gl').then((x) => { mapboxgl.current = (x as unknown as { default?: typeof x }).default ?? x; setLib(true); }); }, [ready]);
+
+  useEffect(() => {
+    const m = map.current, gl = mapboxgl.current;
+    if (!lib || !m || !gl) return;
+    stopMarkers.current.forEach((x) => x.remove());
+    stopMarkers.current = byDrawOrder(stops).map((s) => new gl.Marker({ element: stopEl(s) }).setLngLat([s.lng, s.lat]).addTo(m));
+  }, [lib, stopsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const m = map.current, gl = mapboxgl.current;
+    if (!lib || !m || !gl) return;
+    pinMarker.current?.remove();
+    pinMarker.current = pin ? new gl.Marker({ element: pinEl(pinLabel), anchor: 'bottom' }).setLngLat([pin.lng, pin.lat]).addTo(m) : null;
+  }, [lib, pinKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The driver's dot moves and turns in place; it's only rebuilt when its pointer comes or goes.
+  useEffect(() => {
+    const m = map.current, gl = mapboxgl.current;
+    if (!lib || !m || !gl) return;
+    const pointer = driverHeading != null;
+    if (!driver || !showDriver) { driverMarker.current?.marker.remove(); driverMarker.current = null; return; }
+    if (!driverMarker.current || driverMarker.current.pointer !== pointer) {
+      driverMarker.current?.marker.remove();
+      driverMarker.current = { pointer, marker: new gl.Marker({ element: driverEl(pointer), rotationAlignment: 'map' }).setLngLat([driver.lng, driver.lat]).addTo(m) };
+    }
+    driverMarker.current.marker.setLngLat([driver.lng, driver.lat]).setRotation(driverHeading ?? 0);
+  }, [lib, driver?.lat, driver?.lng, showDriver, driverHeading]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!ready || !map.current) return;
-    (async () => {
-      const mapboxgl = (await import('mapbox-gl')).default;
-      const m = map.current;
-      if (!m) return; // closed meanwhile
-      markers.current.forEach((x) => x.remove());
-      markers.current = [
-        ...byDrawOrder(stops).map((s) => new mapboxgl.Marker({ element: stopEl(s) }).setLngLat([s.lng, s.lat])),
-        ...(pin ? [new mapboxgl.Marker({ element: pinEl(pinLabel), anchor: 'bottom' }).setLngLat([pin.lng, pin.lat])] : []),
-        ...(driver && showDriver ? [new mapboxgl.Marker({ element: driverEl(driverHeading != null), rotation: driverHeading ?? 0, rotationAlignment: 'map' }).setLngLat([driver.lng, driver.lat])] : []),
-      ].map((mk) => mk.addTo(m));
-      (m.getSource('route') as import('mapbox-gl').GeoJSONSource | undefined)?.setData({
-        type: 'Feature', properties: {},
-        geometry: { type: 'LineString', coordinates: path.length > 1 ? path.map((p) => [p.lng, p.lat]) : [] },
-      });
-    })();
-  }); // every render: cheap, and keeps numbers and states current
+    (map.current.getSource('route') as import('mapbox-gl').GeoJSONSource | undefined)?.setData({
+      type: 'Feature', properties: {},
+      geometry: { type: 'LineString', coordinates: path.length > 1 ? path.map((p) => [p.lng, p.lat]) : [] },
+    });
+  }, [ready, lineKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Following: glide along with the driver, centred in the uncovered part.
   useEffect(() => {

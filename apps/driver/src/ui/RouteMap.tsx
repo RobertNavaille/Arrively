@@ -29,10 +29,13 @@ export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inse
   // A driver too far away to frame isn't connected to the route line.
   const following = !!follow && !!driver;
   const path = (line ?? []).filter((p) => p !== driver || following || points.includes(driver));
-  const lineShape = path.length > 1 ? {
+  // A new shape only when the line itself changes: the screen re-renders many times a
+  // second (compass, location), and a fresh shape each time makes the line flicker.
+  const lineKey = path.map((p) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
+  const lineShape = useMemo(() => path.length > 1 ? {
     type: 'Feature' as const, properties: {},
     geometry: { type: 'LineString' as const, coordinates: path.map((p) => [p.lng, p.lat]) },
-  } : null;
+  } : null, [lineKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <View style={{ height, backgroundColor: color.mapGround, overflow: 'hidden' }}>
