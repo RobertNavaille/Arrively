@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
@@ -8,6 +8,7 @@ import { bearingDeg, dayKey, distanceM, pathAhead, estimateDriveMin, fmtDuration
 import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
 import { lockedOrder, optionsOf, SPEED, type RouteOptions, type RoutePlan, type TravelMode } from '../src/lib/routing';
 import { currentStop, useDriverData } from '../src/lib/store';
+import { avoidList, avoidNotPassed, openDirections } from '../src/lib/navigation';
 import { useBottomInset } from '../src/lib/viewport';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
 import { AutoButton } from '../src/ui/AutoButton';
@@ -26,13 +27,6 @@ export { ScreenError as ErrorBoundary } from '../src/ui/ScreenError';
 const RADIUS_M = 75;
 // A strip of map always shows above the sheet, even pulled all the way up.
 const MAP_STRIP = 68;
-
-function openDirections(s: Stop) {
-  const url = Platform.OS === 'ios'
-    ? `http://maps.apple.com/?daddr=${s.lat},${s.lng}&dirflg=d`
-    : `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}`;
-  Linking.openURL(url);
-}
 
 /**
  * The trip in one view: the map fills the screen and the trip sits in a sheet
@@ -237,7 +231,7 @@ export default function Trip() {
 
       {/* On the way: where to, across the top of the map. */}
       {phase === 'onroute' && current ? (
-        <Pressable onPress={() => openDirections(current)} accessibilityRole="button" accessibilityLabel={`Directions to ${current.address}`}
+        <Pressable onPress={() => openDirections(current, options)} accessibilityRole="button" accessibilityLabel={`Directions to ${current.address}`}
           style={[{ position: 'absolute', top: 12, left: space[4], right: space[4], zIndex: 2, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], paddingVertical: 10, borderRadius: radius.md, backgroundColor: color.surface }, shadow.float]}>
           <Icon name="navigate" size={18} color={color.ink} />
           <Text style={[type.body, { flex: 1 }]} numberOfLines={1}>{current.address}</Text>
@@ -305,8 +299,14 @@ export default function Trip() {
                   </Text>
                 </View>
                 {call ? <IconButton icon="phone" label={`Call ${current.customer_name}`} onPress={call} /> : null}
-                <IconButton icon="navigate" label="Directions" onPress={() => openDirections(current)} />
+                <IconButton icon="navigate" label="Directions" onPress={() => openDirections(current, options)} />
               </View>
+              {/* The maps app can't be told this from a link: a reminder to set it there. */}
+              {avoidNotPassed(options) ? (
+                <Text style={[type.caption, { fontSize: 13, lineHeight: 18 }]}>
+                  In your maps app, turn on Avoid {avoidList(options).join(' and ')} too: it isn't passed on.
+                </Text>
+              ) : null}
               <View style={{ gap: space[2] }}>
                 <Button label="Arrived" loading={busy === 'arrived'}
                   onPress={() => run('arrived', async () => { await backend.markArrived(current.id); await refresh(); })} />
