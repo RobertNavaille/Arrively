@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Linking, Pressable, ScrollView, TextInput, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
@@ -61,8 +61,10 @@ export default function Trip() {
   const bottomInset = useBottomInset();
   // The driver moved the map by hand: stop following until they re-center.
   const [freeMap, setFreeMap] = useState(false);
-  // Arrived: Complete stop opens the ways to mark it (complete, no show, skip).
+  // Arrived: Complete stop opens a short form: how it went (complete, no show, skipped) and comments.
   const [choosing, setChoosing] = useState(false);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [comments, setComments] = useState('');
   // The sheet is pulled up to full height (not resting).
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -107,7 +109,7 @@ export default function Trip() {
   const floatOptimize = phase === 'next' && canOptimize;
   // Each step starts with the sheet at its resting height.
   // Each step follows the driver again (the sheet itself goes back to rest on its own).
-  useEffect(() => { setFreeMap(false); setChoosing(false); }, [phase]);
+  useEffect(() => { setFreeMap(false); setChoosing(false); setOutcome(null); setComments(''); }, [phase]);
 
   if (!route || !stops.length) {
     return (
@@ -178,15 +180,18 @@ export default function Trip() {
     await backend.startTrip(current.id);
     await refresh();
   });
-  async function mark(outcome: 'completed' | 'no_show') {
+  // The driver's comments are saved with the stop (as its mark reason). Skipping, or marking
+  // away from the stop, needs a reason: without comments, a plain one is used.
+  async function mark(outcome: Outcome) {
     if (!current) return;
+    const note = comments.trim() || null;
     const here = pos ?? (await currentPosition());
-    if (here && distanceM(here, current) > RADIUS_M * 2) {
+    if (outcome !== 'skipped' && here && distanceM(here, current) > RADIUS_M * 2) {
       const ok = await confirmAction('You are away from this stop', 'Marking it from here is flagged to your business. Mark it anyway?', 'Mark it');
-      if (ok) await run(outcome, async () => { await backend.markStop(current.id, outcome, 'Marked away from the stop', here); await refresh(); });
+      if (ok) await run('mark', async () => { await backend.markStop(current.id, outcome, note ?? 'Marked away from the stop', here); await refresh(); });
       return;
     }
-    await run(outcome, async () => { await backend.markStop(current.id, outcome, null, here); await refresh(); });
+    await run('mark', async () => { await backend.markStop(current.id, outcome, outcome === 'skipped' ? note ?? 'Skipped' : note, here); await refresh(); });
   }
   const call = current?.customer_phone ? () => Linking.openURL(`tel:${current.customer_phone}`) : undefined;
   const message = () => showMessage('Coming soon', 'Chat with customers arrives in the next build.');
@@ -247,7 +252,7 @@ export default function Trip() {
       ) : null}
 
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
-      <BottomSheet top={SHEET_TOP} rest={peek} onOpenChange={setSheetOpen} resetKey={phase} startOpen={phase === 'review'} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
+      <BottomSheet top={SHEET_TOP} rest={peek} onOpenChange={setSheetOpen} resetKey={choosing ? `${phase}:mark` : phase} startOpen={phase === 'review' || choosing} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
         <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH) setCardH(h); }}
           style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' || phase === 'next' || phase === 'review' || phase === 'onroute' ? 0 : 1, borderBottomColor: color.divider }}>
@@ -339,13 +344,7 @@ export default function Trip() {
                 <IconButton icon="message" label={`Message ${current.customer_name}`} onPress={message} />
               </View>
               {current.notes ? <DetailRow icon="notes" primary={current.notes} /> : null}
-              {choosing ? (
-                <View style={{ gap: space[2] }}>
-                  <Button label="Complete" loading={busy === 'completed'} onPress={() => mark('completed')} />
-                  <Button variant="text" label="No show" loading={busy === 'no_show'} onPress={() => mark('no_show')} />
-                  <Button variant="text" label="Skip" onPress={() => router.push(`/skip/${current.id}`)} />
-                </View>
-              ) : (
+              {choosing ? null : (
                 <View style={{ gap: space[2] }}>
                   <Button icon="check" label="Complete stop" onPress={() => setChoosing(true)} />
                   {/* Arrived by mistake: back to on the way. */}
@@ -353,7 +352,7 @@ export default function Trip() {
                     onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
                 </View>
               )}
-              <Text style={[type.caption, { textAlign: 'center' }]}>Mark this stop to start your next trip.</Text>
+              {choosing ? null : <Text style={[type.caption, { textAlign: 'center' }]}>Mark this stop to start your next trip.</Text>}
             </View>
           ) : null}
 
@@ -367,6 +366,29 @@ export default function Trip() {
       }>
         {/* The rest of the sheet: the stops after this one, then the ones done. On the way: the job instead. */}
         <View style={{ paddingBottom: space[8] }}>
+          {/* Marking the stop: pick how it went, add comments, finish. The sheet opens to full height for it. */}
+          {phase === 'arrived' && current && choosing ? (
+            <View style={{ gap: 20, paddingHorizontal: space[4], paddingTop: space[4], marginTop: space[1], borderTopWidth: 1, borderTopColor: color.divider }}>
+              <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]} accessibilityRole="header">How did it go?</Text>
+              <View style={{ gap: space[2] }} accessibilityRole="radiogroup" accessibilityLabel="Outcome">
+                {OUTCOMES.map((o) => (
+                  <OutcomeChoice key={o.key} label={o.label} description={o.description} selected={outcome === o.key} onPress={() => setOutcome(o.key)} />
+                ))}
+              </View>
+              <View style={{ gap: 6 }}>
+                <Text style={[type.label, { textTransform: 'uppercase' }]}>Comments</Text>
+                <TextInput value={comments} onChangeText={setComments} multiline accessibilityLabel="Comments"
+                  placeholder="What was done, parts used, anything for next time (optional)" placeholderTextColor={color.inkMuted}
+                  style={styles.comments} />
+                <Text style={type.caption}>Saved with the stop.</Text>
+              </View>
+              <View style={{ gap: space[2] }}>
+                <Button label={outcome === 'no_show' ? 'Mark no show' : outcome === 'skipped' ? 'Skip stop' : 'Complete stop'}
+                  disabled={!outcome} loading={busy === 'mark'} onPress={() => outcome && mark(outcome)} />
+                <Button variant="text" label="Back" onPress={() => setChoosing(false)} />
+              </View>
+            </View>
+          ) : null}
           {/* The job's details show once the sheet is pulled up to full height. */}
           {phase === 'onroute' && current && sheetOpen ? (
             <View style={{ gap: 28, paddingTop: 40, paddingHorizontal: space[4] }} accessibilityRole="list" accessibilityLabel="Job details">
@@ -476,6 +498,12 @@ const styles = StyleSheet.create({
   nextDot: { marginTop: 5, width: 20, height: 20, borderRadius: 10, backgroundColor: color.action, borderWidth: 4, borderColor: color.brandTint },
   // Full width under the trip totals, like the step dividers.
   totals: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: -space[4], paddingHorizontal: space[8], paddingTop: space[1], paddingBottom: space[4], borderBottomWidth: 1, borderBottomColor: color.divider, marginBottom: space[1] },
+  choice: { flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: 14, paddingHorizontal: space[4], borderRadius: radius.md, borderWidth: 1, borderColor: color.divider },
+  choiceOn: { borderWidth: 2, borderColor: color.action, paddingVertical: 13, paddingHorizontal: space[4] - 1 },
+  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: color.controlBorder, alignItems: 'center', justifyContent: 'center' },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: color.action },
+  comments: { minHeight: 104, borderRadius: radius.sm, backgroundColor: color.surfaceMuted, borderWidth: 1, borderColor: color.divider,
+    paddingHorizontal: space[3], paddingTop: space[3], paddingBottom: space[3], fontFamily: font.regular, fontSize: 16, lineHeight: 22, color: color.ink, textAlignVertical: 'top' },
   bottomBar: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingTop: space[3], paddingHorizontal: space[4], backgroundColor: color.surface, borderTopWidth: 1, borderTopColor: color.divider },
   floatBar: { position: 'absolute', left: 0, right: 0, alignItems: 'center', pointerEvents: 'box-none' },
   // Beside the centred button, at the sheet's left margin.
@@ -502,6 +530,29 @@ function TripTotals({ travelMin, meters, stops }: { travelMin: number; meters: n
           <Text style={{ fontFamily: font.medium, fontSize: 16, color: color.inkMuted }}> {it.label}</Text></Text>
       ))}
     </View>
+  );
+}
+
+type Outcome = 'completed' | 'no_show' | 'skipped';
+const OUTCOMES: { key: Outcome; label: string; description: string }[] = [
+  { key: 'completed', label: 'Completed', description: 'The job is done' },
+  { key: 'no_show', label: 'No show', description: 'The customer wasn\u2019t there' },
+  { key: 'skipped', label: 'Skipped', description: 'Not done today' },
+];
+
+/** One way the stop went, as a selectable card. */
+function OutcomeChoice({ label, description, selected, onPress }: { label: string; description: string; selected: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={`${label}, ${description}`}
+      style={[styles.choice, selected && styles.choiceOn]}>
+      <View style={[styles.radio, selected && { borderColor: color.action }]}>
+        {selected ? <View style={styles.radioDot} /> : null}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[type.bodyStrong, { fontSize: 16, lineHeight: 22 }]}>{label}</Text>
+        <Text style={[type.body, { color: color.inkMuted }]}>{description}</Text>
+      </View>
+    </Pressable>
   );
 }
 
