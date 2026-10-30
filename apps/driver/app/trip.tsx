@@ -16,7 +16,7 @@ import { BottomSheet } from '../src/ui/BottomSheet';
 import { ReorderList } from '../src/ui/ReorderList';
 import { SelectChip, ToggleChip } from '../src/ui/Chips';
 import { useCountTo } from '../src/ui/useCountTo';
-import { Button, DetailRow, IconButton, StatusPill } from '../src/ui/components';
+import { Button, IconButton, StatusPill } from '../src/ui/components';
 import { Icon, type IconName } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
 import type { MapStop } from '../src/ui/RouteMap.types';
@@ -194,7 +194,18 @@ export default function Trip() {
   }
   const call = current?.customer_phone ? () => Linking.openURL(`tel:${current.customer_phone}`) : undefined;
   const message = () => showMessage('Coming soon', 'Chat with customers arrives in the next build.');
-  // Arrived: the stop's own moment (time there, who, call and text, notes).
+  // The job in full, one gray line icon and its text per row (on the way, and arrived).
+  // `contact`: buttons at the right of the phone number's row.
+  const jobDetails = (contact?: ReactNode) => current ? (
+    <View style={{ gap: 28 }} accessibilityRole="list" accessibilityLabel="Job details">
+      <JobRow icon="person" text={current.customer_name} />
+      {current.customer_phone ? <JobRow icon="phone" text={fmtPhone(current.customer_phone)} trailing={contact} /> : null}
+      <JobRow icon="pin" text={current.address} />
+      {current.window_start ? <JobRow icon="clock" text={`${route?.day === dayKey(new Date()) ? 'Today, ' : ''}${fmtWindow(current)}`} /> : null}
+      {current.notes ? <JobRow icon="lines" text={current.notes} /> : null}
+    </View>
+  ) : null;
+  // Arrived: the stop's own moment (time there, who, call and text, the job in full).
   const arrivedInfo = current ? (
     <>
       <View style={{ alignItems: 'center', gap: 4 }}>
@@ -208,7 +219,7 @@ export default function Trip() {
           onPress={call ?? (() => showMessage('No phone number', `There's no phone number for ${current.customer_name}.`))} />
         <IconButton icon="message" size="xl" label={`Message ${current.customer_name}`} onPress={message} />
       </View>
-      {current.notes ? <DetailRow icon="notes" primary={current.notes} /> : null}
+      <View style={{ paddingTop: space[4], paddingBottom: space[4] }}>{jobDetails()}</View>
     </>
   ) : null;
 
@@ -396,19 +407,13 @@ export default function Trip() {
           ) : null}
           {/* The job's details show once the sheet is pulled up to full height. */}
           {phase === 'onroute' && current && sheetOpen ? (
-            <View style={{ gap: 28, paddingTop: 40, paddingHorizontal: space[4] }} accessibilityRole="list" accessibilityLabel="Job details">
-              <JobRow icon="person" text={current.customer_name} />
-              {current.customer_phone ? (
-                <JobRow icon="phone" text={fmtPhone(current.customer_phone)} trailing={
-                  <View style={{ flexDirection: 'row', gap: space[2], marginVertical: -8 }}>
-                    {call ? <IconButton icon="phone" size="compact" label={`Call ${current.customer_name}`} onPress={call} /> : null}
-                    <IconButton icon="message" size="compact" label={`Text ${current.customer_name}`} onPress={message} />
-                  </View>
-                } />
-              ) : null}
-              <JobRow icon="pin" text={current.address} />
-              {current.window_start ? <JobRow icon="clock" text={`${route.day === dayKey(new Date()) ? 'Today, ' : ''}${fmtWindow(current)}`} /> : null}
-              {current.notes ? <JobRow icon="lines" text={current.notes} /> : null}
+            <View style={{ paddingTop: 40, paddingHorizontal: space[4] }}>
+              {jobDetails(
+                <View style={{ flexDirection: 'row', gap: space[2], marginVertical: -8 }}>
+                  {call ? <IconButton icon="phone" size="compact" label={`Call ${current.customer_name}`} onPress={call} /> : null}
+                  <IconButton icon="message" size="compact" label={`Text ${current.customer_name}`} onPress={message} />
+                </View>,
+              )}
             </View>
           ) : null}
           {phase !== 'arrived' && phase !== 'onroute' ? (
