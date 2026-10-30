@@ -195,6 +195,22 @@ export default function Trip() {
   }
   const call = current?.customer_phone ? () => Linking.openURL(`tel:${current.customer_phone}`) : undefined;
   const message = () => showMessage('Coming soon', 'Chat with customers arrives in the next build.');
+  // Arrived: the stop's own moment (time there, who, call and text, notes).
+  const arrivedInfo = current ? (
+    <>
+      {away ? <Banner tone="warning" icon="alert" title="You left without marking this stop" meta="Mark it to start your next trip." /> : null}
+      <View style={{ alignItems: 'center', gap: 4 }}>
+        <StatusPill tone="info" icon="clock" label={`At stop${current.arrived_at ? ` since ${fmtTime(current.arrived_at)}` : ''}`} />
+        <Text style={[type.title, { fontSize: 28, lineHeight: 34, marginTop: 6 }]} accessibilityRole="header">Arrived</Text>
+        <Text style={[type.body, { color: color.inkMuted, textAlign: 'center' }]}>{current.customer_name} · {current.address.split(',')[0]}</Text>
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space[3] }}>
+        {call ? <IconButton icon="phone" label={`Call ${current.customer_name}`} onPress={call} /> : null}
+        <IconButton icon="message" label={`Message ${current.customer_name}`} onPress={message} />
+      </View>
+      {current.notes ? <DetailRow icon="notes" primary={current.notes} /> : null}
+    </>
+  ) : null;
 
   // The map: the whole trip, or once arrived, this stop alone.
   const order = [...done, ...ahead];
@@ -331,28 +347,17 @@ export default function Trip() {
           ) : null}
 
           {/* Arrived: the stop's own moment; the list comes back once it's marked. */}
-          {phase === 'arrived' && current ? (
+          {/* Marking (the form), all of this moves into the scrolling part of the sheet with it. */}
+          {phase === 'arrived' && current && !choosing ? (
             <View style={{ gap: space[4] }}>
-              {away ? <Banner tone="warning" icon="alert" title="You left without marking this stop" meta="Mark it to start your next trip." /> : null}
-              <View style={{ alignItems: 'center', gap: 4 }}>
-                <StatusPill tone="info" icon="clock" label={`At stop${current.arrived_at ? ` since ${fmtTime(current.arrived_at)}` : ''}`} />
-                <Text style={[type.title, { fontSize: 28, lineHeight: 34, marginTop: 6 }]} accessibilityRole="header">Arrived</Text>
-                <Text style={[type.body, { color: color.inkMuted, textAlign: 'center' }]}>{current.customer_name} · {current.address.split(',')[0]}</Text>
+              {arrivedInfo}
+              <View style={{ gap: space[2] }}>
+                <Button icon="check" label="Complete stop" onPress={() => setChoosing(true)} />
+                {/* Arrived by mistake: back to on the way. */}
+                <Button variant="text" label="Continue route" loading={busy === 'undo'}
+                  onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
               </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space[3] }}>
-                {call ? <IconButton icon="phone" label={`Call ${current.customer_name}`} onPress={call} /> : null}
-                <IconButton icon="message" label={`Message ${current.customer_name}`} onPress={message} />
-              </View>
-              {current.notes ? <DetailRow icon="notes" primary={current.notes} /> : null}
-              {choosing ? null : (
-                <View style={{ gap: space[2] }}>
-                  <Button icon="check" label="Complete stop" onPress={() => setChoosing(true)} />
-                  {/* Arrived by mistake: back to on the way. */}
-                  <Button variant="text" label="Continue route" loading={busy === 'undo'}
-                    onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
-                </View>
-              )}
-              {choosing ? null : <Text style={[type.caption, { textAlign: 'center' }]}>Mark this stop to start your next trip.</Text>}
+              <Text style={[type.caption, { textAlign: 'center' }]}>Mark this stop to start your next trip.</Text>
             </View>
           ) : null}
 
@@ -368,7 +373,10 @@ export default function Trip() {
         <View style={{ paddingBottom: space[8] }}>
           {/* Marking the stop: pick how it went, add comments, finish. The sheet opens to full height for it. */}
           {phase === 'arrived' && current && choosing ? (
-            <View style={{ gap: 20, paddingHorizontal: space[4], paddingTop: space[4], marginTop: space[1], borderTopWidth: 1, borderTopColor: color.divider }}>
+            <View style={{ gap: space[4], paddingHorizontal: space[4], paddingBottom: space[4] }}>{arrivedInfo}</View>
+          ) : null}
+          {phase === 'arrived' && current && choosing ? (
+            <View style={{ gap: 20, paddingHorizontal: space[4], paddingTop: space[4], borderTopWidth: 1, borderTopColor: color.divider }}>
               <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]} accessibilityRole="header">How did it go?</Text>
               <View style={{ gap: space[2] }} accessibilityRole="radiogroup" accessibilityLabel="Outcome">
                 {OUTCOMES.map((o) => (
