@@ -46,8 +46,8 @@ export function Button({ label, onPress, variant = 'primary', icon, size = varia
 
 export function IconButton({ icon, label, onPress, variant = 'tint', size = 'md' }: {
   icon: IconName; label: string; onPress?: () => void; variant?: 'tint' | 'plain' | 'solid';
-  /** md 56px (tint and solid), compact 40px (beside a heading, e.g. call and text on the way). */
-  size?: 'md' | 'compact';
+  /** md 56px (tint and solid), compact 40px (beside a heading, e.g. call and text on the way), xl 72px (call and text, arrived). */
+  size?: 'md' | 'compact' | 'xl';
 }) {
   const fg = variant === 'tint' ? color.action : variant === 'solid' ? color.onAction : color.ink;
   return (
@@ -56,25 +56,26 @@ export function IconButton({ icon, label, onPress, variant = 'tint', size = 'md'
       style={({ pressed }) => [
         styles.iconBtn,
         variant !== 'plain' && size === 'md' && styles.iconBtnLarge,
+        variant !== 'plain' && size === 'xl' && styles.iconBtnXL,
         variant === 'tint' && { backgroundColor: color.brandTint },
         variant === 'solid' && { backgroundColor: color.action },
         pressed && { opacity: 0.8 },
       ]}
     >
-      <Icon name={icon} size={variant === 'plain' || size === 'compact' ? 20 : 24} color={fg} />
+      <Icon name={icon} size={variant === 'plain' || size === 'compact' ? 20 : size === 'xl' ? 30 : 24} color={fg} />
     </Pressable>
   );
 }
 
 export type PillTone = 'info' | 'neutral' | 'warning' | 'success';
-export function StatusPill({ label, tone = 'info', icon }: { label: string; tone?: PillTone; icon?: IconName }) {
+export function StatusPill({ label, tone = 'info', icon, center }: { label: string; tone?: PillTone; icon?: IconName; center?: boolean }) {
   const map = {
     info: [color.brandTint, color.onTint], neutral: [color.surfaceMuted, color.inkMuted],
     warning: [color.warningTint, color.warning], success: [color.surfaceMuted, color.success],
   } as const;
   const [bg, fg] = map[tone];
   return (
-    <View style={[styles.pill, { backgroundColor: bg }]}>
+    <View style={[styles.pill, { backgroundColor: bg }, center && { alignSelf: 'center' }]}>
       {icon ? <Icon name={icon} size={14} color={fg} strokeWidth={2} /> : null}
       <Text style={[styles.pillText, { color: fg }]}>{label}</Text>
     </View>
@@ -169,6 +170,8 @@ export const styles = StyleSheet.create({
   iconBtn: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   // Call, message, directions: 56px like the buttons, for use while driving (plain ones are header chrome).
   iconBtnLarge: { width: 56, height: 56 },
+  // The arrived screen's call and text: the driver's main way to reach the customer there.
+  iconBtnXL: { width: 72, height: 72 },
   infoIcon: { width: 40, height: 40, borderRadius: radius.full, backgroundColor: color.brandTint, alignItems: 'center', justifyContent: 'center' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 2, borderRadius: radius.full, alignSelf: 'flex-start' },
   pillText: { fontFamily: font.medium, fontSize: 11, lineHeight: 18, letterSpacing: 0.2 },

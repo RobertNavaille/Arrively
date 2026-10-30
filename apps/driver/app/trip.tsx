@@ -16,7 +16,7 @@ import { BottomSheet } from '../src/ui/BottomSheet';
 import { ReorderList } from '../src/ui/ReorderList';
 import { SelectChip, ToggleChip } from '../src/ui/Chips';
 import { useCountTo } from '../src/ui/useCountTo';
-import { Banner, Button, DetailRow, IconButton, StatusPill } from '../src/ui/components';
+import { Button, DetailRow, IconButton, StatusPill } from '../src/ui/components';
 import { Icon, type IconName } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
 import type { MapStop } from '../src/ui/RouteMap.types';
@@ -103,7 +103,6 @@ export default function Trip() {
   const tripMin = road ? Math.round(road.durationS / 60) : straight.driveMin;
   const tripMeters = road ? road.distanceM : straight.meters;
 
-  const away = current && pos ? distanceM(pos, current) > RADIUS_M * 2 : false;
   const canOptimize = !!route && route.status !== 'completed' && remaining.filter((s) => s.status === 'scheduled' || s.status === 'queued').length >= 2;
   // Optimize route floats over the list while the next stop is up (not mid-drive, at a stop or in review).
   const floatOptimize = phase === 'next' && canOptimize;
@@ -198,15 +197,16 @@ export default function Trip() {
   // Arrived: the stop's own moment (time there, who, call and text, notes).
   const arrivedInfo = current ? (
     <>
-      {away ? <Banner tone="warning" icon="alert" title="You left without marking this stop" meta="Mark it to start your next trip." /> : null}
       <View style={{ alignItems: 'center', gap: 4 }}>
-        <StatusPill tone="info" icon="clock" label={`At stop${current.arrived_at ? ` since ${fmtTime(current.arrived_at)}` : ''}`} />
+        <StatusPill center tone="info" icon="clock" label={`At stop${current.arrived_at ? ` since ${fmtTime(current.arrived_at)}` : ''}`} />
         <Text style={[type.title, { fontSize: 28, lineHeight: 34, marginTop: 6 }]} accessibilityRole="header">Arrived</Text>
         <Text style={[type.body, { color: color.inkMuted, textAlign: 'center' }]}>{current.customer_name} · {current.address.split(',')[0]}</Text>
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space[3] }}>
-        {call ? <IconButton icon="phone" label={`Call ${current.customer_name}`} onPress={call} /> : null}
-        <IconButton icon="message" label={`Message ${current.customer_name}`} onPress={message} />
+        {/* Call shows even without a number on file (it says so), beside text. */}
+        <IconButton icon="phone" size="xl" label={`Call ${current.customer_name}`}
+          onPress={call ?? (() => showMessage('No phone number', `There's no phone number for ${current.customer_name}.`))} />
+        <IconButton icon="message" size="xl" label={`Message ${current.customer_name}`} onPress={message} />
       </View>
       {current.notes ? <DetailRow icon="notes" primary={current.notes} /> : null}
     </>
@@ -347,7 +347,7 @@ export default function Trip() {
           ) : null}
 
           {/* Arrived: the stop's own moment; the list comes back once it's marked. */}
-          {/* Marking (the form), all of this moves into the scrolling part of the sheet with it. */}
+          {/* Marking (the form), the sheet is just the form. */}
           {phase === 'arrived' && current && !choosing ? (
             <View style={{ gap: space[4] }}>
               {arrivedInfo}
@@ -371,12 +371,9 @@ export default function Trip() {
       }>
         {/* The rest of the sheet: the stops after this one, then the ones done. On the way: the job instead. */}
         <View style={{ paddingBottom: space[8] }}>
-          {/* Marking the stop: pick how it went, add comments, finish. The sheet opens to full height for it. */}
+          {/* Marking the stop: pick how it went, add comments, finish. The sheet opens to full height for it, and all of it scrolls. */}
           {phase === 'arrived' && current && choosing ? (
-            <View style={{ gap: space[4], paddingHorizontal: space[4], paddingBottom: space[4] }}>{arrivedInfo}</View>
-          ) : null}
-          {phase === 'arrived' && current && choosing ? (
-            <View style={{ gap: 20, paddingHorizontal: space[4], paddingTop: space[4], borderTopWidth: 1, borderTopColor: color.divider }}>
+            <View style={{ gap: 20, paddingHorizontal: space[4], paddingTop: space[2] }}>
               <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]} accessibilityRole="header">How did it go?</Text>
               <View style={{ gap: space[2] }} accessibilityRole="radiogroup" accessibilityLabel="Outcome">
                 {OUTCOMES.map((o) => (
