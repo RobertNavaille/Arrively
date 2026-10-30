@@ -4,7 +4,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimens
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
-import { bearingDeg, dayKey, distanceM, pathAhead, estimateDriveMin, fmtDuration, fmtTime, miles, routeTotals } from '../src/lib/geo';
+import { bearingDeg, dayKey, distanceM, pathAhead, estimateDriveMin, fmtDuration, fmtTime, fmtWindow, miles, routeTotals } from '../src/lib/geo';
 import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
 import { lockedOrder, optionsOf, SPEED, type RouteOptions, type RoutePlan, type TravelMode } from '../src/lib/routing';
 import { currentStop, useDriverData } from '../src/lib/store';
@@ -17,7 +17,7 @@ import { ReorderList } from '../src/ui/ReorderList';
 import { SelectChip, ToggleChip } from '../src/ui/Chips';
 import { useCountTo } from '../src/ui/useCountTo';
 import { Banner, Button, DetailRow, IconButton, StatusPill } from '../src/ui/components';
-import { Icon } from '../src/ui/Icon';
+import { Icon, type IconName } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
 import type { MapStop } from '../src/ui/RouteMap.types';
 import { color, font, radius, shadow, space, type } from '../src/ui/theme';
@@ -203,7 +203,8 @@ export default function Trip() {
   // enough that the step's card (with Arrived) sits above what's covered at the
   // bottom. Never so low that the card would slip under it.
   const sheetArea = height - MAP_STRIP;
-  const cardRest = cardH != null ? Math.max(0, Math.round(sheetArea - cardH - bottomInset)) : null;
+  const barSpace = phase === 'onroute' ? BAR_SPACE : 0;
+  const cardRest = cardH != null ? Math.max(0, Math.round(sheetArea - cardH - bottomInset - barSpace)) : null;
   const peek = phase === 'onroute' && cardRest != null ? cardRest : Math.min(Math.round(height * 0.36), cardRest ?? Infinity);
 
   return (
@@ -239,10 +240,10 @@ export default function Trip() {
       ) : null}
 
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
-      <BottomSheet top={MAP_STRIP} rest={peek} resetKey={phase} startOpen={phase === 'review'} bottomInset={bottomInset + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
+      <BottomSheet top={MAP_STRIP} rest={peek} resetKey={phase} startOpen={phase === 'review'} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
         <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH) setCardH(h); }}
-          style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' || phase === 'next' || phase === 'review' ? 0 : 1, borderBottomColor: color.divider }}>
+          style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' || phase === 'next' || phase === 'review' || phase === 'onroute' ? 0 : 1, borderBottomColor: color.divider }}>
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: color.divider, alignSelf: 'center' }} />
 
           {phase === 'next' && current ? (
@@ -291,29 +292,24 @@ export default function Trip() {
           {/* On the way: the drive leads; who it's to comes second. */}
           {phase === 'onroute' && current ? (
             <>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
                 <View style={{ flex: 1 }} accessible accessibilityLabel={`${legMin ?? '–'} minutes, ${legMeters != null ? miles(legMeters).toFixed(1) : '–'} miles to ${current.customer_name}`}>
                   <Text style={{ fontFamily: font.semibold, fontSize: 34, lineHeight: 40, color: color.ink }}>{legMin != null ? `${legMin} min` : '–'}</Text>
                   <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]} numberOfLines={1}>
                     {legMeters != null ? `${miles(legMeters).toFixed(1)} mi · ` : ''}to {current.customer_name}
                   </Text>
                 </View>
-                {call ? <IconButton icon="phone" label={`Call ${current.customer_name}`} onPress={call} /> : null}
-                <IconButton icon="navigate" label="Directions" onPress={() => openDirections(current, options)} />
+                {call ? <IconButton icon="phone" size="compact" label={`Call ${current.customer_name}`} onPress={call} /> : null}
+                <IconButton icon="message" size="compact" label={`Text ${current.customer_name}`} onPress={message} />
               </View>
+              {/* Arrival is detected, so getting there leads. */}
+              <Button icon="navigate" label="Get directions" onPress={() => openDirections(current, options)} style={{ marginTop: space[2] }} />
               {/* The maps app can't be told this from a link: a reminder to set it there. */}
               {avoidNotPassed(options) ? (
                 <Text style={[type.caption, { fontSize: 13, lineHeight: 18 }]}>
                   In your maps app, turn on Avoid {avoidList(options).join(' and ')} too: it isn't passed on.
                 </Text>
               ) : null}
-              <View style={{ gap: space[2] }}>
-                <Button label="Arrived" loading={busy === 'arrived'}
-                  onPress={() => run('arrived', async () => { await backend.markArrived(current.id); await refresh(); })} />
-                {/* Started by mistake, or plans changed: back to the trip view. */}
-                <Button variant="text" label="Cancel route" loading={busy === 'cancel'}
-                  onPress={() => run('cancel', async () => { await backend.cancelTrip(current.id); await stopSharing(); await refresh(); })} />
-              </View>
             </>
           ) : null}
 
@@ -357,9 +353,17 @@ export default function Trip() {
           ) : null}
         </View>
       }>
-        {/* The rest of the sheet: the stops after this one, then the ones done. */}
+        {/* The rest of the sheet: the stops after this one, then the ones done. On the way: the job instead. */}
         <View style={{ paddingBottom: space[8] }}>
-          {phase !== 'arrived' ? (
+          {phase === 'onroute' && current ? (
+            <View style={{ gap: 28, paddingTop: 40, paddingHorizontal: space[4] }} accessibilityRole="list" accessibilityLabel="Job details">
+              <JobRow icon="person" text={current.customer_name} />
+              <JobRow icon="pin" text={current.address} />
+              {current.window_start ? <JobRow icon="clock" text={`${route.day === dayKey(new Date()) ? 'Today, ' : ''}${fmtWindow(current)}`} /> : null}
+              {current.notes ? <JobRow icon="lines" text={current.notes} /> : null}
+            </View>
+          ) : null}
+          {phase !== 'arrived' && phase !== 'onroute' ? (
             <>
               {after.length && !review ? (
                 <View style={{ flexDirection: 'row', gap: space[3], paddingHorizontal: space[4] }}>
@@ -411,6 +415,16 @@ export default function Trip() {
         </View>
       </BottomSheet>
 
+      {/* On the way: Arrived (a fallback; arrival is detected) and Cancel, anchored to the bottom. */}
+      {phase === 'onroute' && current ? (
+        <View style={[styles.bottomBar, { paddingBottom: bottomInset + space[4] }]}>
+          <Button variant="secondary" label="Arrived" loading={busy === 'arrived'} style={{ flex: 1 }}
+            onPress={() => run('arrived', async () => { await backend.markArrived(current.id); await refresh(); })} />
+          {/* Started by mistake, or plans changed: back to the trip view. */}
+          <Button variant="text" label="Cancel" loading={busy === 'cancel'}
+            onPress={() => run('cancel', async () => { await backend.cancelTrip(current.id); await stopSharing(); await refresh(); })} />
+        </View>
+      ) : null}
       {/* Reviewing: Confirm route takes Optimize route's place, in blue. */}
       {phase === 'review' && review ? (
         <View style={[styles.floatBar, { bottom: bottomInset + space[4] }]}>
@@ -433,12 +447,15 @@ export default function Trip() {
 
 // Room at the end of the list so its last stop can scroll clear of the floating button.
 const OPTIMIZE_SPACE = 44 + space[4] * 2;
+// The bar at the bottom on the way (a 56px button with its padding, not counting the inset under it).
+const BAR_SPACE = 56 + space[3] + space[4] + 1;
 const styles = StyleSheet.create({
   // The trip's line, shared by the next stop, the list heading and the stops after it.
   line: { flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider },
   nextDot: { marginTop: 5, width: 20, height: 20, borderRadius: 10, backgroundColor: color.action, borderWidth: 4, borderColor: color.brandTint },
   // Full width under the trip totals, like the step dividers.
   totals: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: -space[4], paddingHorizontal: space[8], paddingTop: space[1], paddingBottom: space[4], borderBottomWidth: 1, borderBottomColor: color.divider, marginBottom: space[1] },
+  bottomBar: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingTop: space[3], paddingHorizontal: space[4], backgroundColor: color.surface, borderTopWidth: 1, borderTopColor: color.divider },
   floatBar: { position: 'absolute', left: 0, right: 0, alignItems: 'center', pointerEvents: 'box-none' },
   // Beside the centred button, at the sheet's left margin.
   floatStart: { position: 'absolute', left: space[4], top: 0, bottom: 0, justifyContent: 'center' },
@@ -463,6 +480,16 @@ function TripTotals({ travelMin, meters, stops }: { travelMin: number; meters: n
         <Text key={i} style={[type.stat, { fontSize: 24, lineHeight: 30, fontVariant: ['tabular-nums'] }]}>{it.value}
           <Text style={{ fontFamily: font.medium, fontSize: 16, color: color.inkMuted }}> {it.label}</Text></Text>
       ))}
+    </View>
+  );
+}
+
+/** One line of the job on the way: a gray line icon and its text. */
+function JobRow({ icon, text }: { icon: IconName; text: string }) {
+  return (
+    <View accessibilityRole="text" style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 20 }}>
+      <Icon name={icon} size={24} color={color.mapLabel} />
+      <Text style={{ flex: 1, fontFamily: font.regular, fontSize: 17, lineHeight: 24, color: color.ink }}>{text}</Text>
     </View>
   );
 }

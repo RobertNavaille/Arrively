@@ -44,8 +44,10 @@ export function Button({ label, onPress, variant = 'primary', icon, size = varia
   );
 }
 
-export function IconButton({ icon, label, onPress, variant = 'tint' }: {
+export function IconButton({ icon, label, onPress, variant = 'tint', size = 'md' }: {
   icon: IconName; label: string; onPress?: () => void; variant?: 'tint' | 'plain' | 'solid';
+  /** md 56px (tint and solid), compact 40px (beside a heading, e.g. call and text on the way). */
+  size?: 'md' | 'compact';
 }) {
   const fg = variant === 'tint' ? color.action : variant === 'solid' ? color.onAction : color.ink;
   return (
@@ -53,13 +55,13 @@ export function IconButton({ icon, label, onPress, variant = 'tint' }: {
       accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={6}
       style={({ pressed }) => [
         styles.iconBtn,
-        variant !== 'plain' && styles.iconBtnLarge,
+        variant !== 'plain' && size === 'md' && styles.iconBtnLarge,
         variant === 'tint' && { backgroundColor: color.brandTint },
         variant === 'solid' && { backgroundColor: color.action },
         pressed && { opacity: 0.8 },
       ]}
     >
-      <Icon name={icon} size={variant === 'plain' ? 20 : 24} color={fg} />
+      <Icon name={icon} size={variant === 'plain' || size === 'compact' ? 20 : 24} color={fg} />
     </Pressable>
   );
 }
