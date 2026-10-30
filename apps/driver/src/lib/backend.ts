@@ -208,7 +208,7 @@ function makeDay(day: Date, center: LatLng, count: number, done: boolean): Route
     const start = new Date(day); start.setHours(9 + i, 0, 0, 0);
     return {
       id: `s${seq++}`, route_id: id, position: i + 1, status: done ? 'completed' : 'scheduled',
-      customer_name: NAMES[i % NAMES.length], customer_phone: null, address: STREETS[i % STREETS.length],
+      customer_name: NAMES[i % NAMES.length], customer_phone: `+1401555${String(142 + i).padStart(4, '0')}`, address: STREETS[i % STREETS.length],
       lat: center.lat + (km / 111) * Math.cos(a), lng: center.lng + (km / (111 * Math.cos((center.lat * Math.PI) / 180))) * Math.sin(a),
       window_start: null, window_end: null, service_minutes: 20,
       notes: JOBS[i % JOBS.length], eta: null, arrived_at: null,

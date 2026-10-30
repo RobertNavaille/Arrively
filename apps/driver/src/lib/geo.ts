@@ -48,6 +48,12 @@ export function fmtTime(d: Date | string | null | undefined): string {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 }
 
+/** A phone number as people write it: (401) 555-0142 for US numbers, as stored otherwise. */
+export function fmtPhone(p: string): string {
+  const d = p.replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+  return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : p;
+}
+
 export function fmtWindow(s: Pick<Stop, 'window_start' | 'window_end'>): string {
   if (!s.window_start) return '';
   if (!s.window_end) return fmtTime(s.window_start);

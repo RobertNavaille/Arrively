@@ -4,7 +4,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimens
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
-import { bearingDeg, dayKey, distanceM, pathAhead, estimateDriveMin, fmtDuration, fmtTime, fmtWindow, miles, routeTotals } from '../src/lib/geo';
+import { bearingDeg, dayKey, distanceM, pathAhead, estimateDriveMin, fmtDuration, fmtPhone, fmtTime, fmtWindow, miles, routeTotals } from '../src/lib/geo';
 import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
 import { lockedOrder, optionsOf, SPEED, type RouteOptions, type RoutePlan, type TravelMode } from '../src/lib/routing';
 import { currentStop, useDriverData } from '../src/lib/store';
@@ -93,6 +93,8 @@ export default function Trip() {
   const leg = useRoadRoute(heading ? pos : null, heading && current ? current : null, options);
   const legMeters = leg ? leg.distanceM : pos && current ? distanceM(pos, current) : null;
   const legMin = leg ? Math.max(1, Math.round(leg.durationS / 60)) : legMeters != null ? estimateDriveMin(legMeters) : null;
+  // On the way: when they'll get there, at the drive time left.
+  const arriveAt = legMin != null ? fmtTime(new Date(Date.now() + legMin * 60_000)) : null;
   // Without road routes (offline): straight lines at the travel mode's usual speed.
   const straightMeters = routeTotals(ahead, pos).meters + (back ? distanceM(ahead[ahead.length - 1], pos!) : 0);
   const straight = { meters: straightMeters, driveMin: Math.max(1, Math.round((straightMeters * 1.3) / SPEED[options.mode ?? 'drive'] / 60)) };
@@ -298,14 +300,19 @@ export default function Trip() {
           {phase === 'onroute' && current ? (
             <>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-                <View style={{ flex: 1 }} accessible accessibilityLabel={`${legMin ?? '–'} minutes, ${legMeters != null ? miles(legMeters).toFixed(1) : '–'} miles to ${current.customer_name}`}>
+                <View style={{ flex: 1 }} accessible accessibilityLabel={`${legMin ?? '–'} minutes, ${legMeters != null ? miles(legMeters).toFixed(1) : '–'} miles${arriveAt ? `, arriving ${arriveAt}` : ''}`}>
                   <Text style={{ fontFamily: font.semibold, fontSize: 34, lineHeight: 40, color: color.ink }}>{legMin != null ? `${legMin} min` : '–'}</Text>
                   <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]} numberOfLines={1}>
-                    {legMeters != null ? `${miles(legMeters).toFixed(1)} mi · ` : ''}to {current.customer_name}
+                    {[legMeters != null ? `${miles(legMeters).toFixed(1)} mi` : null, arriveAt ? `Arrive ${arriveAt}` : null].filter(Boolean).join(' · ')}
                   </Text>
                 </View>
-                {call ? <IconButton icon="phone" size="compact" label={`Call ${current.customer_name}`} onPress={call} /> : null}
-                <IconButton icon="message" size="compact" label={`Text ${current.customer_name}`} onPress={message} />
+                {/* Pulled up, call and text move to the phone number's row. */}
+                {!(sheetOpen && current.customer_phone) ? (
+                  <>
+                    {call ? <IconButton icon="phone" size="compact" label={`Call ${current.customer_name}`} onPress={call} /> : null}
+                    <IconButton icon="message" size="compact" label={`Text ${current.customer_name}`} onPress={message} />
+                  </>
+                ) : null}
               </View>
               {/* Arrival is detected, so getting there leads. */}
               <Button icon="navigate" label="Get directions" onPress={() => openDirections(current, options)} style={{ marginTop: space[2] }} />
@@ -360,9 +367,18 @@ export default function Trip() {
       }>
         {/* The rest of the sheet: the stops after this one, then the ones done. On the way: the job instead. */}
         <View style={{ paddingBottom: space[8] }}>
-          {phase === 'onroute' && current ? (
+          {/* The job's details show once the sheet is pulled up to full height. */}
+          {phase === 'onroute' && current && sheetOpen ? (
             <View style={{ gap: 28, paddingTop: 40, paddingHorizontal: space[4] }} accessibilityRole="list" accessibilityLabel="Job details">
               <JobRow icon="person" text={current.customer_name} />
+              {current.customer_phone ? (
+                <JobRow icon="phone" text={fmtPhone(current.customer_phone)} trailing={
+                  <View style={{ flexDirection: 'row', gap: space[2], marginVertical: -8 }}>
+                    {call ? <IconButton icon="phone" size="compact" label={`Call ${current.customer_name}`} onPress={call} /> : null}
+                    <IconButton icon="message" size="compact" label={`Text ${current.customer_name}`} onPress={message} />
+                  </View>
+                } />
+              ) : null}
               <JobRow icon="pin" text={current.address} />
               {current.window_start ? <JobRow icon="clock" text={`${route.day === dayKey(new Date()) ? 'Today, ' : ''}${fmtWindow(current)}`} /> : null}
               {current.notes ? <JobRow icon="lines" text={current.notes} /> : null}
@@ -489,12 +505,13 @@ function TripTotals({ travelMin, meters, stops }: { travelMin: number; meters: n
   );
 }
 
-/** One line of the job on the way: a gray line icon and its text. */
-function JobRow({ icon, text }: { icon: IconName; text: string }) {
+/** One line of the job on the way: a gray line icon and its text (and any buttons, at the right). */
+function JobRow({ icon, text, trailing }: { icon: IconName; text: string; trailing?: ReactNode }) {
   return (
-    <View accessibilityRole="text" style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 20 }}>
+    <View style={{ flexDirection: 'row', alignItems: trailing ? 'center' : 'flex-start', gap: 20 }}>
       <Icon name={icon} size={24} color={color.mapLabel} />
       <Text style={{ flex: 1, fontFamily: font.regular, fontSize: 17, lineHeight: 24, color: color.ink }}>{text}</Text>
+      {trailing}
     </View>
   );
 }
