@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
-import { Animated, PanResponder, Platform, ScrollView, StyleSheet, View, useWindowDimensions, type ViewStyle } from 'react-native';
+import { Animated, PanResponder, Platform, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
+import { useScreenHeight } from '../lib/viewport';
 import { color, radius, shadow } from './theme';
 
 /**
@@ -21,7 +22,7 @@ export function BottomSheet({ top, rest, resetKey, startOpen = false, bottomInse
   bottomInset?: number;
   header: ReactNode; children: ReactNode;
 }) {
-  const { height } = useWindowDimensions();
+  const height = useScreenHeight();
   const offset = useRef(new Animated.Value(rest)).current;
   const restRef = useRef(rest);
   restRef.current = rest;

@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Linking, Pressable, ScrollView, TextInput, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Linking, Pressable, ScrollView, TextInput, StyleSheet, Text, View } from 'react-native';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
@@ -9,7 +9,7 @@ import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHe
 import { lockedOrder, optionsOf, SPEED, type RouteOptions, type RoutePlan, type TravelMode } from '../src/lib/routing';
 import { currentStop, useDriverData } from '../src/lib/store';
 import { avoidList, avoidNotPassed, openDirections } from '../src/lib/navigation';
-import { useBottomInset } from '../src/lib/viewport';
+import { useBottomInset, useScreenHeight } from '../src/lib/viewport';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
 import { AutoButton } from '../src/ui/AutoButton';
 import { BottomSheet } from '../src/ui/BottomSheet';
@@ -38,7 +38,7 @@ const REST_FROM = 68;
  */
 export default function Trip() {
   const router = useRouter();
-  const { height } = useWindowDimensions();
+  const height = useScreenHeight();
   const { routeFor, refresh } = useDriverData();
   const pos = useLivePosition();
   const travel = useTravelBearing(pos);
