@@ -25,8 +25,10 @@ import { color, font, radius, shadow, space, type } from '../src/ui/theme';
 export { ScreenError as ErrorBoundary } from '../src/ui/ScreenError';
 
 const RADIUS_M = 75;
-// A strip of map always shows above the sheet, even pulled all the way up.
-const MAP_STRIP = 68;
+// Pulled all the way up, the sheet stops just under the top of the screen.
+const SHEET_TOP = 10;
+// Where the sheet's resting heights were first measured from (the old map strip above an open sheet).
+const REST_FROM = 68;
 
 /**
  * The trip in one view: the map fills the screen and the trip sits in a sheet
@@ -61,6 +63,8 @@ export default function Trip() {
   const [freeMap, setFreeMap] = useState(false);
   // Arrived: Complete stop opens the ways to mark it (complete, no show, skip).
   const [choosing, setChoosing] = useState(false);
+  // The sheet is pulled up to full height (not resting).
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const stops = route?.stops ?? [];
   const byId = new Map(stops.map((s) => [s.id, s]));
@@ -202,16 +206,17 @@ export default function Trip() {
   // The sheet rests a third of the way down, or lower on the way: just low
   // enough that the step's card (with Arrived) sits above what's covered at the
   // bottom. Never so low that the card would slip under it.
-  const sheetArea = height - MAP_STRIP;
+  const sheetArea = height - SHEET_TOP;
+  // On the way, Arrived and Cancel sit in a bar at the bottom once the sheet is pulled up (not at rest).
   const barSpace = phase === 'onroute' ? BAR_SPACE : 0;
-  const cardRest = cardH != null ? Math.max(0, Math.round(sheetArea - cardH - bottomInset - barSpace)) : null;
-  const peek = phase === 'onroute' && cardRest != null ? cardRest : Math.min(Math.round(height * 0.36), cardRest ?? Infinity);
+  const cardRest = cardH != null ? Math.max(0, Math.round(sheetArea - cardH - bottomInset)) : null;
+  const peek = phase === 'onroute' && cardRest != null ? cardRest : Math.min(Math.round(height * 0.36) + REST_FROM - SHEET_TOP, cardRest ?? Infinity);
 
   return (
     <View style={{ flex: 1, backgroundColor: color.mapGround }}>
       <RouteMap height={height} stops={mapStops} driver={pos} line={line}
         pin={focus ? current : null} pinLabel={phase === 'arrived' ? current?.address.split(',')[0] : undefined}
-        inset={{ top: phase === 'onroute' ? 84 : 0, bottom: height - peek - MAP_STRIP }}
+        inset={{ top: phase === 'onroute' ? 84 : 0, bottom: height - peek - SHEET_TOP }}
         // On the way it's a navigation view: the map follows the driver, who stays centred.
         follow={phase === 'onroute' && !freeMap}
         // The way the driver faces: the compass when there is one, else their direction of travel.
@@ -230,8 +235,8 @@ export default function Trip() {
         </Pressable>
       ) : null}
 
-      {/* On the way: where to, across the top of the map. */}
-      {phase === 'onroute' && current ? (
+      {/* On the way: where to, across the top of the map (until the sheet is pulled up over it). */}
+      {phase === 'onroute' && current && !sheetOpen ? (
         <Pressable onPress={() => openDirections(current, options)} accessibilityRole="button" accessibilityLabel={`Directions to ${current.address}`}
           style={[{ position: 'absolute', top: 12, left: space[4], right: space[4], zIndex: 2, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], paddingVertical: 10, borderRadius: radius.md, backgroundColor: color.surface }, shadow.float]}>
           <Icon name="navigate" size={18} color={color.ink} />
@@ -240,7 +245,7 @@ export default function Trip() {
       ) : null}
 
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
-      <BottomSheet top={MAP_STRIP} rest={peek} resetKey={phase} startOpen={phase === 'review'} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
+      <BottomSheet top={SHEET_TOP} rest={peek} onOpenChange={setSheetOpen} resetKey={phase} startOpen={phase === 'review'} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
         <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH) setCardH(h); }}
           style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' || phase === 'next' || phase === 'review' || phase === 'onroute' ? 0 : 1, borderBottomColor: color.divider }}>
@@ -415,8 +420,8 @@ export default function Trip() {
         </View>
       </BottomSheet>
 
-      {/* On the way: Arrived (a fallback; arrival is detected) and Cancel, anchored to the bottom. */}
-      {phase === 'onroute' && current ? (
+      {/* On the way, with the sheet pulled up: Arrived (a fallback; arrival is detected) and Cancel, anchored to the bottom. */}
+      {phase === 'onroute' && current && sheetOpen ? (
         <View style={[styles.bottomBar, { paddingBottom: bottomInset + space[4] }]}>
           <Button variant="secondary" label="Arrived" loading={busy === 'arrived'} style={{ flex: 1 }}
             onPress={() => run('arrived', async () => { await backend.markArrived(current.id); await refresh(); })} />

@@ -9,8 +9,10 @@ import { color, radius, shadow } from './theme';
  * put inside the sheet; the list scrolls only once the sheet is open. The map
  * above the sheet gets every touch, since nothing covers it.
  */
-export function BottomSheet({ top, rest, resetKey, startOpen = false, bottomInset = 0, hold, header, children }: {
+export function BottomSheet({ top, rest, resetKey, startOpen = false, bottomInset = 0, hold, onOpenChange, header, children }: {
   top: number; rest: number; resetKey: string;
+  /** Told when the sheet opens to full height or goes back to rest. */
+  onOpenChange?: (open: boolean) => void;
   /** Each new step (resetKey) starts open at full height instead of resting. */
   startOpen?: boolean;
   /** True while something inside (a row being dragged) owns the touch: the sheet stays put. */
@@ -34,9 +36,12 @@ export function BottomSheet({ top, rest, resetKey, startOpen = false, bottomInse
   holdRef.current = hold;
   const sheetRef = useRef<View>(null);
 
+  const openChange = useRef(onOpenChange);
+  openChange.current = onOpenChange;
   const snap = useCallback((toOpen: boolean) => {
     openRef.current = toOpen;
     setOpen(toOpen);
+    openChange.current?.(toOpen);
     if (!toOpen) { listRef.current?.scrollTo({ y: 0, animated: false }); listAtTop.current = true; }
     Animated.spring(offset, { toValue: toOpen ? 0 : restRef.current, useNativeDriver: Platform.OS !== 'web', bounciness: 0, speed: 18 }).start();
   }, [offset]);
