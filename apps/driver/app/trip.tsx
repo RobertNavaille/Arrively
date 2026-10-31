@@ -363,7 +363,7 @@ export default function Trip() {
             <View style={{ gap: space[4] }}>
               {arrivedInfo}
               <View style={{ gap: space[2] }}>
-                <Button icon="check" label="Complete stop" onPress={() => setChoosing(true)} />
+                <Button label="Stop Complete" onPress={() => setChoosing(true)} />
                 {/* Arrived by mistake: back to on the way. */}
                 <Button variant="text" label="Continue route" loading={busy === 'undo'}
                   onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
