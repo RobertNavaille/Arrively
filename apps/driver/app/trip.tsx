@@ -207,7 +207,7 @@ export default function Trip() {
       {current.notes ? <JobRow icon="lines" text={current.notes} /> : null}
     </View>
   ) : null;
-  // Arrived: the stop's own moment (time there, who, call and text, the job in full).
+  // Arrived, resting: the stop's own moment (time there, who, call and text). The job in full is pulled up.
   const arrivedInfo = current ? (
     <>
       <View style={{ alignItems: 'center', gap: 4 }}>
@@ -221,9 +221,10 @@ export default function Trip() {
           onPress={call ?? (() => showMessage('No phone number', `There's no phone number for ${current.customer_name}.`))} />
         <IconButton icon="message" size="xl" label={`Message ${current.customer_name}`} onPress={message} />
       </View>
-      <View style={{ paddingTop: space[4], paddingBottom: space[4] }}>{jobDetails()}</View>
     </>
   ) : null;
+  // Pulled up to full height, on the way and arrived: the job's details, with call and text in the phone row.
+  const detailsOpen = sheetOpen && !!current && (phase === 'onroute' || (phase === 'arrived' && !choosing));
 
   // The map: the whole trip, or once arrived, this stop alone.
   const order = [...done, ...ahead];
@@ -243,10 +244,11 @@ export default function Trip() {
   // enough that the step's card (with Arrived) sits above what's covered at the
   // bottom. Never so low that the card would slip under it.
   const sheetArea = height - SHEET_TOP;
-  // On the way, Arrived and Cancel sit in a bar at the bottom once the sheet is pulled up (not at rest).
-  const barSpace = phase === 'onroute' ? BAR_SPACE : 0;
+  // Pulled up (not at rest), a bar sits at the bottom: Arrived and Cancel on the way, Stop Complete and Continue route arrived.
+  const barSpace = phase === 'onroute' || (phase === 'arrived' && !choosing) ? BAR_SPACE : 0;
   const cardRest = cardH != null ? Math.max(0, Math.round(sheetArea - cardH - bottomInset)) : null;
-  const peek = phase === 'onroute' && cardRest != null ? cardRest : Math.min(Math.round(height * 0.36) + REST_FROM - SHEET_TOP, cardRest ?? Infinity);
+  // On the way and arrived, the sheet rests with its card just in view.
+  const peek = (phase === 'onroute' || (phase === 'arrived' && !choosing)) && cardRest != null ? cardRest : Math.min(Math.round(height * 0.36) + REST_FROM - SHEET_TOP, cardRest ?? Infinity);
 
   return (
     <View style={{ flex: 1, backgroundColor: color.mapGround }}>
@@ -283,7 +285,8 @@ export default function Trip() {
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
       <BottomSheet top={SHEET_TOP} rest={peek} onOpenChange={setSheetOpen} resetKey={choosing ? `${phase}:mark` : phase} startOpen={phase === 'review' || choosing} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
-        <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH) setCardH(h); }}
+        // Arrived and pulled up, the card empties for the details: its resting height stays measured from before.
+        <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH && !(phase === 'arrived' && sheetOpen)) setCardH(h); }}
           style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' || phase === 'next' || phase === 'review' || phase === 'onroute' ? 0 : 1, borderBottomColor: color.divider }}>
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: color.divider, alignSelf: 'center' }} />
 
@@ -361,7 +364,8 @@ export default function Trip() {
 
           {/* Arrived: the stop's own moment; the list comes back once it's marked. */}
           {/* Marking (the form), the sheet is just the form. */}
-          {phase === 'arrived' && current && !choosing ? (
+          {/* Pulled up, the job's details take its place, with Stop Complete in a bar at the bottom. */}
+          {phase === 'arrived' && current && !choosing && !sheetOpen ? (
             <View style={{ gap: space[4] }}>
               {arrivedInfo}
               <View style={{ gap: space[2] }}>
@@ -407,8 +411,8 @@ export default function Trip() {
             </View>
           ) : null}
           {/* The job's details show once the sheet is pulled up to full height. */}
-          {phase === 'onroute' && current && sheetOpen ? (
-            <View style={{ paddingTop: 40, paddingHorizontal: space[4] }}>
+          {detailsOpen && current ? (
+            <View style={{ paddingTop: phase === 'onroute' ? 40 : space[4], paddingHorizontal: space[4] }}>
               {jobDetails(
                 <View style={{ flexDirection: 'row', gap: space[2], marginVertical: -8 }}>
                   {call ? <IconButton icon="phone" size="compact" label={`Call ${current.customer_name}`} onPress={call} /> : null}
@@ -477,6 +481,15 @@ export default function Trip() {
           {/* Started by mistake, or plans changed: back to the trip view. */}
           <Button variant="text" label="Cancel" loading={busy === 'cancel'}
             onPress={() => run('cancel', async () => { await backend.cancelTrip(current.id); await stopSharing(); await refresh(); })} />
+        </View>
+      ) : null}
+      {/* Arrived, with the sheet pulled up: Stop Complete and Continue route, anchored to the bottom. */}
+      {phase === 'arrived' && current && !choosing && sheetOpen ? (
+        <View style={[styles.bottomBar, { paddingBottom: bottomInset + space[4] }]}>
+          <Button label="Stop Complete" style={{ flex: 1 }} onPress={() => setChoosing(true)} />
+          {/* Arrived by mistake: back to on the way. */}
+          <Button variant="text" label="Continue route" loading={busy === 'undo'}
+            onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
         </View>
       ) : null}
       {/* Reviewing: Confirm route takes Optimize route's place, in blue. */}

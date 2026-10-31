@@ -16,6 +16,7 @@ Several items have a **reference commit** on branch `claude/vibrant-goldberg-dpz
 | 4 | Restyle My Day to match the trip view (type sizes, no divider lines) | Driver · My Day | ✔️ | 2026-10-31 | `c8a3206` + `02dd0ca` |
 | 5 | Show the driver's comments from completing a stop on its details screen | Driver · Stop details | ✔️ | 2026-10-31 | `341db9b` |
 | 6 | Call and text back to the large buttons | Driver · On route | ✔️ | 2026-10-31 | `d0ea5c7` |
+| 7 | Arrived: job details only at full height, replacing the Arrived UI | Driver · Arrived | ✔️ | 2026-10-31 | — |
 
 ## Details
 
@@ -51,3 +52,18 @@ The change, for any marked stop:
 `apps/driver/app/trip.tsx`, `phase === 'onroute'`, in the row beside the minutes and miles: remove `size="compact"` from the call and text `IconButton`s so they go back to the default 56px. Before 2133e36 they were the default size.
 
 The copies in the phone-number row, which show once the sheet is pulled up, stay compact (40px). If those change too, update the comment on `IconButton`'s `size` prop in `apps/driver/src/ui/components.tsx`.
+
+### #7: Arrived: job details only when the sheet is fully open
+`apps/driver/app/trip.tsx`, `phase === 'arrived'`. Today `arrivedInfo` shows everything at once: the "At stop since…" pill, "Arrived", the name and street, the XL call and text buttons, then the full job details (`jobDetails()`), then Stop Complete and Continue route.
+
+**The change:**
+- **Resting sheet:** the Arrived UI without the job details: the pill, "Arrived", name and street, call and text, Stop Complete, and Continue route.
+- **Sheet pulled up to full height** (`sheetOpen`): the Arrived UI disappears and only the job details show: person, phone, address, time window, and notes.
+- **Existing pattern to follow:** the On route screen already does this. Its details render only when `sheetOpen` (the `phase === 'onroute' && current && sheetOpen` block), with call and text moving into the phone row via `jobDetails(contact)`.
+
+**Decided (built):** at full height, Stop Complete (filling the row) and Continue route are pinned in a bar at the bottom, and call and text sit in the phone row (compact). The sheet now rests with the shorter card just in view.
+
+**Open questions (answered):**
+- At full height, should Stop Complete stay reachable? For example, it could be pinned at the bottom the way On route pins Arrived and Cancel when the sheet is open. Or should the driver pull the sheet back down to act?
+- Should call and text move into the phone row at full height, as on On route?
+- The resting height may need re-tuning once the details are gone, since the card is much shorter.
