@@ -16,6 +16,7 @@ import { BottomSheet } from '../src/ui/BottomSheet';
 import { ReorderList } from '../src/ui/ReorderList';
 import { SelectChip, ToggleChip } from '../src/ui/Chips';
 import { useCountTo } from '../src/ui/useCountTo';
+import { FadeIn } from '../src/ui/FadeIn';
 import { Button, IconButton, StatusPill } from '../src/ui/components';
 import { Icon, type IconName } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
@@ -367,13 +368,13 @@ export default function Trip() {
           {/* Pulled up, the job's details take its place, with Stop Complete in a bar at the bottom. */}
           {/* Arrived, pulled up to the job's details: a left-aligned heading, how long they've been there beside it, a divider under it. */}
           {phase === 'arrived' && current && !choosing && sheetOpen ? (
-            <View style={styles.arrivedHeading}>
+            <FadeIn style={styles.arrivedHeading} from={-6}>
               <Text style={[type.title, { flex: 1, fontSize: 28, lineHeight: 34 }]} accessibilityRole="header">Arrived</Text>
               <StatusPill center tone="info" icon="clock" label={`At stop${current.arrived_at ? ` since ${fmtTime(current.arrived_at)}` : ''}`} />
-            </View>
+            </FadeIn>
           ) : null}
           {phase === 'arrived' && current && !choosing && !sheetOpen ? (
-            <View style={{ gap: space[4] }}>
+            <FadeIn style={{ gap: space[4] }}>
               {arrivedInfo}
               <View style={{ gap: space[2] }}>
                 <Button label="Stop Complete" onPress={() => setChoosing(true)} />
@@ -381,7 +382,7 @@ export default function Trip() {
                 <Button variant="text" label="Continue route" loading={busy === 'undo'}
                   onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
               </View>
-            </View>
+            </FadeIn>
           ) : null}
 
           {phase === 'finished' ? (
@@ -419,14 +420,14 @@ export default function Trip() {
           ) : null}
           {/* The job's details show once the sheet is pulled up to full height. */}
           {detailsOpen && current ? (
-            <View style={{ paddingTop: phase === 'onroute' ? 40 : space[4], paddingHorizontal: space[4] }}>
+            <FadeIn delay={60} style={{ paddingTop: phase === 'onroute' ? 40 : space[4], paddingHorizontal: space[4] }}>
               {jobDetails(
                 <View style={{ flexDirection: 'row', gap: space[2], marginVertical: -8 }}>
                   {call ? <IconButton icon="phone" size="compact" label={`Call ${current.customer_name}`} onPress={call} /> : null}
                   <IconButton icon="message" size="compact" label={`Text ${current.customer_name}`} onPress={message} />
                 </View>,
               )}
-            </View>
+            </FadeIn>
           ) : null}
           {phase !== 'arrived' && phase !== 'onroute' ? (
             <>
@@ -482,22 +483,22 @@ export default function Trip() {
 
       {/* On the way, with the sheet pulled up: Arrived (a fallback; arrival is detected) and Cancel, anchored to the bottom. */}
       {phase === 'onroute' && current && sheetOpen ? (
-        <View style={[styles.bottomBar, { paddingBottom: bottomInset + space[4] }]}>
+        <FadeIn from={16} style={[styles.bottomBar, { paddingBottom: bottomInset + space[4] }]}>
           <Button variant="secondary" label="Arrived" loading={busy === 'arrived'} style={{ flex: 1 }}
             onPress={() => run('arrived', async () => { await backend.markArrived(current.id); await refresh(); })} />
           {/* Started by mistake, or plans changed: back to the trip view. */}
           <Button variant="text" label="Cancel" loading={busy === 'cancel'}
             onPress={() => run('cancel', async () => { await backend.cancelTrip(current.id); await stopSharing(); await refresh(); })} />
-        </View>
+        </FadeIn>
       ) : null}
       {/* Arrived, with the sheet pulled up: Stop Complete and Continue route, anchored to the bottom. */}
       {phase === 'arrived' && current && !choosing && sheetOpen ? (
-        <View style={[styles.bottomBar, { paddingBottom: bottomInset + space[4] }]}>
+        <FadeIn from={16} style={[styles.bottomBar, { paddingBottom: bottomInset + space[4] }]}>
           <Button label="Stop Complete" style={{ flex: 1 }} onPress={() => setChoosing(true)} />
           {/* Arrived by mistake: back to on the way. */}
           <Button variant="text" label="Continue route" loading={busy === 'undo'}
             onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
-        </View>
+        </FadeIn>
       ) : null}
       {/* Reviewing: Confirm route takes Optimize route's place, in blue. */}
       {phase === 'review' && review ? (
