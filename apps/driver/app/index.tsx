@@ -144,15 +144,15 @@ export default function MyDay() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[2] }}>
         <Avatar name={profile?.name ?? 'Driver'} size={36} />
         <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={type.heading}>{day.toLocaleDateString('en-US', { weekday: 'long' })}</Text>
-          <Text style={type.caption}>{day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}{isToday ? ' · Today' : ''}</Text>
+          <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]} accessibilityRole="header">{day.toLocaleDateString('en-US', { weekday: 'long' })}</Text>
+          <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]}>{day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}{isToday ? ' · Today' : ''}</Text>
         </View>
         <IconButton icon="more" label="More" variant="plain" onPress={() => setMenu(true)} />
       </View>
 
       {/* Date strip */}
       {/* Week strip, Sunday to Saturday; swipe for the next or previous week. */}
-      <View style={{ borderBottomWidth: 1, borderBottomColor: color.divider }}>
+      <View>
         <FlatList
           ref={stripRef}
           data={weeks}
@@ -248,11 +248,11 @@ export default function MyDay() {
             {q.trim() ? <Pressable accessibilityLabel="Close search" onPress={() => setQ('')} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: color.scrim, zIndex: 2 }} /> : null}
             {error ? <Text style={[type.caption, { color: color.danger, paddingHorizontal: space[4], paddingTop: space[2] }]}>{error}</Text> : null}
             {trip ? <TripBar route={trip} /> : (
-              <View style={{ padding: space[4], paddingBottom: space[6] + bottomInset, borderTopWidth: 1, borderTopColor: color.divider }}>
+              <View style={{ padding: space[4], paddingBottom: space[6] + bottomInset }}>
                 {isToday && current ? (
                   <Button label="Start trip" onPress={() => router.push('/trip')} />
                 ) : (
-                  <Text style={[type.body, { color: color.inkMuted, textAlign: 'center', paddingVertical: space[3] }]}>
+                  <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted, textAlign: 'center', paddingVertical: space[3] }]}>
                     {footerText(route, day, today)}
                   </Text>
                 )}
@@ -336,7 +336,7 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, search }: {
         {search}
         <View style={{ alignItems: 'center', paddingVertical: space[8], paddingHorizontal: space[6], gap: space[2] }}>
           <Icon name="route" size={28} color={color.inkMuted} />
-          <Text style={[type.body, { color: color.inkMuted, textAlign: 'center' }]}>
+          <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted, textAlign: 'center' }]}>
             {loading ? 'Loading…' : 'No stops this day. Search above to add one.'}
           </Text>
         </View>
@@ -352,28 +352,35 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, search }: {
           <RouteMap height={190} stops={mapStops} driver={isToday ? driver : null} />
         </View>
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space[3], paddingHorizontal: space[4], paddingTop: space[4], paddingBottom: space[2] }}>
-        <Text style={type.heading}>{count}</Text>
-        {countMeta ? <Text style={type.caption}>{countMeta}</Text> : null}
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space[3], paddingHorizontal: space[4], paddingTop: space[6], paddingBottom: space[4] }}>
+        <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]}>{count}</Text>
+        {countMeta ? <Text style={[type.body, { color: color.inkMuted, flexShrink: 1, textAlign: 'right' }]}>{countMeta}</Text> : null}
       </View>
-      <View style={{ borderTopWidth: 1, borderTopColor: color.divider, paddingHorizontal: space[4] }}>
-        {stops.map((s, i) => (
-          <StopListRow key={s.id} stop={s} isCurrent={s.id === current?.id} last={i === stops.length - 1} onPress={() => onOpenStop(s)} />
+      <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
+        {stops.map((s) => (
+          <StopListRow key={s.id} stop={s} isCurrent={route?.status === 'active' && s.id === current?.id} onPress={() => onOpenStop(s)} />
         ))}
       </View>
     </ScrollView>
   );
 }
 
-function StopListRow({ stop, isCurrent, last, onPress }: { stop: Stop; isCurrent: boolean; last: boolean; onPress: () => void }) {
+/** A stop on the day, styled like the trip's stop list: a blue ring (or a check once done), name and address. No dividers. */
+function StopListRow({ stop, isCurrent, onPress }: { stop: Stop; isCurrent: boolean; onPress: () => void }) {
   const done = isDone(stop);
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${stop.customer_name}, ${stop.address}${done ? ', done' : isCurrent ? ', next' : ''}`}
-      style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[3], borderBottomWidth: last ? 0 : 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
-      <View style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: done ? color.divider : color.brand }} />
+      style={({ pressed }) => [{ flexDirection: 'row', gap: space[3], paddingBottom: 20 }, pressed && { opacity: 0.6 }]}>
+      <View style={{ width: 20, alignItems: 'center' }}>
+        {done
+          ? <View style={{ marginTop: 3 }}><Icon name="check" size={18} color={color.inkMuted} /></View>
+          : <View style={{ marginTop: 5, width: 16, height: 16, borderRadius: 8, backgroundColor: isCurrent ? color.action : color.surface, borderWidth: 3, borderColor: color.action }} />}
+      </View>
       <View style={{ flex: 1 }}>
-        <Text style={type.bodyStrong}>{stop.customer_name}</Text>
-        <Text style={type.caption} numberOfLines={1}>{stop.address}{stop.notes ? ` · ${stop.notes}` : ''}</Text>
+        <Text style={{ fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: done ? color.inkMuted : color.ink }}>{stop.customer_name}</Text>
+        <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }} numberOfLines={1}>
+          {stop.address.split(',')[0]}{stop.notes ? ` · ${stop.notes}` : ''}
+        </Text>
       </View>
     </Pressable>
   );
@@ -402,7 +409,7 @@ function SearchHeader({ label, q, setQ, results, err, onPick }: {
   const open = q.trim().length > 0;
   return (
     <View style={{ padding: space[4], paddingTop: space[3], paddingBottom: space[3], backgroundColor: color.surface, zIndex: 10 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], height: 44, paddingHorizontal: space[3], borderRadius: radius.full, backgroundColor: color.surfaceMuted, borderWidth: 1, borderColor: color.divider }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], height: 44, paddingHorizontal: space[3], borderRadius: radius.full, backgroundColor: color.surfaceMuted }}>
         <Icon name="search" size={20} color={color.inkMuted} />
         <TextInput value={q} onChangeText={setQ} placeholder={`Add a stop to ${label}`} placeholderTextColor={color.inkMuted}
           accessibilityLabel={`Add a stop to ${label}`} autoCorrect={false}
@@ -417,7 +424,7 @@ function SearchHeader({ label, q, setQ, results, err, onPick }: {
           <View style={[{ position: 'absolute', top: '100%', left: space[4], right: space[4], backgroundColor: color.surface, borderRadius: radius.md, borderWidth: 1, borderColor: color.divider, overflow: 'hidden' }, shadow.float]}>
             {results.map((p) => (
               <Pressable key={p.id} accessibilityRole="button" onPress={() => onPick(p)}
-                style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3], borderBottomWidth: 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
+                style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3] }, pressed && { backgroundColor: color.surfaceMuted }]}>
                 <Icon name="pin" size={20} color={color.inkMuted} />
                 <View style={{ flex: 1 }}>
                   <Text style={type.bodyStrong} numberOfLines={1}>{p.name}</Text>
