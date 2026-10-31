@@ -341,8 +341,8 @@ export default function Trip() {
                 {/* Pulled up, call and text move to the phone number's row. */}
                 {!(sheetOpen && current.customer_phone) ? (
                   <>
-                    {call ? <IconButton icon="phone" size="compact" label={`Call ${current.customer_name}`} onPress={call} /> : null}
-                    <IconButton icon="message" size="compact" label={`Text ${current.customer_name}`} onPress={message} />
+                    {call ? <IconButton icon="phone" label={`Call ${current.customer_name}`} onPress={call} /> : null}
+                    <IconButton icon="message" label={`Text ${current.customer_name}`} onPress={message} />
                   </>
                 ) : null}
               </View>
