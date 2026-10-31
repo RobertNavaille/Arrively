@@ -8,7 +8,8 @@ import type { LatLng, MarkOutcome, Profile, Route, Stop } from './types';
 
 /** Everything the app does against the server. Two implementations: Supabase and an offline demo. */
 /** What the driver fills in when adding a stop. */
-export interface StopDetails { name?: string; notes?: string }
+/** `phone`: as stored (normalized), or null for none. */
+export interface StopDetails { name?: string; notes?: string; phone?: string | null }
 
 export interface Backend {
   offline: boolean;
@@ -143,7 +144,7 @@ const supabaseBackend: Backend = {
     const routeId = check(await supabase().rpc('my_route_for', { p_day: day })) as string;
     check(await supabase().rpc('add_stop', {
       p_route: routeId, p_address: address, p_lat: at.lat, p_lng: at.lng,
-      p_customer_name: details?.name?.trim() || null, p_notes: details?.notes?.trim() || null,
+      p_customer_name: details?.name?.trim() || null, p_customer_phone: details?.phone || null, p_notes: details?.notes?.trim() || null,
     }));
     refreshEtas(true);
   },
@@ -152,7 +153,9 @@ const supabaseBackend: Backend = {
     refreshEtas(true);
   },
   async updateDetails(stopId, details) {
-    check(await supabase().rpc('update_stop_details', { p_stop: stopId, p_name: details.name?.trim() || null, p_notes: details.notes?.trim() || null }));
+    check(await supabase().rpc('update_stop_details', {
+      p_stop: stopId, p_name: details.name?.trim() || null, p_notes: details.notes?.trim() || null, p_phone: details.phone ?? null,
+    }));
   },
   async removeStop(stopId) {
     check(await supabase().rpc('remove_stop', { p_stop: stopId }));
@@ -290,7 +293,7 @@ const offlineBackend: Backend = {
     if (r.status === 'completed') r.status = 'active';
     r.stops.push({
       id: `s${seq++}`, route_id: r.id, position: (Math.max(0, ...r.stops.map((x) => x.position))) + 1,
-      status: r.status === 'active' ? 'queued' : 'scheduled', customer_name: details?.name?.trim() || 'New stop', customer_phone: null,
+      status: r.status === 'active' ? 'queued' : 'scheduled', customer_name: details?.name?.trim() || 'New stop', customer_phone: details?.phone || null,
       address, lat: at.lat, lng: at.lng, window_start: null, window_end: null, service_minutes: 20, notes: details?.notes?.trim() || null,
       eta: null, arrived_at: null, marked_at: null, departed_at: null,
     });
@@ -299,7 +302,9 @@ const offlineBackend: Backend = {
   async updateAddress(stopId, address, at) { const [, s] = findStop(stopId); s.address = address; s.lat = at.lat; s.lng = at.lng; emit(); },
   async updateDetails(stopId, details) {
     const [, s] = findStop(stopId);
-    s.customer_name = details.name?.trim() || s.customer_name; s.notes = details.notes?.trim() || null; emit();
+    s.customer_name = details.name?.trim() || s.customer_name; s.notes = details.notes?.trim() || null;
+    if (details.phone !== undefined) s.customer_phone = details.phone;
+    emit();
   },
   async removeStop(stopId) {
     const [r, s] = findStop(stopId);

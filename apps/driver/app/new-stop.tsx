@@ -4,6 +4,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
+import { fmtPhone, normalizePhone } from '../src/lib/geo';
 import { searchAddress, type Place } from '../src/lib/mapbox';
 import { useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
@@ -18,8 +19,8 @@ const field = {
 } as const;
 
 /**
- * Add a stop: the address picked in My day's search, plus a name and notes
- * (DRV-24). With `id`, the same form edits that stop: name, address, notes.
+ * Add a stop: the address picked in My day's search, plus a name, phone and notes
+ * (DRV-24). With `id`, the same form edits that stop: name, phone, address, notes.
  */
 export default function NewStop() {
   const params = useLocalSearchParams<{ id?: string; day: string; name: string; detail: string; lat: string; lng: string }>();
@@ -36,6 +37,9 @@ export default function NewStop() {
   });
   const [name, setName] = useState(editing?.customer_name ?? '');
   const [notes, setNotes] = useState(editing?.notes ?? '');
+  // Optional; for calling the customer. Texts only go to numbers with consent recorded in the console.
+  const [phone, setPhone] = useState(editing?.customer_phone ? fmtPhone(editing.customer_phone) : '');
+  const [phoneBad, setPhoneBad] = useState(false);
   const [busy, setBusy] = useState(false);
   const [nameMissing, setNameMissing] = useState(false);
 
@@ -45,15 +49,17 @@ export default function NewStop() {
   async function save() {
     // The customer's name is required.
     if (!name.trim()) { setNameMissing(true); return; }
+    const storedPhone = normalizePhone(phone);
+    if (storedPhone === undefined) { setPhoneBad(true); return; }
     setBusy(true);
     try {
       if (editing) {
         if (place.id !== 'current') await backend.updateAddress(editing.id, label(place), place);
-        if (name.trim() !== editing.customer_name || (notes.trim() || null) !== (editing.notes || null)) {
-          await backend.updateDetails(editing.id, { name, notes });
+        if (name.trim() !== editing.customer_name || (notes.trim() || null) !== (editing.notes || null) || storedPhone !== (editing.customer_phone || null)) {
+          await backend.updateDetails(editing.id, { name, notes, phone: storedPhone });
         }
       } else {
-        await backend.addStop(day, label(place), place, { name, notes });
+        await backend.addStop(day, label(place), place, { name, notes, phone: storedPhone });
       }
       await refresh();
       router.back();
@@ -78,6 +84,15 @@ export default function NewStop() {
                 autoFocus={!editing} autoCapitalize="words" textContentType="name" returnKeyType="next" accessibilityLabel="Customer name"
                 style={[field, nameMissing && { borderColor: color.danger }]} />
               {nameMissing ? <Text style={[type.caption, { color: color.danger }]} accessibilityLiveRegion="polite">Add the customer's name.</Text> : null}
+            </View>
+
+            <View style={{ gap: space[2] }}>
+              <Text style={[type.label, { textTransform: 'uppercase' }]}>Phone number</Text>
+              <TextInput value={phone} onChangeText={(t) => { setPhone(t); setPhoneBad(false); }}
+                placeholder="(401) 555-0100 (optional)" placeholderTextColor={color.inkMuted}
+                keyboardType="phone-pad" textContentType="telephoneNumber" autoComplete="tel" accessibilityLabel="Phone number"
+                style={[field, phoneBad && { borderColor: color.danger }]} />
+              {phoneBad ? <Text style={[type.caption, { color: color.danger }]} accessibilityLiveRegion="polite">Enter a 10-digit phone number.</Text> : null}
             </View>
 
             <AddressField place={place} onChange={setPlace} />

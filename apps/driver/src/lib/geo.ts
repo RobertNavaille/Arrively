@@ -54,6 +54,17 @@ export function fmtPhone(p: string): string {
   return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : p;
 }
 
+/** A phone number to store: +1 and ten digits for US numbers; null if empty; undefined if it doesn't look like one. */
+export function normalizePhone(p: string): string | null | undefined {
+  const raw = p.trim();
+  if (!raw) return null;
+  const d = raw.replace(/\D/g, '');
+  if (d.length === 10) return `+1${d}`;
+  if (d.length === 11 && d.startsWith('1')) return `+${d}`;
+  if (raw.startsWith('+') && d.length >= 8 && d.length <= 15) return `+${d}`;
+  return undefined;
+}
+
 export function fmtWindow(s: Pick<Stop, 'window_start' | 'window_end'>): string {
   if (!s.window_start) return '';
   if (!s.window_end) return fmtTime(s.window_start);
