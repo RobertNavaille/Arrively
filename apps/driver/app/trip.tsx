@@ -4,7 +4,7 @@ import { Modal, Pressable, ScrollView, TextInput, StyleSheet, Text, View } from 
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
-import { bearingDeg, dayKey, distanceM, pathAhead, estimateDriveMin, fmtDuration, fmtPhone, fmtTime, fmtWindow, miles, routeTotals } from '../src/lib/geo';
+import { bearingDeg, dayKey, distanceM, pathAhead, pathLengthM, estimateDriveMin, fmtDuration, fmtPhone, fmtTime, fmtWindow, miles, routeTotals } from '../src/lib/geo';
 import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
 import { lockedOrder, optionsOf, SPEED, type RouteOptions, type RoutePlan, type TravelMode } from '../src/lib/routing';
 import { currentStop, useDriverData } from '../src/lib/store';
@@ -93,11 +93,14 @@ export default function Trip() {
   const options: RouteOptions = (review && tryOptions) || (route ? optionsOf(route) : {});
   const back = !!options.roundTrip && !!pos && ahead.length > 0;
   // The road route for the whole trip ahead (back to the start on a round trip), and for the leg to the current stop.
-  const road = useRoadPath(pos, ahead, options);
+  // (Only where it's shown: the trip view and Optimize route. On the way, the leg is enough.)
+  const road = useRoadPath(pos, phase === 'next' || phase === 'review' ? ahead : [], options);
   const heading = phase === 'next' || phase === 'onroute';
   const leg = useRoadRoute(heading ? pos : null, heading && current ? current : null, options);
-  const legMeters = leg ? leg.distanceM : pos && current ? distanceM(pos, current) : null;
-  const legMin = leg ? Math.max(1, Math.round(leg.durationS / 60)) : legMeters != null ? estimateDriveMin(legMeters) : null;
+  // The leg isn't asked for again while the driver stays on it, so what's left counts down along its line.
+  const legShare = leg && pos ? Math.min(1, pathLengthM(pathAhead(leg.path, pos)) / Math.max(1, pathLengthM(leg.path))) : 1;
+  const legMeters = leg ? leg.distanceM * legShare : pos && current ? distanceM(pos, current) : null;
+  const legMin = leg ? Math.max(1, Math.round((leg.durationS * legShare) / 60)) : legMeters != null ? estimateDriveMin(legMeters) : null;
   // On the way: when they'll get there, at the drive time left.
   const arriveAt = legMin != null ? fmtTime(new Date(Date.now() + legMin * 60_000)) : null;
   // Without road routes (offline): straight lines at the travel mode's usual speed.

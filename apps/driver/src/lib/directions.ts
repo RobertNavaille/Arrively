@@ -2,7 +2,7 @@
 // shown to the driver follow real roads (Mapbox Directions, with traffic).
 import { useEffect, useRef, useState } from 'react';
 import { MAPBOX_TOKEN } from './config';
-import { distanceM } from './geo';
+import { distanceM, distanceToPathM } from './geo';
 import type { RouteOptions } from './routing';
 import type { LatLng } from './types';
 
@@ -23,6 +23,11 @@ const optionsKey = (o: RouteOptions) => `${o.mode ?? 'drive'}${o.avoidHighways ?
 
 // Ask again only after the driver has moved this far, to keep requests down.
 const REFETCH_AFTER_M = 150;
+// The leg to a stop is asked again only when the driver leaves it (farther than
+// this from its line), or after a while for fresh traffic. Each request is a
+// Mapbox Directions call, the app's biggest Mapbox cost.
+const OFF_ROUTE_M = 60;
+const LEG_MAX_AGE_MS = 5 * 60_000;
 
 export async function fetchRoadRoute(from: LatLng, to: LatLng, signal?: AbortSignal, options: RouteOptions = {}): Promise<RoadRoute | null> {
   if (!MAPBOX_TOKEN) return null;
@@ -42,10 +47,15 @@ export async function fetchRoadRoute(from: LatLng, to: LatLng, signal?: AbortSig
 /** The road route from `from` to `to`, refreshed as the driver moves; null until known or without a Mapbox token. */
 export function useRoadRoute(from: LatLng | null, to: LatLng | null, options: RouteOptions = {}): RoadRoute | null {
   const opts = optionsKey(options);
-  const want = from && to && MAPBOX_TOKEN ? { from, to, opts } : null;
-  return useLoaded(want && `${opts}|${keyOf([from!, to!])}`, want,
-    (a, b) => a.opts === b.opts && a.to.lat === b.to.lat && a.to.lng === b.to.lng && distanceM(a.from, b.from) < REFETCH_AFTER_M,
+  const known = useRef<RoadRoute | null>(null);
+  const want = from && to && MAPBOX_TOKEN ? { from, to, opts, at: Date.now() } : null;
+  const route = useLoaded(want && `${opts}|${keyOf([from!, to!])}`, want,
+    // The same route still serves while the driver is on it (or hasn't moved far), until it's a few minutes old.
+    (a, b) => a.opts === b.opts && a.to.lat === b.to.lat && a.to.lng === b.to.lng && b.at - a.at < LEG_MAX_AGE_MS
+      && (distanceM(a.from, b.from) < REFETCH_AFTER_M || (!!known.current && distanceToPathM(known.current.path, b.from) < OFF_ROUTE_M)),
     (w) => fetchRoadRoute(w.from, w.to, undefined, options));
+  known.current = route;
+  return route;
 }
 
 // Directions takes at most 25 points per request; longer days are split into

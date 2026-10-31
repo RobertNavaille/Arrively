@@ -79,13 +79,21 @@ async function invoke<T>(name: string, body: Record<string, unknown>): Promise<T
   return data as T;
 }
 
-// ETAs are refreshed after anything that changes the route, and at most once a
-// minute from location reports; the server throttles too (ETA-2).
-const ETA_EVERY_MS = 60_000;
+// ETAs are refreshed after anything that changes the route, and from location
+// reports at most every 2.5 minutes once the driver has moved (10 while still): each
+// refresh is a Mapbox Directions request, the app's biggest Mapbox cost. The
+// server throttles too (ETA-2).
+const ETA_EVERY_MS = 150_000;
+const ETA_MOVED_M = 200;
+const ETA_STILL_MS = 600_000;
 let lastEtaCall = 0;
-function refreshEtas(force: boolean) {
+let lastEtaAt: LatLng | null = null;
+function refreshEtas(force: boolean, at?: LatLng) {
   if (!force && Date.now() - lastEtaCall < ETA_EVERY_MS) return;
+  // Stopped (at a stop, in traffic): every 10 minutes, so later customers' times still move on.
+  if (!force && at && lastEtaAt && distanceM(lastEtaAt, at) < ETA_MOVED_M && Date.now() - lastEtaCall < ETA_STILL_MS) return;
   lastEtaCall = Date.now();
+  if (at) lastEtaAt = at;
   invoke('route-etas', { force }).catch((e) => console.warn('ETA refresh failed', e));
 }
 
@@ -166,7 +174,7 @@ const supabaseBackend: Backend = {
       p_lat: p.lat, p_lng: p.lng, p_heading: p.heading ?? null, p_speed: p.speed ?? null,
       p_accuracy: p.accuracy ?? null, p_recorded_at: p.at ?? new Date().toISOString(),
     }));
-    refreshEtas(false);
+    refreshEtas(false, { lat: p.lat, lng: p.lng });
   },
   planRoute(routeId, from, options) { return invoke<RoutePlan>('route-plan', { route_id: routeId, from, options }); },
   async applyPlan(routeId, order, from, options) { await invoke('route-plan', { route_id: routeId, apply: order, from, options }); },

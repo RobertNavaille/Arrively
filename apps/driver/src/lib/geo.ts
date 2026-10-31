@@ -95,6 +95,20 @@ export function parseDay(key: string): Date {
  * they drive, what's behind them drops off. Distances use a flat projection
  * around the driver, plenty for a few kilometres.
  */
+/** Length of a path, meters. */
+export function pathLengthM(path: LatLng[]): number {
+  let m = 0;
+  for (let i = 1; i < path.length; i++) m += distanceM(path[i - 1], path[i]);
+  return m;
+}
+
+/** How far `at` is from the nearest point of `path`, meters (flat projection, fine for a few km). */
+export function distanceToPathM(path: LatLng[], at: LatLng): number {
+  if (!path.length) return Infinity;
+  const ahead = pathAhead(path, at);
+  return distanceM(ahead[0], at);
+}
+
 export function pathAhead(path: LatLng[], at: LatLng): LatLng[] {
   if (path.length < 2) return path;
   const k = Math.cos((at.lat * Math.PI) / 180);
