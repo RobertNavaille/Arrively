@@ -361,10 +361,8 @@ function PlanPanel({ route, plan, onUse, onClose }: { route: ConsoleRoute; plan:
   plan.order.filter((id) => ['scheduled', 'queued'].includes(byId.get(id)?.status ?? '')).forEach((id, i) => after.set(id, slots[i]));
   const same = plan.order.join() === plan.current.order.join();
   const saved = plan.current.drive_s - plan.drive_s;
-  const fewerLate = plan.current.late.length - plan.late.length;
   const headline = same ? 'This order is already the best'
-    : saved >= 60 ? `Saves ${minutes(saved)} of driving`
-    : fewerLate > 0 ? `${fewerLate} fewer late ${fewerLate === 1 ? 'arrival' : 'arrivals'}` : 'About the same drive time';
+    : saved >= 60 ? `Saves ${minutes(saved)} of driving` : 'About the same drive time';
   return (
     <div style={{ margin: '8px 0 12px', padding: 16, borderRadius: 12, background: 'var(--surface-muted)', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 24px' }}>
@@ -373,23 +371,17 @@ function PlanPanel({ route, plan, onUse, onClose }: { route: ConsoleRoute; plan:
         <span className="caption"><b style={{ color: 'var(--ink)' }}>{(plan.distance_m / 1609.34).toFixed(1)} mi</b></span>
         <span className="caption">Finish <b style={{ color: 'var(--ink)' }}>{fmtTime(plan.finish)}</b></span>
       </div>
-      {plan.late.length ? (
-        <div className="caption" style={{ color: 'var(--warning)', fontWeight: 600 }}>
-          Can&apos;t make the window: {plan.late.map((id) => byId.get(id)?.customer_name).join(', ')}
-        </div>
-      ) : null}
       <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
         {plan.order.map((id) => {
           const s = byId.get(id); if (!s) return null;
           const n = after.get(id)!, was = before.get(id)!;
-          const late = plan.late.includes(id);
           return (
             <li key={id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0' }}>
               <span className={`num ${s.status === 'en_route' ? 'next' : ''}`}>{n}</span>
               <span className="body" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 <b>{s.customer_name}</b> <span className="caption">{[s.status === 'en_route' ? 'on the way now' : n !== was ? `was ${was}` : '', windowText(s)].filter(Boolean).map((t) => ` · ${t}`).join('')}</span>
               </span>
-              <span className="caption" style={{ fontWeight: 600, color: late ? 'var(--warning)' : 'var(--ink)' }}>{fmtTime(plan.etas[id])}{late ? ' · late' : ''}</span>
+              <span className="caption" style={{ fontWeight: 600, color: 'var(--ink)' }}>{fmtTime(plan.etas[id])}</span>
             </li>
           );
         })}
