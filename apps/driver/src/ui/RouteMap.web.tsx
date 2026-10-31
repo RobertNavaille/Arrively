@@ -53,6 +53,22 @@ function fitPadding(m: import('mapbox-gl').Map, top: number, bottom: number, sid
   return { top: t, bottom: Math.max(0, Math.min(bottom, room - t)), left: Math.min(side, w / 4), right: Math.min(side, w / 4) };
 }
 
+/**
+ * A camera move that can't break the map: the map first takes its current size
+ * (it may have just changed, e.g. as the phone's keyboard closes), and a move
+ * Mapbox can't work out is skipped instead of throwing "Invalid LngLat (NaN)".
+ */
+function safely(m: import('mapbox-gl').Map, move: () => void) {
+  try { m.resize(); move(); } catch (e) { console.warn('map camera move skipped', e); }
+}
+
+/** Padding the map keeps (from following) that no longer fits a smaller map is dropped. */
+function keepPaddingInside(m: import('mapbox-gl').Map) {
+  const p = m.getPadding(), c = m.getCanvas();
+  const h = c.clientHeight, w = c.clientWidth;
+  if (p.top + p.bottom >= h - 1 || p.left + p.right >= w - 1) m.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
+}
+
 function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, driverHeading, onUserMove, hold }: RouteMapProps) {
   const host = useRef<View>(null);
   const map = useRef<import('mapbox-gl').Map | null>(null);
@@ -91,6 +107,7 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
       m.on('rotatestart', byHand);
       m.on('zoomstart', (e) => { if (!followingRef.current) byHand(e); });
       m.on('zoomend', (e) => { if (e.originalEvent && followingRef.current) followZoom.current = m.getZoom(); });
+      m.on('resize', () => keepPaddingInside(m));
       m.on('load', () => {
         // lineMetrics: the line is drawn as a gradient along its length (deep blue at the start, pale at the end).
         m.addSource('route', { type: 'geojson', lineMetrics: true, data: { type: 'FeatureCollection', features: [] } });
@@ -99,7 +116,7 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
         setReady(true);
       });
       map.current = m;
-      const measure = () => { setSize({ w: el.clientWidth, h: el.clientHeight }); m.resize(); };
+      const measure = () => { setSize({ w: el.clientWidth, h: el.clientHeight }); try { m.resize(); } catch (e) { console.warn('map resize skipped', e); } };
       measure();
       if (typeof ResizeObserver !== 'undefined') { observer = new ResizeObserver(measure); observer.observe(el); }
     })();
@@ -159,19 +176,28 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
   useEffect(() => {
     const m = map.current;
     if (!ready || !sized || !m || !following) return;
-    m.easeTo({ center: [driver!.lng, driver!.lat], zoom: followZoom.current, bearing, duration: 800,
-      padding: fitPadding(m, inset?.top ?? 0, inset?.bottom ?? 0) });
+    if (!Number.isFinite(driver!.lat) || !Number.isFinite(driver!.lng)) return;
+    safely(m, () => m.easeTo({ center: [driver!.lng, driver!.lat], zoom: followZoom.current, bearing, duration: 800,
+      padding: fitPadding(m, inset?.top ?? 0, inset?.bottom ?? 0) }));
   }, [ready, sized, following, driver?.lat, driver?.lng, bearing, inset?.top, inset?.bottom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const m = map.current;
     if (!ready || !sized || !m || !framed.length || following || hold) return;
-    const lngs = framed.map((p) => p.lng), lats = framed.map((p) => p.lat);
-    // Following leaves its own padding on the map, which Mapbox adds to this fit's:
-    // clear it, or the two together can outgrow the map.
-    m.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
-    m.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-      { padding: fitPadding(m, (pinLabel ? 56 : 36) + (inset?.top ?? 0), 28 + (inset?.bottom ?? 0), 28), maxZoom: 15, bearing: 0, duration: 0 });
+    const pts = framed.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+    if (!pts.length) return;
+    const lngs = pts.map((p) => p.lng), lats = pts.map((p) => p.lat);
+    safely(m, () => {
+      // Following leaves its own padding on the map, which Mapbox adds to this fit's:
+      // clear it, or the two together can outgrow the map.
+      m.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
+      const cam = m.cameraForBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+        { padding: fitPadding(m, (pinLabel ? 56 : 36) + (inset?.top ?? 0), 28 + (inset?.bottom ?? 0), 28), maxZoom: 15, bearing: 0 });
+      const cc = cam?.center as unknown as { lng: number; lat: number } | [number, number] | undefined;
+      const center: [number, number] | null = !cc ? null : Array.isArray(cc) ? cc : [cc.lng, cc.lat];
+      if (!cam || !center || !center.every(Number.isFinite) || !Number.isFinite(cam.zoom ?? NaN)) return;
+      m.jumpTo({ center, zoom: Math.min(cam.zoom!, 15), bearing: 0 });
+    });
   }, [ready, sized, size.h, frameKey, inset?.top, inset?.bottom, following, hold]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Following: pinch and wheel zoom about the driver (the map's centre), not the finger,
