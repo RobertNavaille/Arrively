@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, TextInput, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, TextInput, StyleSheet, Text, View } from 'react-native';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
@@ -68,6 +68,8 @@ export default function Trip() {
   const [comments, setComments] = useState('');
   // The sheet is pulled up to full height (not resting).
   const [sheetOpen, setSheetOpen] = useState(false);
+  // On the way, pulled up: the More menu beside Get directions.
+  const [barMenu, setBarMenu] = useState(false);
 
   const stops = route?.stops ?? [];
   const byId = new Map(stops.map((s) => [s.id, s]));
@@ -286,8 +288,8 @@ export default function Trip() {
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
       <BottomSheet top={SHEET_TOP} rest={peek} onOpenChange={setSheetOpen} resetKey={choosing ? `${phase}:mark` : phase} startOpen={phase === 'review' || choosing} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
-        // Arrived and pulled up, the card empties for the details: its resting height stays measured from before.
-        <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH && !(phase === 'arrived' && sheetOpen)) setCardH(h); }}
+        // Pulled up (arrived, on the way), the card changes for the details: its resting height stays measured from before.
+        <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH && !(sheetOpen && (phase === 'arrived' || phase === 'onroute'))) setCardH(h); }}
           style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' || phase === 'next' || phase === 'review' || phase === 'onroute' ? 0 : 1, borderBottomColor: color.divider }}>
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: color.divider, alignSelf: 'center' }} />
 
@@ -352,8 +354,8 @@ export default function Trip() {
                   </>
                 ) : null}
               </View>
-              {/* Arrival is detected, so getting there leads. */}
-              <Button icon="navigate" label="Get directions" onPress={() => openDirections(current, options)} style={{ marginTop: space[6] - space[1] }} />
+              {/* Arrival is detected, so getting there leads. Pulled up, it moves to the bar at the bottom. */}
+              {sheetOpen ? null : <Button icon="navigate" label="Get directions" onPress={() => openDirections(current, options)} style={{ marginTop: space[6] - space[1] }} />}
               {/* The maps app can't be told this from a link: a reminder to set it there. */}
               {avoidNotPassed(options) ? (
                 <Text style={[type.caption, { fontSize: 13, lineHeight: 18 }]}>
@@ -477,16 +479,25 @@ export default function Trip() {
         </View>
       </BottomSheet>
 
-      {/* On the way, with the sheet pulled up: Arrived (a fallback; arrival is detected) and Cancel, anchored to the bottom. */}
+      {/* On the way, with the sheet pulled up: Get directions, and More (arrived at location, cancel route), anchored to the bottom. */}
       {phase === 'onroute' && current && sheetOpen ? (
         <FadeIn from={16} style={[styles.bottomBar, { paddingBottom: bottomInset + space[4] }]}>
-          <Button variant="secondary" label="Arrived" loading={busy === 'arrived'} style={{ flex: 1 }}
-            onPress={() => run('arrived', async () => { await backend.markArrived(current.id); await refresh(); })} />
-          {/* Started by mistake, or plans changed: back to the trip view. */}
-          <Button variant="text" label="Cancel" loading={busy === 'cancel'}
-            onPress={() => run('cancel', async () => { await backend.cancelTrip(current.id); await stopSharing(); await refresh(); })} />
+          <Button icon="navigate" label="Get directions" style={{ flex: 1 }}
+            onPress={() => openDirections(current, options)} />
+          <IconButton icon="more" label="More options" onPress={() => setBarMenu(true)} />
         </FadeIn>
       ) : null}
+      <Modal transparent visible={barMenu && phase === 'onroute' && !!current} animationType="fade" onRequestClose={() => setBarMenu(false)}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => setBarMenu(false)} accessibilityLabel="Close menu" />
+        {current ? (
+          <View style={[styles.barMenu, shadow.float, { bottom: bottomInset + space[4] + 56 + space[2] }]} accessibilityRole="menu">
+            {/* A fallback: arrival is detected. */}
+            <BarMenuItem icon="pin" label="Arrived at location" onPress={() => { setBarMenu(false); run('arrived', async () => { await backend.markArrived(current.id); await refresh(); }); }} />
+            {/* Started by mistake, or plans changed: back to the trip view. */}
+            <BarMenuItem icon="close" label="Cancel route" danger onPress={() => { setBarMenu(false); run('cancel', async () => { await backend.cancelTrip(current.id); await stopSharing(); await refresh(); }); }} />
+          </View>
+        ) : null}
+      </Modal>
       {/* Arrived, with the sheet pulled up: Stop Complete and Continue route, anchored to the bottom. */}
       {phase === 'arrived' && current && !choosing && sheetOpen ? (
         <FadeIn from={16} style={[styles.bottomBar, { paddingBottom: bottomInset + space[4] }]}>
@@ -533,6 +544,7 @@ const styles = StyleSheet.create({
   comments: { minHeight: 104, borderRadius: radius.sm, backgroundColor: color.surfaceMuted, borderWidth: 1, borderColor: color.divider,
     paddingHorizontal: space[3], paddingTop: space[3], paddingBottom: space[3], fontFamily: font.regular, fontSize: 16, lineHeight: 22, color: color.ink, textAlignVertical: 'top' },
   arrivedHeading: { flexDirection: 'row', alignItems: 'center', gap: space[3], marginHorizontal: -space[4], paddingHorizontal: space[4], paddingBottom: space[3], borderBottomWidth: 1, borderBottomColor: color.divider },
+  barMenu: { position: 'absolute', right: space[4], minWidth: 220, paddingVertical: space[1], borderRadius: radius.md, backgroundColor: color.surface },
   bottomBar: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingTop: space[3], paddingHorizontal: space[4], backgroundColor: color.surface, borderTopWidth: 1, borderTopColor: color.divider },
   floatBar: { position: 'absolute', left: 0, right: 0, alignItems: 'center', pointerEvents: 'box-none' },
   // Beside the centred button, at the sheet's left margin.
@@ -581,6 +593,18 @@ function OutcomeChoice({ label, description, selected, onPress }: { label: strin
         <Text style={[type.bodyStrong, { fontSize: 16, lineHeight: 22 }]}>{label}</Text>
         <Text style={[type.body, { color: color.inkMuted }]}>{description}</Text>
       </View>
+    </Pressable>
+  );
+}
+
+/** An item in the More menu above the on-the-way bar. */
+function BarMenuItem({ icon, label, danger, onPress }: { icon: IconName; label: string; danger?: boolean; onPress: () => void }) {
+  const tint = danger ? color.danger : color.ink;
+  return (
+    <Pressable accessibilityRole="menuitem" onPress={onPress}
+      style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 52, paddingHorizontal: space[4] }, pressed && { backgroundColor: color.surfaceMuted }]}>
+      <Icon name={icon} size={20} color={tint} />
+      <Text style={[type.body, { fontSize: 16, color: tint }]}>{label}</Text>
     </Pressable>
   );
 }
