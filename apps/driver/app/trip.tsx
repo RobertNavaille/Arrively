@@ -210,7 +210,7 @@ export default function Trip() {
     <>
       <View style={{ alignItems: 'center', gap: 4 }}>
         <StatusPill center tone="info" icon="clock" label={`At stop${current.arrived_at ? ` since ${fmtTime(current.arrived_at)}` : ''}`} />
-        <Text style={[type.title, { fontSize: 28, lineHeight: 34, marginTop: space[3] }]} accessibilityRole="header">Arrived</Text>
+        <Text style={[type.title, { fontSize: 28, lineHeight: 34, marginTop: 6 }]} accessibilityRole="header">Arrived</Text>
         <Text style={[type.body, { color: color.inkMuted, textAlign: 'center' }]}>{current.customer_name} · {current.address.split(',')[0]}</Text>
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space[3] }}>
@@ -341,8 +341,8 @@ export default function Trip() {
                 {/* Pulled up, call and text move to the phone number's row. */}
                 {!(sheetOpen && current.customer_phone) ? (
                   <>
-                    {call ? <IconButton icon="phone" label={`Call ${current.customer_name}`} onPress={call} /> : null}
-                    <IconButton icon="message" label={`Text ${current.customer_name}`} onPress={message} />
+                    {call ? <IconButton icon="phone" size="compact" label={`Call ${current.customer_name}`} onPress={call} /> : null}
+                    <IconButton icon="message" size="compact" label={`Text ${current.customer_name}`} onPress={message} />
                   </>
                 ) : null}
               </View>
@@ -363,11 +363,12 @@ export default function Trip() {
             <View style={{ gap: space[4] }}>
               {arrivedInfo}
               <View style={{ gap: space[2] }}>
-                <Button label="Stop Complete" onPress={() => setChoosing(true)} />
+                <Button icon="check" label="Complete stop" onPress={() => setChoosing(true)} />
                 {/* Arrived by mistake: back to on the way. */}
                 <Button variant="text" label="Continue route" loading={busy === 'undo'}
                   onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
               </View>
+              <Text style={[type.caption, { textAlign: 'center' }]}>Mark this stop to start your next trip.</Text>
             </View>
           ) : null}
 

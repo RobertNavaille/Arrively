@@ -60,9 +60,6 @@ export default function StopScreen() {
   }
 
   const done = isDone(stop);
-  // The driver's comments from marking the stop (saved as its mark reason). The
-  // stand-ins used when there were none aren't comments, so they don't show.
-  const comments = stop.mark_reason && !['Skipped', 'Marked away from the stop'].includes(stop.mark_reason) ? stop.mark_reason : null;
   const outcome = stop.status === 'completed' ? 'Done' : stop.status === 'no_show' ? 'No-show' : 'Skipped';
   const call = stop.customer_phone ? () => Linking.openURL(`tel:${stop.customer_phone}`) : undefined;
   const message = () => showMessage('Coming soon', 'Chat with customers arrives in the next build.');
@@ -117,7 +114,7 @@ export default function StopScreen() {
               <InfoRow icon="check" title={`${outcome} at ${fmtTime(stop.marked_at)}`}
                 body={stop.arrived_at ? `Arrived at ${fmtTime(stop.arrived_at)}` : undefined} />
             ) : null}
-            {done && comments ? <InfoRow icon="lines" title="Comments" body={comments} /> : null}
+            {done && stop.mark_reason && !stop.marked_outside ? <InfoRow icon="flag" title="Reason" body={stop.mark_reason} /> : null}
             {!done && stop.window_start ? <InfoRow icon="clock" title="Time window" body={`${fmtWindow(stop)} · promised to the customer`} /> : null}
             <InfoRow icon="notes" title="Description" body={stop.notes || 'No notes for this stop.'} />
           </View>
