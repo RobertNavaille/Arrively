@@ -347,7 +347,7 @@ export default function Trip() {
                 ) : null}
               </View>
               {/* Arrival is detected, so getting there leads. */}
-              <Button icon="navigate" label="Get directions" onPress={() => openDirections(current, options)} style={{ marginTop: space[2] }} />
+              <Button icon="navigate" label="Get directions" onPress={() => openDirections(current, options)} style={{ marginTop: space[6] - space[1] }} />
               {/* The maps app can't be told this from a link: a reminder to set it there. */}
               {avoidNotPassed(options) ? (
                 <Text style={[type.caption, { fontSize: 13, lineHeight: 18 }]}>
