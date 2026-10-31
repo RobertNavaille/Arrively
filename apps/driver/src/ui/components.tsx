@@ -46,7 +46,7 @@ export function Button({ label, onPress, variant = 'primary', icon, size = varia
 
 export function IconButton({ icon, label, onPress, variant = 'tint', size = 'md' }: {
   icon: IconName; label: string; onPress?: () => void; variant?: 'tint' | 'plain' | 'solid';
-  /** md 56px (tint and solid), compact 40px (inline in a row, e.g. call and text beside the phone number on the way), xl 72px (call and text, arrived). */
+  /** md 56px (tint and solid; also call and text beside the phone number), compact 40px (inline where 56px would crowd), xl 72px (call and text, arrived). */
   size?: 'md' | 'compact' | 'xl';
 }) {
   const fg = variant === 'tint' ? color.action : variant === 'solid' ? color.onAction : color.ink;

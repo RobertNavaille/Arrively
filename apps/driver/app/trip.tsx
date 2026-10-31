@@ -418,9 +418,9 @@ export default function Trip() {
           {detailsOpen && current ? (
             <FadeIn delay={60} style={{ paddingTop: phase === 'onroute' ? 40 : space[4], paddingHorizontal: space[4] }}>
               {jobDetails(
-                <View style={{ flexDirection: 'row', gap: space[2], marginVertical: -8 }}>
-                  {call ? <IconButton icon="phone" size="compact" label={`Call ${current.customer_name}`} onPress={call} /> : null}
-                  <IconButton icon="message" size="compact" label={`Text ${current.customer_name}`} onPress={message} />
+                <View style={{ flexDirection: 'row', gap: space[2], marginVertical: -16 }}>
+                  {call ? <IconButton icon="phone" label={`Call ${current.customer_name}`} onPress={call} /> : null}
+                  <IconButton icon="message" label={`Text ${current.customer_name}`} onPress={message} />
                 </View>,
               )}
             </FadeIn>
