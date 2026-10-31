@@ -207,10 +207,14 @@ export default function Trip() {
       {current.notes ? <JobRow icon="lines" text={current.notes} /> : null}
     </View>
   ) : null;
-  // Arrived, resting: who, and call and text (under the heading). The job in full is pulled up.
+  // Arrived, resting: the stop's own moment (time there, who, call and text). The job in full is pulled up.
   const arrivedInfo = current ? (
     <>
-      <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted, textAlign: 'center' }]}>{current.customer_name} · {current.address.split(',')[0]}</Text>
+      <View style={{ alignItems: 'center', gap: 4 }}>
+        <StatusPill center tone="info" icon="clock" label={`At stop${current.arrived_at ? ` since ${fmtTime(current.arrived_at)}` : ''}`} />
+        <Text style={[type.title, { fontSize: 28, lineHeight: 34, marginTop: space[3] }]} accessibilityRole="header">Arrived</Text>
+        <Text style={[type.body, { color: color.inkMuted, textAlign: 'center' }]}>{current.customer_name} · {current.address.split(',')[0]}</Text>
+      </View>
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space[3] }}>
         {/* Call shows even without a number on file (it says so), beside text. */}
         <IconButton icon="phone" size="xl" label={`Call ${current.customer_name}`}
@@ -361,15 +365,15 @@ export default function Trip() {
           {/* Arrived: the stop's own moment; the list comes back once it's marked. */}
           {/* Marking (the form), the sheet is just the form. */}
           {/* Pulled up, the job's details take its place, with Stop Complete in a bar at the bottom. */}
-          {/* Arrived: a heading that stays, resting or pulled up: left-aligned, how long they've been there beside it, a divider under it. */}
-          {phase === 'arrived' && current && !choosing ? (
+          {/* Arrived, pulled up to the job's details: a left-aligned heading, how long they've been there beside it, a divider under it. */}
+          {phase === 'arrived' && current && !choosing && sheetOpen ? (
             <View style={styles.arrivedHeading}>
               <Text style={[type.title, { flex: 1, fontSize: 28, lineHeight: 34 }]} accessibilityRole="header">Arrived</Text>
               <StatusPill center tone="info" icon="clock" label={`At stop${current.arrived_at ? ` since ${fmtTime(current.arrived_at)}` : ''}`} />
             </View>
           ) : null}
           {phase === 'arrived' && current && !choosing && !sheetOpen ? (
-            <View style={{ gap: space[4], paddingTop: space[1] }}>
+            <View style={{ gap: space[4] }}>
               {arrivedInfo}
               <View style={{ gap: space[2] }}>
                 <Button label="Stop Complete" onPress={() => setChoosing(true)} />
