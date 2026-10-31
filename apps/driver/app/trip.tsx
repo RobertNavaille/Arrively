@@ -210,7 +210,7 @@ export default function Trip() {
     <>
       <View style={{ alignItems: 'center', gap: 4 }}>
         <StatusPill center tone="info" icon="clock" label={`At stop${current.arrived_at ? ` since ${fmtTime(current.arrived_at)}` : ''}`} />
-        <Text style={[type.title, { fontSize: 28, lineHeight: 34, marginTop: 6 }]} accessibilityRole="header">Arrived</Text>
+        <Text style={[type.title, { fontSize: 28, lineHeight: 34, marginTop: space[3] }]} accessibilityRole="header">Arrived</Text>
         <Text style={[type.body, { color: color.inkMuted, textAlign: 'center' }]}>{current.customer_name} · {current.address.split(',')[0]}</Text>
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space[3] }}>
@@ -363,12 +363,11 @@ export default function Trip() {
             <View style={{ gap: space[4] }}>
               {arrivedInfo}
               <View style={{ gap: space[2] }}>
-                <Button icon="check" label="Complete stop" onPress={() => setChoosing(true)} />
+                <Button label="Stop Complete" onPress={() => setChoosing(true)} />
                 {/* Arrived by mistake: back to on the way. */}
                 <Button variant="text" label="Continue route" loading={busy === 'undo'}
                   onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
               </View>
-              <Text style={[type.caption, { textAlign: 'center' }]}>Mark this stop to start your next trip.</Text>
             </View>
           ) : null}
 
