@@ -98,7 +98,6 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
 }
 
 const etaText = (s: ConsoleStop) => `ETA ${s.eta_approx ? '~' : ''}${fmtTime(s.eta)}`;
-const isLate = (s: ConsoleStop) => !!s.eta && !!s.window_end && Date.parse(s.eta) > Date.parse(s.window_end);
 const minutes = (sec: number) => { const m = Math.max(1, Math.round(sec / 60)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`; };
 
 function progress(r: ConsoleRoute) {
@@ -422,7 +421,7 @@ function StopRow({ s, n, isCurrent, onUp, onDown, onCancel }: { s: ConsoleStop; 
       </div>
       <div style={{ textAlign: 'right' }}>
         {!done && s.eta && s.status !== 'arrived'
-          ? <div className="caption" style={{ fontWeight: 600, color: isLate(s) ? 'var(--warning)' : 'var(--ink)' }}>{etaText(s)}{isLate(s) ? ' · late' : ''}</div>
+          ? <div className="caption" style={{ fontWeight: 600, color: 'var(--ink)' }}>{etaText(s)}</div>
           : null}
         <div className="caption">{done ? fmtTime(s.marked_at) : windowText(s)}</div>
       </div>
