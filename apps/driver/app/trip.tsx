@@ -376,12 +376,8 @@ export default function Trip() {
           {phase === 'arrived' && current && !choosing && !sheetOpen ? (
             <FadeIn style={{ gap: space[4] }}>
               {arrivedInfo}
-              <View style={{ gap: space[2] }}>
-                <Button label="Stop Complete" onPress={() => setChoosing(true)} />
-                {/* Arrived by mistake: back to on the way. */}
-                <Button variant="text" label="Continue route" loading={busy === 'undo'}
-                  onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
-              </View>
+              {/* Twice the usual space above it; Continue route is in the pulled-up sheet's bar. */}
+              <Button label="Stop Complete" onPress={() => setChoosing(true)} style={{ marginTop: space[4] }} />
             </FadeIn>
           ) : null}
 
