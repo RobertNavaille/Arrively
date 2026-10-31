@@ -8,8 +8,8 @@ import type { LatLng, MarkOutcome, Profile, Route, Stop } from './types';
 
 /** Everything the app does against the server. Two implementations: Supabase and an offline demo. */
 /** What the driver fills in when adding a stop. */
-/** `phone`: as stored (normalized), or null for none. */
-export interface StopDetails { name?: string; notes?: string; phone?: string | null }
+/** `phone`: as stored (normalized), or null for none. `shareTrip`: Share trip (on unless false). */
+export interface StopDetails { name?: string; notes?: string; phone?: string | null; shareTrip?: boolean }
 
 export interface Backend {
   offline: boolean;
@@ -33,6 +33,8 @@ export interface Backend {
   updateAddress(stopId: string, address: string, at: LatLng): Promise<void>;
   /** A stop's name and notes (Edit details). */
   updateDetails(stopId: string, details: StopDetails): Promise<void>;
+  /** Share trip: text the customer their tracking link when the trip to them starts. */
+  setShareTrip(stopId: string, on: boolean): Promise<void>;
   /** Removes a stop that isn't in progress, finished or not (it's kept as cancelled). */
   removeStop(stopId: string): Promise<void>;
   reportLocation(p: LatLng & { heading?: number | null; speed?: number | null; accuracy?: number | null; at?: string }): Promise<void>;
@@ -150,10 +152,12 @@ const supabaseBackend: Backend = {
   },
   async addStop(day, address, at, details) {
     const routeId = check(await supabase().rpc('my_route_for', { p_day: day })) as string;
-    check(await supabase().rpc('add_stop', {
+    const stop = check(await supabase().rpc('add_stop', {
       p_route: routeId, p_address: address, p_lat: at.lat, p_lng: at.lng,
       p_customer_name: details?.name?.trim() || null, p_customer_phone: details?.phone || null, p_notes: details?.notes?.trim() || null,
-    }));
+    })) as Stop | null;
+    // Share trip is on for a new stop unless the driver turned it off.
+    if (stop && details?.shareTrip === false) check(await supabase().rpc('set_share_trip', { p_stop: stop.id, p_on: false }));
     refreshEtas(true);
   },
   async updateAddress(stopId, address, at) {
@@ -165,6 +169,7 @@ const supabaseBackend: Backend = {
       p_stop: stopId, p_name: details.name?.trim() || null, p_notes: details.notes?.trim() || null, p_phone: details.phone ?? null,
     }));
   },
+  async setShareTrip(stopId, on) { check(await supabase().rpc('set_share_trip', { p_stop: stopId, p_on: on })); },
   async removeStop(stopId) {
     check(await supabase().rpc('remove_stop', { p_stop: stopId }));
     refreshEtas(true);
@@ -219,7 +224,7 @@ function makeDay(day: Date, center: LatLng, count: number, done: boolean): Route
     const start = new Date(day); start.setHours(9 + i, 0, 0, 0);
     return {
       id: `s${seq++}`, route_id: id, position: i + 1, status: done ? 'completed' : 'scheduled',
-      customer_name: NAMES[i % NAMES.length], customer_phone: `+1401555${String(142 + i).padStart(4, '0')}`, address: STREETS[i % STREETS.length],
+      customer_name: NAMES[i % NAMES.length], customer_phone: `+1401555${String(142 + i).padStart(4, '0')}`, share_trip: true, tracking_token: `demo-${id}-${i}`, address: STREETS[i % STREETS.length],
       lat: center.lat + (km / 111) * Math.cos(a), lng: center.lng + (km / (111 * Math.cos((center.lat * Math.PI) / 180))) * Math.sin(a),
       window_start: null, window_end: null, service_minutes: 20,
       notes: JOBS[i % JOBS.length], eta: null, arrived_at: null,
@@ -302,6 +307,7 @@ const offlineBackend: Backend = {
     r.stops.push({
       id: `s${seq++}`, route_id: r.id, position: (Math.max(0, ...r.stops.map((x) => x.position))) + 1,
       status: r.status === 'active' ? 'queued' : 'scheduled', customer_name: details?.name?.trim() || 'New stop', customer_phone: details?.phone || null,
+      share_trip: details?.shareTrip !== false, tracking_token: `demo-new-${seq}`,
       address, lat: at.lat, lng: at.lng, window_start: null, window_end: null, service_minutes: 20, notes: details?.notes?.trim() || null,
       eta: null, arrived_at: null, marked_at: null, departed_at: null,
     });
@@ -314,6 +320,7 @@ const offlineBackend: Backend = {
     if (details.phone !== undefined) s.customer_phone = details.phone;
     emit();
   },
+  async setShareTrip(stopId, on) { const [, s] = findStop(stopId); s.share_trip = on; emit(); },
   async removeStop(stopId) {
     const [r, s] = findStop(stopId);
     if (s.status === 'en_route' || s.status === 'arrived') throw new Error('Mark this stop before removing it.');

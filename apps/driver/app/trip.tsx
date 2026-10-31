@@ -8,7 +8,8 @@ import { bearingDeg, dayKey, distanceM, pathAhead, pathLengthM, estimateDriveMin
 import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
 import { lockedOrder, optionsOf, SPEED, type RouteOptions, type RoutePlan, type TravelMode } from '../src/lib/routing';
 import { currentStop, useDriverData } from '../src/lib/store';
-import { avoidList, avoidNotPassed, contactCustomer, openDirections } from '../src/lib/navigation';
+import { avoidList, avoidNotPassed, contactCustomer, openDirections, shareTripMessage } from '../src/lib/navigation';
+import { TRACKING_BASE_URL } from '../src/lib/config';
 import { useBottomInset, useScreenHeight } from '../src/lib/viewport';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
 import { AutoButton } from '../src/ui/AutoButton';
@@ -40,7 +41,7 @@ const REST_FROM = 68;
 export default function Trip() {
   const router = useRouter();
   const height = useScreenHeight();
-  const { routeFor, refresh } = useDriverData();
+  const { routeFor, refresh, profile } = useDriverData();
   const pos = useLivePosition();
   const travel = useTravelBearing(pos);
   const compass = useCompassHeading();
@@ -172,7 +173,17 @@ export default function Trip() {
     setLocked(next);
     showOrder(lockedOrder(review.plan, route, review.from, Object.fromEntries(next.map((x) => [x, shown.indexOf(x)]))));
   };
-  const startDriving = () => run('start', async () => {
+  // Share trip (on unless the stop has it off): Start driving also opens Messages with a text
+  // to the customer and their live tracking link. Opened first, straight from the tap,
+  // since phones only open another app from one.
+  const startDriving = () => {
+    if (current && current.share_trip !== false && current.tracking_token) {
+      const link = `${TRACKING_BASE_URL}${encodeURIComponent(current.tracking_token)}`;
+      contactCustomer('sms', current.customer_phone, shareTripMessage(current.customer_name, link, profile?.name, profile?.org_name));
+    }
+    return startTrip();
+  };
+  const startTrip = () => run('start', async () => {
     if (!current) return;
     // Asked from this tap: iPhone browsers share the compass only once allowed.
     await enableCompass();

@@ -23,6 +23,9 @@ export interface Stop {
   departed_at: string | null;
   mark_reason?: string | null; // why it was skipped, or 'Marked away from the stop'
   marked_outside?: boolean;
+  // Share trip: Start driving texts the customer their tracking link (from the driver's phone). On unless turned off.
+  share_trip?: boolean;
+  tracking_token?: string; // the customer's tracking page: TRACKING_BASE_URL + token
 }
 
 export interface Route {

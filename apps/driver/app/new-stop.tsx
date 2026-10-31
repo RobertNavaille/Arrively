@@ -8,7 +8,7 @@ import { fmtPhone, normalizePhone } from '../src/lib/geo';
 import { searchAddress, type Place } from '../src/lib/mapbox';
 import { useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
-import { Button } from '../src/ui/components';
+import { Button, ShareTripRow } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
 import { bareInput, color, font, radius, space, type } from '../src/ui/theme';
@@ -40,6 +40,7 @@ export default function NewStop() {
   // Optional; for calling the customer. Texts only go to numbers with consent recorded in the console.
   const [phone, setPhone] = useState(editing?.customer_phone ? fmtPhone(editing.customer_phone) : '');
   const [phoneBad, setPhoneBad] = useState(false);
+  const [shareTrip, setShareTrip] = useState(editing ? editing.share_trip !== false : true);
   const [busy, setBusy] = useState(false);
   const [nameMissing, setNameMissing] = useState(false);
 
@@ -58,8 +59,9 @@ export default function NewStop() {
         if (name.trim() !== editing.customer_name || (notes.trim() || null) !== (editing.notes || null) || storedPhone !== (editing.customer_phone || null)) {
           await backend.updateDetails(editing.id, { name, notes, phone: storedPhone });
         }
+        if (shareTrip !== (editing.share_trip !== false)) await backend.setShareTrip(editing.id, shareTrip);
       } else {
-        await backend.addStop(day, label(place), place, { name, notes, phone: storedPhone });
+        await backend.addStop(day, label(place), place, { name, notes, phone: storedPhone, shareTrip });
       }
       await refresh();
       router.back();
@@ -96,6 +98,8 @@ export default function NewStop() {
             </View>
 
             <AddressField place={place} onChange={setPlace} />
+
+            <ShareTripRow on={shareTrip} onChange={setShareTrip} />
 
             <View style={{ gap: space[2] }}>
               <Text style={[type.label, { textTransform: 'uppercase' }]}>Notes</Text>

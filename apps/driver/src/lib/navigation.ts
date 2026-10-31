@@ -48,12 +48,21 @@ export function openDirections(to: LatLng, o: RouteOptions = {}) {
 }
 
 /**
- * Call or text the customer with the phone's own apps. In the browser these go
- * through the page's location (like react-native-web does for tel:), so an
- * sms: link doesn't leave a blank tab behind.
+ * Call or text the customer with the phone's own apps; a text can start with a
+ * message. In the browser these go through the page's location (like
+ * react-native-web does for tel:), so an sms: link doesn't leave a blank tab.
  */
-export function contactCustomer(how: 'tel' | 'sms', phone: string) {
-  const url = `${how}:${phone}`;
+export function contactCustomer(how: 'tel' | 'sms', phone: string | null, body?: string) {
+  let url = `${how}:${phone ?? ''}`;
+  // iPhones read the message after "&", Android after "?".
+  if (how === 'sms' && body) url += `${isApple() ? '&' : '?'}body=${encodeURIComponent(body)}`;
   if (Platform.OS === 'web' && typeof window !== 'undefined') window.location.href = url;
   else Linking.openURL(url);
+}
+
+/** Share trip: the text the customer gets when the driver starts the trip to them. */
+export function shareTripMessage(customer: string, link: string, driver?: string | null, business?: string | null): string {
+  const first = customer.trim().split(/\s+/)[0];
+  const who = [driver?.trim().split(/\s+/)[0], business?.trim() ? `from ${business.trim()}` : ''].filter(Boolean).join(' ');
+  return `Hi ${first}, ${who ? `${who} here. ` : ''}I'm on my way. Follow along live: ${link}`;
 }

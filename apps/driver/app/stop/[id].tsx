@@ -9,8 +9,8 @@ import { contactCustomer } from '../../src/lib/navigation';
 import { fmtTime, fmtWindow, parseDay } from '../../src/lib/geo';
 import { useLivePosition } from '../../src/lib/location';
 import { useActiveTrip, useDriverData } from '../../src/lib/store';
-import { isDone } from '../../src/lib/types';
-import { Banner, Button, IconButton, InfoRow, StatusPill } from '../../src/ui/components';
+import { isDone, type Stop } from '../../src/lib/types';
+import { Banner, Button, IconButton, InfoRow, ShareTripRow, StatusPill } from '../../src/ui/components';
 import { RouteMap } from '../../src/ui/RouteMap';
 import { TripBar } from '../../src/ui/TripBar';
 import { Icon, type IconName } from '../../src/ui/Icon';
@@ -122,6 +122,8 @@ export default function StopScreen() {
             ) : null}
             {done && comments ? <InfoRow icon="lines" title="Comments" body={comments} /> : null}
             {!done && stop.window_start ? <InfoRow icon="clock" title="Time window" body={`${fmtWindow(stop)} · promised to the customer`} /> : null}
+            {/* Until the trip to it starts: whether starting it texts the customer their tracking link. */}
+            {stop.status === 'scheduled' || stop.status === 'queued' ? <ShareTripSetting stop={stop} /> : null}
             <InfoRow icon="notes" title="Description" body={stop.notes || 'No notes for this stop.'} />
           </View>
 
@@ -161,3 +163,13 @@ const styles = StyleSheet.create({
   menu: { position: 'absolute', top: 56, right: space[3], minWidth: 200, paddingVertical: space[1], borderRadius: radius.md, backgroundColor: color.surface },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 48, paddingHorizontal: space[4] },
 });
+
+/** Share trip, saved as soon as it's switched (and switched back if that fails). */
+function ShareTripSetting({ stop }: { stop: Stop }) {
+  const [on, setOn] = useState(stop.share_trip !== false);
+  const change = (v: boolean) => {
+    setOn(v);
+    backend.setShareTrip(stop.id, v).catch((e) => { setOn(!v); showMessage('Could not change Share trip', e instanceof Error ? e.message : String(e)); });
+  };
+  return <ShareTripRow on={on} onChange={change} />;
+}

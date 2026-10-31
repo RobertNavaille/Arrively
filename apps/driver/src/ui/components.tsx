@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { color, font, radius, space, type } from './theme';
 import { Icon, type IconName } from './Icon';
 
@@ -118,6 +118,20 @@ export function InfoRow({ icon, title, body, trailing }: { icon: IconName; title
       </View>
       {trailing}
     </View>
+  );
+}
+
+/** Share trip: on, starting the trip to this stop texts the customer their live tracking link (from the driver's phone). */
+export function ShareTripRow({ on, onChange, disabled }: { on: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
+  return (
+    <InfoRow icon="navigate" title="Share trip" body="Text the customer a live tracking link when you start the trip"
+      trailing={
+        <View style={{ alignSelf: 'center' }}>
+          <Switch value={on} onValueChange={onChange} disabled={disabled} accessibilityLabel="Share trip"
+            trackColor={{ false: color.controlBorder, true: color.action }} thumbColor={color.surface}
+            {...({ activeThumbColor: color.surface } as object)} />
+        </View>
+      } />
   );
 }
 
