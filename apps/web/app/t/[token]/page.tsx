@@ -52,7 +52,6 @@ function Visit({ data }: { data: Tracking }) {
   const guess = meters != null ? Math.max(1, Math.round(((meters * 1.3) / 1609.34 / 25) * 60)) : null;
   const minutes = stop.eta ? Math.max(1, Math.round((Date.parse(stop.eta) - Date.now()) / 60000)) : guess;
   const eta = stop.eta ?? (guess != null ? new Date(Date.now() + guess * 60000).toISOString() : null);
-  const approx = !stop.eta || !!stop.eta_approx;
   const staleMin = loc ? Math.floor((Date.now() - new Date(loc.recorded_at).getTime()) / 60000) : 0;
   const done = ['completed', 'no_show', 'skipped', 'cancelled'].includes(stop.status);
   const initials = business.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
@@ -105,7 +104,7 @@ function Visit({ data }: { data: Tracking }) {
                 <span className="stat">{data.stops_ahead}</span>
                 <span className="body" style={{ color: 'var(--ink-muted)' }}>{data.stops_ahead === 1 ? 'stop before yours' : 'stops before yours'}</span>
               </div>
-              {eta ? <div className="body" style={{ color: 'var(--ink-muted)' }}>Estimated arrival {approx ? 'around ' : ''}<b style={{ color: 'var(--ink)' }}>{fmtTime(eta)}</b></div> : null}
+              {/* No arrival time yet: a customer sees one only once theirs is the current trip. */}
             </>
           ) : null}
 

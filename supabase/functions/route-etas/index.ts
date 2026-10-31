@@ -2,10 +2,11 @@
 //
 //   POST { route_id?, force?, from? }   (from: where the driver is now)
 //
-// The driver app calls this after each location report (at most once a
-// minute) and right after a stop changes; the console after it edits a route.
-// Without route_id it uses the caller's active route. Calls within 45 s of the
-// last refresh are skipped unless force is set, to keep routing costs down.
+// The driver app calls this from location reports (every few minutes while
+// driving) and right after a stop changes; the console after it edits a route.
+// Without route_id it uses the caller's active route. Unless force is set, calls
+// within 45 s of the last refresh, or with no trip under way, are skipped, to
+// keep routing (Mapbox) costs down.
 // Secret MAPBOX_TOKEN.
 
 import { cors, json, withCors } from "../_shared/admin.ts";
@@ -33,6 +34,10 @@ Deno.serve(async (req) => {
   if (!loaded) return withCors(json({ error: "Route not found" }, 404));
   const last = loaded.route.etas_at ? Date.parse(loaded.route.etas_at) : 0;
   if (!body.force && Date.now() - last < MIN_INTERVAL_MS) return withCors(json({ skipped: "too soon" }));
+  // Customers see an arrival time only for the current trip, so routine refreshes (from
+  // location reports) are only worth a Mapbox request while a trip is under way. Refreshes
+  // after a stop changes (forced) still run, keeping the console's times current.
+  if (!body.force && !loaded.stops.some((s) => s.status === "en_route")) return withCors(json({ skipped: "no trip under way" }));
 
   try {
     return withCors(json(await refreshEtas(loaded, undefined, asPoint(body.from))));
