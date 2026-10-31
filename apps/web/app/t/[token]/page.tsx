@@ -71,7 +71,7 @@ function Visit({ data }: { data: Tracking }) {
 
       {!done ? (
         <TrackMap height={stop.status === 'scheduled' ? 300 : 360} home={home}
-          driver={loc} showLine={stop.status === 'en_route'} />
+          driver={loc} />
       ) : null}
 
       <section style={{

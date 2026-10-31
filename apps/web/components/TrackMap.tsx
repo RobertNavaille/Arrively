@@ -8,8 +8,7 @@ import type { LatLng } from '@/lib/tracking';
 interface Props {
   height: number;
   home: LatLng;            // the customer's own pin
-  driver: LatLng | null;   // live driver position, when visible
-  showLine: boolean;       // route line only when the driver is heading here
+  driver: LatLng | null;   // live driver position, when visible (no route line: just the driver and the home pin)
 }
 
 /** Mapbox map when a token is set; otherwise a drawn map in the same style. */
@@ -17,7 +16,7 @@ export function TrackMap(props: Props) {
   return MAPBOX_TOKEN ? <MapboxMap {...props} /> : <DrawnMap {...props} />;
 }
 
-function MapboxMap({ height, home, driver, showLine }: Props) {
+function MapboxMap({ height, home, driver }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<import('mapbox-gl').Map | null>(null);
   const markers = useRef<{ home?: import('mapbox-gl').Marker; driver?: import('mapbox-gl').Marker }>({});
@@ -36,11 +35,6 @@ function MapboxMap({ height, home, driver, showLine }: Props) {
       const homeEl = document.createElement('div');
       homeEl.className = 'home-pin';
       markers.current.home = new mapboxgl.Marker({ element: homeEl, anchor: 'bottom' }).setLngLat([home.lng, home.lat]).addTo(m);
-      m.on('load', () => {
-        m.addSource('route', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-        m.addLayer({ id: 'route-casing', type: 'line', source: 'route', paint: { 'line-color': '#FFFFFF', 'line-width': 8 }, layout: { 'line-cap': 'round', 'line-join': 'round' } });
-        m.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#009DFE', 'line-width': 4.5 }, layout: { 'line-cap': 'round', 'line-join': 'round' } });
-      });
     })();
     return () => { cancelled = true; map.current?.remove(); map.current = null; };
   }, [home.lat, home.lng]);
@@ -64,13 +58,8 @@ function MapboxMap({ height, home, driver, showLine }: Props) {
         markers.current.driver?.remove();
         markers.current.driver = undefined;
       }
-      const src = m.getSource('route') as import('mapbox-gl').GeoJSONSource | undefined;
-      src?.setData({
-        type: 'FeatureCollection',
-        features: showLine && driver ? [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [[driver.lng, driver.lat], [home.lng, home.lat]] } }] : [],
-      });
     })();
-  }, [driver?.lat, driver?.lng, showLine, home.lat, home.lng, driver]);
+  }, [driver?.lat, driver?.lng, home.lat, home.lng, driver]);
 
   return (
     <div style={{ height, position: 'relative', background: 'var(--map-ground)' }}>
@@ -83,7 +72,7 @@ function MapboxMap({ height, home, driver, showLine }: Props) {
   );
 }
 
-function DrawnMap({ height, home, driver, showLine }: Props) {
+function DrawnMap({ height, home, driver }: Props) {
   const W = 400, H = 300;
   const pts = [home, ...(driver ? [driver] : [])];
   const lats = pts.map((p) => p.lat), lngs = pts.map((p) => p.lng);
@@ -106,12 +95,6 @@ function DrawnMap({ height, home, driver, showLine }: Props) {
         })}
         {minor.map((d) => <path key={d} d={d} stroke="#fff" strokeWidth={4} fill="none" />)}
         {roads.map((d) => <path key={d} d={d} stroke="#fff" strokeWidth={9} fill="none" />)}
-        {showLine && driver ? (
-          <>
-            <path d={`M${X(driver.lng)} ${Y(driver.lat)} L${X(home.lng)} ${Y(home.lat)}`} stroke="#fff" strokeWidth={8} strokeLinecap="round" />
-            <path d={`M${X(driver.lng)} ${Y(driver.lat)} L${X(home.lng)} ${Y(home.lat)}`} stroke="#009DFE" strokeWidth={4.5} strokeLinecap="round" />
-          </>
-        ) : null}
         <g transform={`translate(${X(home.lng)} ${Y(home.lat)})`}>
           <path d="M0 0 C-3 -6 -11 -12 -11 -20 A11 11 0 0 1 11 -20 C11 -12 3 -6 0 0 Z" fill="#3C4043" stroke="#fff" strokeWidth={2} />
           <circle cy={-20} r={4} fill="#fff" />
