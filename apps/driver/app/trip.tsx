@@ -368,7 +368,6 @@ export default function Trip() {
                 <Button variant="text" label="Continue route" loading={busy === 'undo'}
                   onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
               </View>
-              <Text style={[type.caption, { textAlign: 'center' }]}>Mark this stop to start your next trip.</Text>
             </View>
           ) : null}
 
