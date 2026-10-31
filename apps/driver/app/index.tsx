@@ -365,18 +365,13 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, search }: {
   );
 }
 
-/** A stop on the day, styled like the trip's stop list: a blue ring (or a check once done), name and address. No dividers. */
+/** A stop on the day, styled like the trip's stop list: name and address (gray once done). No markers or dividers. */
 function StopListRow({ stop, isCurrent, onPress }: { stop: Stop; isCurrent: boolean; onPress: () => void }) {
   const done = isDone(stop);
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${stop.customer_name}, ${stop.address}${done ? ', done' : isCurrent ? ', next' : ''}`}
-      style={({ pressed }) => [{ flexDirection: 'row', gap: space[3], paddingBottom: 20 }, pressed && { opacity: 0.6 }]}>
-      <View style={{ width: 20, alignItems: 'center' }}>
-        {done
-          ? <View style={{ marginTop: 3 }}><Icon name="check" size={18} color={color.inkMuted} /></View>
-          : <View style={{ marginTop: 5, width: 16, height: 16, borderRadius: 8, backgroundColor: isCurrent ? color.action : color.surface, borderWidth: 3, borderColor: color.action }} />}
-      </View>
-      <View style={{ flex: 1 }}>
+      style={({ pressed }) => [{ paddingBottom: 20 }, pressed && { opacity: 0.6 }]}>
+      <View>
         <Text style={{ fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: done ? color.inkMuted : color.ink }}>{stop.customer_name}</Text>
         <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }} numberOfLines={1}>
           {stop.address.split(',')[0]}{stop.notes ? ` · ${stop.notes}` : ''}
