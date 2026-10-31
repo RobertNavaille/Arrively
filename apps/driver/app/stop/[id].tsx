@@ -1,10 +1,11 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { backend } from '../../src/lib/backend';
 import { confirmAction, showMessage } from '../../src/lib/dialog';
 import { useRoadRoute } from '../../src/lib/directions';
+import { contactCustomer } from '../../src/lib/navigation';
 import { fmtTime, fmtWindow, parseDay } from '../../src/lib/geo';
 import { useLivePosition } from '../../src/lib/location';
 import { useActiveTrip, useDriverData } from '../../src/lib/store';
@@ -64,8 +65,10 @@ export default function StopScreen() {
   // stand-ins used when there were none aren't comments, so they don't show.
   const comments = stop.mark_reason && !['Skipped', 'Marked away from the stop'].includes(stop.mark_reason) ? stop.mark_reason : null;
   const outcome = stop.status === 'completed' ? 'Done' : stop.status === 'no_show' ? 'No-show' : 'Skipped';
-  const call = stop.customer_phone ? () => Linking.openURL(`tel:${stop.customer_phone}`) : undefined;
-  const message = () => showMessage('Coming soon', 'Chat with customers arrives in the next build.');
+  const call = stop.customer_phone ? () => contactCustomer('tel', stop.customer_phone!) : undefined;
+  // Calls and texts go through the phone's own apps.
+  const message = stop.customer_phone ? () => contactCustomer('sms', stop.customer_phone!)
+    : () => showMessage('No phone number', `There's no phone number for ${stop.customer_name}.`);
   const line = !done && pos ? [pos, ...(leg ? leg.path : []), stop] : undefined;
 
   return (

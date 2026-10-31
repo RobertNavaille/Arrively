@@ -46,3 +46,14 @@ export function directionsUrl(to: LatLng, o: RouteOptions = {}): string {
 export function openDirections(to: LatLng, o: RouteOptions = {}) {
   Linking.openURL(directionsUrl(to, o));
 }
+
+/**
+ * Call or text the customer with the phone's own apps. In the browser these go
+ * through the page's location (like react-native-web does for tel:), so an
+ * sms: link doesn't leave a blank tab behind.
+ */
+export function contactCustomer(how: 'tel' | 'sms', phone: string) {
+  const url = `${how}:${phone}`;
+  if (Platform.OS === 'web' && typeof window !== 'undefined') window.location.href = url;
+  else Linking.openURL(url);
+}

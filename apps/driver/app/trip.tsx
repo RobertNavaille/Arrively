@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Linking, Pressable, ScrollView, TextInput, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, StyleSheet, Text, View } from 'react-native';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
@@ -8,7 +8,7 @@ import { bearingDeg, dayKey, distanceM, pathAhead, estimateDriveMin, fmtDuration
 import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
 import { lockedOrder, optionsOf, SPEED, type RouteOptions, type RoutePlan, type TravelMode } from '../src/lib/routing';
 import { currentStop, useDriverData } from '../src/lib/store';
-import { avoidList, avoidNotPassed, openDirections } from '../src/lib/navigation';
+import { avoidList, avoidNotPassed, contactCustomer, openDirections } from '../src/lib/navigation';
 import { useBottomInset, useScreenHeight } from '../src/lib/viewport';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
 import { AutoButton } from '../src/ui/AutoButton';
@@ -192,8 +192,10 @@ export default function Trip() {
     }
     await run('mark', async () => { await backend.markStop(current.id, outcome, outcome === 'skipped' ? note ?? 'Skipped' : note, here); await refresh(); });
   }
-  const call = current?.customer_phone ? () => Linking.openURL(`tel:${current.customer_phone}`) : undefined;
-  const message = () => showMessage('Coming soon', 'Chat with customers arrives in the next build.');
+  const call = current?.customer_phone ? () => contactCustomer('tel', current.customer_phone!) : undefined;
+  // Calls and texts go through the phone's own apps.
+  const message = current?.customer_phone ? () => contactCustomer('sms', current.customer_phone!)
+    : () => showMessage('No phone number', `There's no phone number for ${current?.customer_name ?? 'this customer'}.`);
   // The job in full, one gray line icon and its text per row (on the way, and arrived).
   // `contact`: buttons at the right of the phone number's row.
   const jobDetails = (contact?: ReactNode) => current ? (
