@@ -11,7 +11,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.arrively.driver",
       "infoPlist": {
-        "UIBackgroundModes": ["location"],
+        "UIBackgroundModes": [
+          "location"
+        ],
         "NSLocationWhenInUseUsageDescription": "Arrively shares your location with the customer you're driving to, so they know when you'll arrive.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Arrively keeps sharing your location while you're on a route, even when the app is in the background, so customers see an accurate ETA and stops are marked when you arrive and leave. Sharing stops when you end your shift."
       }
@@ -32,11 +34,19 @@
       ],
       [
         "@rnmapbox/maps",
-        { "RNMapboxMapsImpl": "mapbox" }
+        {
+          "RNMapboxMapsImpl": "mapbox"
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": false
+    },
+    "owner": "arrively",
+    "extra": {
+      "eas": {
+        "projectId": "1ead5d03-3e19-49f8-95fb-e296f1e0ed2c"
+      }
     }
   }
 }
