@@ -37,7 +37,8 @@
         {
           "RNMapboxMapsImpl": "mapbox"
         }
-      ]
+      ],
+      "./plugins/withSceneLifecycle"
     ],
     "experiments": {
       "typedRoutes": false
