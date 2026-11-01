@@ -17,6 +17,7 @@ Several items have a **reference commit** on branch `claude/vibrant-goldberg-dpz
 | 5 | Show the driver's comments from completing a stop on its details screen | Driver · Stop details | ✔️ | 2026-10-31 | `341db9b` |
 | 6 | Call and text back to the large buttons | Driver · On route | ✔️ | 2026-10-31 | `d0ea5c7` |
 | 7 | Arrived: job details only at full height, replacing the Arrived UI | Driver · Arrived | ✔️ | 2026-10-31 | — |
+| 8 | Native Swift (SwiftUI) iPhone driver app, replacing the React Native / Expo one | Driver · all | 🔍 | 2026-11-01 | — |
 
 ## Details
 
@@ -67,3 +68,18 @@ The copies in the phone-number row, which show once the sheet is pulled up, stay
 - At full height, should Stop Complete stay reachable? For example, it could be pinned at the bottom the way On route pins Arrived and Cancel when the sheet is open. Or should the driver pull the sheet back down to act?
 - Should call and text move into the phone row at full height, as on On route?
 - The resting height may need re-tuning once the details are gone, since the card is much shorter.
+
+### #8: Native Swift driver app
+The owner wants to move the iPhone driver app to native Swift "sooner rather than later". For now the React Native / Expo app ships to TestFlight via EAS (`apps/driver/eas.json`).
+
+**What carries over:** everything on the server. The app talks to Supabase RPCs (`mark_stop`, `start_trip`, `add_stop`, `update_stop_details`, `set_share_trip`, …) and edge functions (`route-plan`, `route-etas`); a Swift app calls the same ones with supabase-swift. The design tokens (`apps/driver/src/ui/theme.ts`, the design system artifact) and the mockups define the screens.
+
+**What gets rebuilt:** every screen (My Day, the trip sheet with Optimize route, on the way, arrived and the complete-stop form, stop details, add / edit stop), maps (MapKit or the Mapbox Maps SDK), background location (Core Location), and calling / texting / directions hand-off.
+
+**Open questions:**
+- Keep the web driver app (and an Android app) alongside, or iPhone-only?
+- Apple Maps (MapKit) or Mapbox for the maps; turn-by-turn later via the Mapbox Navigation SDK?
+- Rebuild everything at once, or screen by screen?
+
+**Keep the move cheap meanwhile:** put new business rules on the server (RPCs / edge functions), not in the React Native app, so the Swift app inherits them.
+
