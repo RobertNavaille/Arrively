@@ -9,7 +9,7 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.arrively.driver",
+      "bundleIdentifier": "com.arrivelyapp.driver",
       "config": {
         "usesNonExemptEncryption": false
       },
