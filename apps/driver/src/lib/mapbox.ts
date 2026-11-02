@@ -1,3 +1,4 @@
+import { appleMaps } from '../../modules/apple-maps-kit';
 import { MAPBOX_TOKEN, OFFLINE_DEMO } from './config';
 import type { LatLng } from './types';
 
@@ -12,10 +13,15 @@ const SAMPLE: Place[] = [
   { id: 'f', name: '300 Hope St', detail: 'Providence, RI 02906', lat: 41.8338, lng: -71.3943 },
 ];
 
-/** Address autocomplete (Mapbox Geocoding v6), biased toward the driver's position. */
+/** Address autocomplete (Mapbox Geocoding v6, or Apple Maps on iPhone), biased toward the driver's position. */
 export async function searchAddress(query: string, near: LatLng | null, signal?: AbortSignal): Promise<Place[]> {
   const q = query.trim();
   if (!q) return [];
+  // On iPhone: Apple Maps search (free on the device).
+  if (appleMaps) {
+    const found = await appleMaps.search(q, near ? [near.lat, near.lng] : null);
+    return found.map((f, i) => ({ id: `apple-${i}-${f.lat},${f.lng}`, ...f }));
+  }
   if (!MAPBOX_TOKEN) {
     if (!OFFLINE_DEMO) throw new Error('Address search needs EXPO_PUBLIC_MAPBOX_TOKEN.');
     return SAMPLE.filter((p) => `${p.name} ${p.detail}`.toLowerCase().includes(q.toLowerCase())).slice(0, 5);

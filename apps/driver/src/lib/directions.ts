@@ -1,12 +1,23 @@
 // Road routes for the stop screens: the line on the map and the drive time
-// shown to the driver follow real roads (Mapbox Directions, with traffic).
+// shown to the driver follow real roads (Mapbox Directions, with traffic; on
+// iPhone, Apple Maps when the build includes it, which costs nothing per request).
 import { useEffect, useRef, useState } from 'react';
+import { appleMaps } from '../../modules/apple-maps-kit';
 import { MAPBOX_TOKEN } from './config';
 import { distanceM, distanceToPathM } from './geo';
 import type { RouteOptions } from './routing';
 import type { LatLng } from './types';
 
 export interface RoadRoute { path: LatLng[]; durationS: number; distanceM: number }
+
+// Apple has no cycling directions to rely on yet, so bike routes stay on Mapbox.
+const useApple = (o: RouteOptions) => !!appleMaps && o.mode !== 'bike';
+const canRoute = (o: RouteOptions) => useApple(o) || !!MAPBOX_TOKEN;
+
+async function appleRoute(points: LatLng[], o: RouteOptions): Promise<RoadRoute | null> {
+  const r = await appleMaps!.route(points.map((p) => [p.lat, p.lng]), o.mode ?? 'drive', !!o.avoidHighways, !!o.avoidTolls);
+  return r ? { path: r.path.map(([lat, lng]) => ({ lat, lng })), durationS: r.durationS, distanceM: r.distanceM } : null;
+}
 
 /** The Mapbox profile for the route's travel mode (`traffic`: driving with live traffic), and what to avoid. */
 function profileOf(o: RouteOptions, traffic: boolean) {
@@ -30,6 +41,7 @@ const OFF_ROUTE_M = 60;
 const LEG_MAX_AGE_MS = 5 * 60_000;
 
 export async function fetchRoadRoute(from: LatLng, to: LatLng, signal?: AbortSignal, options: RouteOptions = {}): Promise<RoadRoute | null> {
+  if (useApple(options)) return appleRoute([from, to], options);
   if (!MAPBOX_TOKEN) return null;
   const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
   const res = await fetch(`https://api.mapbox.com/directions/v5/mapbox/${profileOf(options, true)}/${coords}?${paramsOf(options)}`, { signal });
@@ -48,7 +60,7 @@ export async function fetchRoadRoute(from: LatLng, to: LatLng, signal?: AbortSig
 export function useRoadRoute(from: LatLng | null, to: LatLng | null, options: RouteOptions = {}): RoadRoute | null {
   const opts = optionsKey(options);
   const known = useRef<RoadRoute | null>(null);
-  const want = from && to && MAPBOX_TOKEN ? { from, to, opts, at: Date.now() } : null;
+  const want = from && to && canRoute(options) ? { from, to, opts, at: Date.now() } : null;
   const route = useLoaded(want && `${opts}|${keyOf([from!, to!])}`, want,
     // The same route still serves while the driver is on it (or hasn't moved far), until it's a few minutes old.
     (a, b) => a.opts === b.opts && a.to.lat === b.to.lat && a.to.lng === b.to.lng && b.at - a.at < LEG_MAX_AGE_MS
@@ -66,10 +78,15 @@ const pathCache = new Map<string, RoadRoute>();
 const keyOf = (pts: LatLng[]) => pts.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(';');
 
 export async function fetchRoadPath(points: LatLng[], signal?: AbortSignal, options: RouteOptions = {}): Promise<RoadRoute | null> {
-  if (!MAPBOX_TOKEN || points.length < 2) return null;
+  if (!canRoute(options) || points.length < 2) return null;
   const key = `${optionsKey(options)}|${keyOf(points)}`;
   const hit = pathCache.get(key);
   if (hit) return hit;
+  if (useApple(options)) {
+    const r = await appleRoute(points, options);
+    if (r) pathCache.set(key, r);
+    return r;
+  }
   const out: RoadRoute = { path: [], durationS: 0, distanceM: 0 };
   for (let i = 0; i < points.length - 1; i += MAX_POINTS - 1) {
     const chunk = points.slice(i, i + MAX_POINTS);
@@ -93,7 +110,7 @@ export async function fetchRoadPath(points: LatLng[], signal?: AbortSignal, opti
 export function useRoadPath(start: LatLng | null, stops: LatLng[], options: RouteOptions = {}): RoadRoute | null {
   const key = `${optionsKey(options)}|${keyOf(stops)}`;
   const pts = [...(start ? [start] : []), ...stops, ...(start && options.roundTrip && stops.length ? [start] : [])];
-  const want = MAPBOX_TOKEN && pts.length >= 2 ? { start, key, pts } : null;
+  const want = canRoute(options) && pts.length >= 2 ? { start, key, pts } : null;
   return useLoaded(want && `${key}|${start ? keyOf([start]) : ''}`, want,
     (a, b) => a.key === b.key && (a.start && b.start ? distanceM(a.start, b.start) < REFETCH_AFTER_M : a.start === b.start),
     (w) => fetchRoadPath(w.pts, undefined, options));
