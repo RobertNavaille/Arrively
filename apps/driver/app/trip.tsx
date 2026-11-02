@@ -19,6 +19,7 @@ import { ReorderList } from '../src/ui/ReorderList';
 import { SelectChip, ToggleChip } from '../src/ui/Chips';
 import { useCountTo } from '../src/ui/useCountTo';
 import { FadeIn } from '../src/ui/FadeIn';
+import { FloatingSurface } from '../src/ui/FloatingSurface';
 import { Button, IconButton, StatusPill } from '../src/ui/components';
 import { Icon, type IconName } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
@@ -291,24 +292,31 @@ export default function Trip() {
 
       {phase === 'onroute' && freeMap ? (
         <Pressable onPress={() => setFreeMap(false)} accessibilityRole="button" accessibilityLabel="Re-center on your location"
-          style={[{ position: 'absolute', top: 72 + safeTop, right: space[4], zIndex: 2, flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: space[3], borderRadius: radius.full, backgroundColor: color.surface }, shadow.float]}>
-          <Icon name="navigate" size={16} color={color.actionInk} />
-          <Text style={[type.bodyStrong, { color: color.actionInk }]}>Re-center</Text>
+          style={{ position: 'absolute', top: 72 + safeTop, right: space[4], zIndex: 2 }}>
+          <FloatingSurface style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: space[3], borderRadius: radius.full }}>
+            <Icon name="navigate" size={16} color={color.actionInk} />
+            <Text style={[type.bodyStrong, { color: color.actionInk }]}>Re-center</Text>
+          </FloatingSurface>
         </Pressable>
       ) : null}
 
       {/* Top bar: back to where the driver came from and, on the way, where to (until the sheet is pulled up). */}
       <View style={{ position: 'absolute', top: NAV_TOP + safeTop, left: space[4], right: space[4], height: NAV_H, zIndex: 3, flexDirection: 'row', alignItems: 'center', gap: space[2] }}
         pointerEvents="box-none">
+        {/* Floating over the map: Liquid Glass on iPhone, white elsewhere (FloatingSurface). */}
         <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={6}
-          style={({ pressed }) => [{ width: NAV_H, height: NAV_H, borderRadius: NAV_H / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface }, shadow.float, pressed && { opacity: 0.8 }]}>
-          <Icon name="back" size={20} color={color.ink} />
+          style={({ pressed }) => pressed && { opacity: 0.8 }}>
+          <FloatingSurface style={{ width: NAV_H, height: NAV_H, borderRadius: NAV_H / 2, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="back" size={20} color={color.ink} />
+          </FloatingSurface>
         </Pressable>
         {phase === 'onroute' && current && !sheetOpen ? (
           <Pressable onPress={() => openDirections(current, options)} accessibilityRole="button" accessibilityLabel={`Directions to ${current.address}`}
-            style={[{ flex: 1, height: NAV_H, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], borderRadius: radius.md, backgroundColor: color.surface }, shadow.float]}>
-            <Icon name="navigate" size={18} color={color.ink} />
-            <Text style={[type.body, { flex: 1 }]} numberOfLines={1}>{current.address}</Text>
+            style={{ flex: 1 }}>
+            <FloatingSurface style={{ height: NAV_H, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], borderRadius: NAV_H / 2 }}>
+              <Icon name="navigate" size={18} color={color.ink} />
+              <Text style={[type.body, { flex: 1 }]} numberOfLines={1}>{current.address}</Text>
+            </FloatingSurface>
           </Pressable>
         ) : null}
       </View>
