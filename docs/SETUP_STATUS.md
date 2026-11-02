@@ -19,4 +19,4 @@ The owner asked to go one step at a time, in plain language.
 
 - [x] Console and tracking page on Vercel: https://arrively-cyan.vercel.app (Grass Geeks team, project `arrively`, root `apps/web`, deploys from `main`). `TRACKING_BASE_URL` function secret and `app_settings.tracking_base_url` set to `https://arrively-cyan.vercel.app/t/`.
 - [x] Driver app as a website on Vercel: https://arrively-driver-v2.vercel.app (Grass Geeks team, project `arrively-driver-v2`, root `apps/driver`, framework Other, settings in `apps/driver/vercel.json`, env EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY / EXPO_PUBLIC_MAPBOX_TOKEN). Owner's Apple Developer account has issues, so TestFlight waits.
-- [ ] Driver app on TestFlight.
+- [x] Driver app on TestFlight (2026-11-02): EAS build 0.1.0 (1) uploaded, App Store Connect app 6829775289 "Arrively Driver (c42c13)", bundle id `com.arrivelyapp.driver`, internal group "Team (Expo)". New builds: `npx eas-cli build --platform ios --profile production --auto-submit` from `apps/driver` on the owner's Mac.
