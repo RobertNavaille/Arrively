@@ -11,6 +11,7 @@ import { currentStop, useDriverData } from '../src/lib/store';
 import { avoidList, avoidNotPassed, contactCustomer, openDirections, shareTripMessage } from '../src/lib/navigation';
 import { TRACKING_BASE_URL } from '../src/lib/config';
 import { useBottomInset, useScreenHeight } from '../src/lib/viewport';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
 import { AutoButton } from '../src/ui/AutoButton';
 import { BottomSheet } from '../src/ui/BottomSheet';
@@ -41,6 +42,9 @@ const REST_FROM = 68;
 export default function Trip() {
   const router = useRouter();
   const height = useScreenHeight();
+  // Below the status bar on a phone (0 on the web).
+  const safeTop = useSafeAreaInsets().top;
+  const sheetTop = SHEET_TOP + safeTop;
   const { routeFor, refresh, profile } = useDriverData();
   const pos = useLivePosition();
   const travel = useTravelBearing(pos);
@@ -260,18 +264,18 @@ export default function Trip() {
   // The sheet rests a third of the way down, or lower on the way: just low
   // enough that the step's card (with Arrived) sits above what's covered at the
   // bottom. Never so low that the card would slip under it.
-  const sheetArea = height - SHEET_TOP;
+  const sheetArea = height - sheetTop;
   // Pulled up (not at rest), a bar sits at the bottom: Arrived and Cancel on the way, Stop Complete and Continue route arrived.
   const barSpace = phase === 'onroute' || (phase === 'arrived' && !choosing) ? BAR_SPACE : 0;
   const cardRest = cardH != null ? Math.max(0, Math.round(sheetArea - cardH - bottomInset)) : null;
   // On the way and arrived, the sheet rests with its card just in view.
-  const peek = (phase === 'onroute' || (phase === 'arrived' && !choosing)) && cardRest != null ? cardRest : Math.min(Math.round(height * 0.36) + REST_FROM - SHEET_TOP, cardRest ?? Infinity);
+  const peek = (phase === 'onroute' || (phase === 'arrived' && !choosing)) && cardRest != null ? cardRest : Math.min(Math.round(height * 0.36) + REST_FROM - sheetTop, cardRest ?? Infinity);
 
   return (
     <View style={{ flex: 1, backgroundColor: color.mapGround }}>
       <RouteMap height={height} stops={mapStops} driver={pos} line={line}
         pin={focus ? current : null} pinLabel={phase === 'arrived' ? current?.address.split(',')[0] : undefined}
-        inset={{ top: phase === 'onroute' ? 84 : 0, bottom: height - peek - SHEET_TOP }}
+        inset={{ top: phase === 'onroute' ? 84 + safeTop : safeTop, bottom: height - peek - sheetTop }}
         // On the way it's a navigation view: the map follows the driver, who stays centred.
         follow={phase === 'onroute' && !freeMap}
         // The way the driver faces: the compass when there is one, else their direction of travel.
@@ -284,7 +288,7 @@ export default function Trip() {
 
       {phase === 'onroute' && freeMap ? (
         <Pressable onPress={() => setFreeMap(false)} accessibilityRole="button" accessibilityLabel="Re-center on your location"
-          style={[{ position: 'absolute', top: 72, right: space[4], zIndex: 2, flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: space[3], borderRadius: radius.full, backgroundColor: color.surface }, shadow.float]}>
+          style={[{ position: 'absolute', top: 72 + safeTop, right: space[4], zIndex: 2, flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: space[3], borderRadius: radius.full, backgroundColor: color.surface }, shadow.float]}>
           <Icon name="navigate" size={16} color={color.actionInk} />
           <Text style={[type.bodyStrong, { color: color.actionInk }]}>Re-center</Text>
         </Pressable>
@@ -293,14 +297,14 @@ export default function Trip() {
       {/* On the way: where to, across the top of the map (until the sheet is pulled up over it). */}
       {phase === 'onroute' && current && !sheetOpen ? (
         <Pressable onPress={() => openDirections(current, options)} accessibilityRole="button" accessibilityLabel={`Directions to ${current.address}`}
-          style={[{ position: 'absolute', top: 12, left: space[4], right: space[4], zIndex: 2, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], paddingVertical: 10, borderRadius: radius.md, backgroundColor: color.surface }, shadow.float]}>
+          style={[{ position: 'absolute', top: 12 + safeTop, left: space[4], right: space[4], zIndex: 2, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], paddingVertical: 10, borderRadius: radius.md, backgroundColor: color.surface }, shadow.float]}>
           <Icon name="navigate" size={18} color={color.ink} />
           <Text style={[type.body, { flex: 1 }]} numberOfLines={1}>{current.address}</Text>
         </Pressable>
       ) : null}
 
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
-      <BottomSheet top={SHEET_TOP} rest={peek} onOpenChange={setSheetOpen} resetKey={choosing ? `${phase}:mark` : phase} startOpen={phase === 'review' || choosing} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
+      <BottomSheet top={sheetTop} rest={peek} onOpenChange={setSheetOpen} resetKey={choosing ? `${phase}:mark` : phase} startOpen={phase === 'review' || choosing} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
         // Pulled up (arrived, on the way), the card changes for the details: its resting height stays measured from before.
         <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH && !(sheetOpen && (phase === 'arrived' || phase === 'onroute'))) setCardH(h); }}
