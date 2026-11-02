@@ -2,6 +2,7 @@ import Mapbox from '@rnmapbox/maps';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { MAPBOX_TOKEN } from '../lib/config';
+import { BASEMAP_CONFIG, BASEMAP_STYLE } from './basemap';
 import Svg from 'react-native-svg';
 import { PUCK_SIZE, PuckShapes } from './DriverPuck';
 import { color, font, shadow } from './theme';
@@ -9,7 +10,7 @@ import { FOLLOW_ZOOM, MARKER, ROUTE_GRADIENT, byDrawOrder, framePoints, type Rou
 
 if (MAPBOX_TOKEN) Mapbox.setAccessToken(MAPBOX_TOKEN);
 
-// Mapbox map in the Arrively style: light base map, blue route and driver,
+// Mapbox map in the Arrively style: muted base map (see basemap.ts), blue route and driver,
 // numbered stops, a dark pin for a single destination.
 export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, driverHeading, onUserMove, hold }: RouteMapProps) {
   const points = useMemo(() => {
@@ -39,9 +40,10 @@ export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inse
 
   return (
     <View style={{ height, backgroundColor: color.mapGround, overflow: 'hidden' }}>
-      <Mapbox.MapView style={{ flex: 1 }} styleURL={Mapbox.StyleURL.Light} scaleBarEnabled={false}
+      <Mapbox.MapView style={{ flex: 1 }} styleURL={BASEMAP_STYLE} scaleBarEnabled={false}
         onCameraChanged={(state) => { if (state.gestures.isGestureActive) onUserMove?.(); }}
         logoPosition={{ bottom: 6, left: 6 }} attributionPosition={{ bottom: 6, right: 6 }}>
+        <Mapbox.StyleImport id="basemap" existing config={BASEMAP_CONFIG} />
         {hold ? (
           // The driver took over from following: leave the camera where they put it.
           <Mapbox.Camera animationDuration={0} />
@@ -60,8 +62,8 @@ export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inse
         {lineShape ? (
           // Deep blue where the trip starts to pale blue where it ends, so the line shows which way it runs.
           <Mapbox.ShapeSource id="route" shape={lineShape} lineMetrics>
-            <Mapbox.LineLayer id="route-casing" style={{ lineColor: color.surface, lineWidth: 7, lineCap: 'round', lineJoin: 'round' }} />
-            <Mapbox.LineLayer id="route-line" aboveLayerID="route-casing" style={{ lineGradient: ROUTE_GRADIENT as never, lineWidth: 4, lineCap: 'round', lineJoin: 'round' }} />
+            <Mapbox.LineLayer id="route-casing" slot="middle" style={{ lineColor: color.surface, lineWidth: 7, lineCap: 'round', lineJoin: 'round' }} />
+            <Mapbox.LineLayer id="route-line" slot="middle" aboveLayerID="route-casing" style={{ lineGradient: ROUTE_GRADIENT as never, lineWidth: 4, lineCap: 'round', lineJoin: 'round' }} />
           </Mapbox.ShapeSource>
         ) : null}
         {byDrawOrder(stops).map((s) => (

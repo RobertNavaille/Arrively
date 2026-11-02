@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { MAPBOX_TOKEN } from '../lib/config';
+import { BASEMAP_CONFIG, BASEMAP_STYLE } from './basemap';
 import { PUCK_SIZE, PuckShapes, puckSvg } from './DriverPuck';
 import { color, font } from './theme';
 import { FOLLOW_ZOOM, MARKER, ROUTE_GRADIENT, byDrawOrder, framePoints, routeColorAt, type MapStop, type RouteMapProps } from './RouteMap.types';
@@ -66,7 +67,7 @@ function safely(m: import('mapbox-gl').Map, move: () => void) {
 function keepPaddingInside(m: import('mapbox-gl').Map) {
   const p = m.getPadding(), c = m.getCanvas();
   const h = c.clientHeight, w = c.clientWidth;
-  if (p.top + p.bottom >= h - 1 || p.left + p.right >= w - 1) m.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
+  if ((p.top ?? 0) + (p.bottom ?? 0) >= h - 1 || (p.left ?? 0) + (p.right ?? 0) >= w - 1) m.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
 }
 
 function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, driverHeading, onUserMove, hold }: RouteMapProps) {
@@ -98,21 +99,21 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
       const el = host.current as unknown as HTMLElement | null;
       if (cancelled || !el || map.current) return;
       mapboxgl.accessToken = MAPBOX_TOKEN;
-      const m = new mapboxgl.Map({ container: el, style: 'mapbox://styles/mapbox/light-v11', center: [-71.41, 41.82], zoom: 11, attributionControl: false });
+      const m = new mapboxgl.Map({ container: el, style: BASEMAP_STYLE, config: { basemap: { ...BASEMAP_CONFIG } }, center: [-71.41, 41.82], zoom: 11, attributionControl: false });
       m.addControl(new mapboxgl.AttributionControl({ compact: true }));
       // Moves the driver makes by hand carry the browser event; the app's own camera moves don't.
       // Dragging or turning takes over from following; zooming while following keeps it, at their zoom.
       const byHand = (e: { originalEvent?: unknown }) => { if (e.originalEvent) userMove.current?.(); };
       m.on('dragstart', byHand);
       m.on('rotatestart', byHand);
-      m.on('zoomstart', (e) => { if (!followingRef.current) byHand(e); });
-      m.on('zoomend', (e) => { if (e.originalEvent && followingRef.current) followZoom.current = m.getZoom(); });
+      m.on('zoomstart', (e) => { if (!followingRef.current) byHand(e as { originalEvent?: unknown }); });
+      m.on('zoomend', (e) => { if ((e as { originalEvent?: unknown }).originalEvent && followingRef.current) followZoom.current = m.getZoom(); });
       m.on('resize', () => keepPaddingInside(m));
       m.on('load', () => {
         // lineMetrics: the line is drawn as a gradient along its length (deep blue at the start, pale at the end).
         m.addSource('route', { type: 'geojson', lineMetrics: true, data: { type: 'FeatureCollection', features: [] } });
-        m.addLayer({ id: 'route-casing', type: 'line', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 7 } });
-        m.addLayer({ id: 'route-line', type: 'line', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-gradient': ROUTE_GRADIENT as never, 'line-width': 4 } });
+        m.addLayer({ id: 'route-casing', type: 'line', slot: 'middle', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 7 } });
+        m.addLayer({ id: 'route-line', type: 'line', slot: 'middle', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-gradient': ROUTE_GRADIENT as never, 'line-width': 4 } });
         setReady(true);
       });
       map.current = m;

@@ -3,6 +3,7 @@
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useEffect, useRef } from 'react';
 import { MAPBOX_TOKEN } from '@/lib/config';
+import { BASEMAP_CONFIG, BASEMAP_STYLE } from '@/lib/basemap';
 
 export interface MapPoint { id: string; lat: number; lng: number; label: string; kind: 'driver' | 'stale' | 'stop' | 'done' }
 
@@ -35,7 +36,7 @@ function Mapbox({ height, points }: { height: number; points: MapPoint[] }) {
       const mapboxgl = (await import('mapbox-gl')).default;
       if (cancelled || !el.current || map.current) return;
       mapboxgl.accessToken = MAPBOX_TOKEN;
-      map.current = new mapboxgl.Map({ container: el.current, style: 'mapbox://styles/mapbox/light-v11', center: [-71.41, 41.826], zoom: 12 });
+      map.current = new mapboxgl.Map({ container: el.current, style: BASEMAP_STYLE, config: { basemap: { ...BASEMAP_CONFIG } }, center: [-71.41, 41.826], zoom: 12 });
     })();
     return () => { cancelled = true; map.current?.remove(); map.current = null; };
   }, []);
