@@ -122,7 +122,11 @@ const supabaseBackend: Backend = {
   },
   async profile() {
     const { data: u } = await supabase().auth.getUser();
-    const row = check(await supabase().from('profiles').select('id,name,role,vehicle,email,orgs(name)').eq('id', u.user?.id ?? '').maybeSingle());
+    const read = (cols: string) => supabase().from('profiles').select(cols).eq('id', u.user?.id ?? '').maybeSingle();
+    let res = await read('id,name,role,vehicle,email,orgs(name)');
+    // Before the email column exists (migration 20261102000000), still load the profile.
+    if (res.error?.code === '42703') res = await read('id,name,role,vehicle,orgs(name)');
+    const row = check(res) as unknown as { id: string; name: string; role: Profile['role']; vehicle: string | null; email?: string | null } | null;
     if (!row) throw new Error("This phone number hasn't been invited to a business yet.");
     const org = (row as unknown as { orgs: { name: string } | null }).orgs;
     return {
