@@ -78,8 +78,24 @@ The owner wants to move the iPhone driver app to native Swift "sooner rather tha
 
 **Open questions:**
 - Keep the web driver app (and an Android app) alongside, or iPhone-only?
-- Apple Maps (MapKit) or Mapbox for the maps; turn-by-turn later via the Mapbox Navigation SDK?
+- Apple Maps (MapKit) or Mapbox for the maps (see #9: parked, staying on Mapbox); turn-by-turn later via the Mapbox Navigation SDK?
 - Rebuild everything at once, or screen by screen?
 
 **Keep the move cheap meanwhile:** put new business rules on the server (RPCs / edge functions), not in the React Native app, so the Swift app inherits them.
 
+
+### #9: Apple Maps instead of Mapbox (parked)
+**Decision (Nov 2, 2026):** stay on Mapbox for now. Its free tier should carry the app to market fit; by the time usage reaches paid tiers the business should cover the cost.
+
+**What was tried:** branch `claude/apple-maps-trial` (kept for later). On iPhone only: Apple Maps for the trip map (react-native-maps, muted, no points of interest), street routes and drive times (MKDirections, with traffic, avoid highways and tolls) and address search (MKLocalSearch), via a local Expo module `apps/driver/modules/apple-maps-kit`. The owner liked how it looked. Not yet compiled on a Mac when parked.
+
+**What Apple's terms allow** (Developer Program License Agreement, Attachment 6):
+| Feature | Allowed? |
+|---|---|
+| iPhone driver app: map, routes, drive times, address search | Yes (Apple data on an Apple map, on an Apple device) |
+| Server optimizer using Apple drive times | Risky: the plan is stored and shown on non-Apple maps (rules 2.4, 2.5) |
+| Customer ETAs from Apple (server or driver's phone) | No / risky: shown on the Mapbox tracking page and in texts (rule 2.4) |
+| MapKit JS for the console or driver web app | No: fleet management / dispatch on non-Apple hardware (rule 1.2) |
+| MapKit JS for the customer tracking page | Unclear (may count as asset tracking, rule 1.2) |
+
+Apple's server ETA service has no avoid options; its directions service avoids tolls but not highways. If revisited, the likely shape is Apple Maps in the iPhone driver app only, Mapbox everywhere else.
