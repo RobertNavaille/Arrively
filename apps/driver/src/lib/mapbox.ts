@@ -36,3 +36,23 @@ export async function searchAddress(query: string, near: LatLng | null, signal?:
     lng: f.geometry.coordinates[0],
   }));
 }
+
+/**
+ * Where to save an address. Search suggestions are temporary geocodes, which
+ * Mapbox's terms don't allow storing, so the address the driver picked is
+ * looked up once more as a permanent geocode (billed per request, no free
+ * tier) and those coordinates are what's saved. Without a token (offline
+ * demo) the picked point is used as is.
+ */
+export async function storableLocation(address: string, near: LatLng): Promise<LatLng> {
+  if (!MAPBOX_TOKEN) return near;
+  const params = new URLSearchParams({
+    q: address, access_token: MAPBOX_TOKEN, permanent: 'true', autocomplete: 'false',
+    country: 'us', limit: '1', types: 'address', proximity: `${near.lng},${near.lat}`,
+  });
+  const res = await fetch(`https://api.mapbox.com/search/geocode/v6/forward?${params}`);
+  if (!res.ok) throw new Error(`Couldn't save the address (${res.status}). Try again.`);
+  const f = (await res.json()).features?.[0];
+  if (!f) throw new Error("Couldn't find that address. Pick it from the list again.");
+  return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] };
+}

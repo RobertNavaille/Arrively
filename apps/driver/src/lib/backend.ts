@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import { OFFLINE_DEMO, SUPABASE_ANON_KEY, SUPABASE_URL } from './config';
 import { addDays, dayKey, distanceM } from './geo';
+import { storableLocation } from './mapbox';
 import { localEtas, localPlan, type RouteOptions, type RoutePlan } from './routing';
 import type { LatLng, MarkOutcome, Profile, Route, Stop } from './types';
 
@@ -150,7 +151,8 @@ const supabaseBackend: Backend = {
     check(await supabase().rpc('mark_stop', { p_stop: stopId, p_outcome: outcome, p_reason: reason, p_lat: at?.lat ?? null, p_lng: at?.lng ?? null }));
     refreshEtas(true);
   },
-  async addStop(day, address, at, details) {
+  async addStop(day, address, picked, details) {
+    const at = await storableLocation(address, picked);
     const routeId = check(await supabase().rpc('my_route_for', { p_day: day })) as string;
     const stop = check(await supabase().rpc('add_stop', {
       p_route: routeId, p_address: address, p_lat: at.lat, p_lng: at.lng,
@@ -160,7 +162,8 @@ const supabaseBackend: Backend = {
     if (stop && details?.shareTrip === false) check(await supabase().rpc('set_share_trip', { p_stop: stop.id, p_on: false }));
     refreshEtas(true);
   },
-  async updateAddress(stopId, address, at) {
+  async updateAddress(stopId, address, picked) {
+    const at = await storableLocation(address, picked);
     check(await supabase().rpc('update_stop_address', { p_stop: stopId, p_address: address, p_lat: at.lat, p_lng: at.lng }));
     refreshEtas(true);
   },

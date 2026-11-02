@@ -109,13 +109,15 @@ export const api = {
       if (r.error) throw new Error(r.error.message);
       route = r.data;
     }
+    // Suggestions are temporary geocodes, which may not be stored: save a permanent geocode of the address.
+    const at = await storableLocation(s.address, { lat: s.lat, lng: s.lng });
     const { data: last } = await sb.from('stops').select('position').eq('route_id', route!.id).order('position', { ascending: false }).limit(1).maybeSingle();
     const { error } = await sb.from('stops').insert({
       org_id: orgId, route_id: route!.id, position: (last?.position ?? 0) + 1,
       customer_name: s.customer_name || 'Customer', customer_phone: s.customer_phone ? e164(s.customer_phone) : null,
       sms_consent_at: s.consent && s.customer_phone ? new Date().toISOString() : null,
       sms_consent_source: s.consent ? 'console' : null,
-      address: s.address, lat: s.lat, lng: s.lng, notes: s.notes || null,
+      address: s.address, lat: at.lat, lng: at.lng, notes: s.notes || null,
     });
     if (error) throw new Error(error.message);
     refreshEtas(route!.id);
@@ -165,6 +167,25 @@ export async function searchAddress(q: string): Promise<Place[]> {
     id: f.id, name: f.properties?.name ?? f.properties?.full_address ?? 'Address', detail: f.properties?.place_formatted ?? '',
     lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0],
   }));
+}
+
+/**
+ * Where to save an address: Mapbox's terms don't allow storing the temporary
+ * geocodes behind search suggestions, so the picked address is looked up once
+ * as a permanent geocode (billed per request, no free tier). Without a token
+ * (offline demo) the picked point is used as is.
+ */
+export async function storableLocation(address: string, near: { lat: number; lng: number }): Promise<{ lat: number; lng: number }> {
+  if (!MAPBOX_TOKEN) return near;
+  const params = new URLSearchParams({
+    q: address, access_token: MAPBOX_TOKEN, permanent: 'true', autocomplete: 'false',
+    country: 'us', limit: '1', types: 'address', proximity: `${near.lng},${near.lat}`,
+  });
+  const res = await fetch(`https://api.mapbox.com/search/geocode/v6/forward?${params}`);
+  if (!res.ok) throw new Error(`Couldn't save the address (${res.status}). Try again.`);
+  const f = (await res.json()).features?.[0];
+  if (!f) throw new Error(`Couldn't find "${address}". Pick it from the list again.`);
+  return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] };
 }
 
 const SAMPLE_PLACES: Place[] = [
