@@ -142,7 +142,10 @@ export default function MyDay() {
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: color.surface }}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[2] }}>
-        <Avatar name={profile?.name ?? 'Driver'} size={36} />
+        <Pressable onPress={() => router.push('/settings')} accessibilityRole="button" accessibilityLabel="Settings and account" hitSlop={6}
+          style={({ pressed }) => pressed && { opacity: 0.7 }}>
+          <Avatar name={profile?.name ?? 'Driver'} size={36} />
+        </Pressable>
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]} accessibilityRole="header">{day.toLocaleDateString('en-US', { weekday: 'long' })}</Text>
           <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]}>{day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}{isToday ? ' · Today' : ''}</Text>

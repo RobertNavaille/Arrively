@@ -28,8 +28,11 @@ import { color, font, radius, shadow, space, type } from '../src/ui/theme';
 export { ScreenError as ErrorBoundary } from '../src/ui/ScreenError';
 
 const RADIUS_M = 75;
-// Pulled all the way up, the sheet stops just under the top of the screen.
-const SHEET_TOP = 10;
+// The bar across the top of the map: a back button (and, on the way, where to).
+const NAV_TOP = 10;
+const NAV_H = 44;
+// Pulled all the way up, the sheet stops just under that bar, so going back is always in reach.
+const SHEET_TOP = NAV_TOP + NAV_H + 10;
 // Where the sheet's resting heights were first measured from (the old map strip above an open sheet).
 const REST_FROM = 68;
 
@@ -275,7 +278,7 @@ export default function Trip() {
     <View style={{ flex: 1, backgroundColor: color.mapGround }}>
       <RouteMap height={height} stops={mapStops} driver={pos} line={line}
         pin={focus ? current : null} pinLabel={phase === 'arrived' ? current?.address.split(',')[0] : undefined}
-        inset={{ top: phase === 'onroute' ? 84 + safeTop : safeTop, bottom: height - peek - sheetTop }}
+        inset={{ top: NAV_TOP + NAV_H + 30 + safeTop, bottom: height - peek - sheetTop }}
         // On the way it's a navigation view: the map follows the driver, who stays centred.
         follow={phase === 'onroute' && !freeMap}
         // The way the driver faces: the compass when there is one, else their direction of travel.
@@ -294,14 +297,21 @@ export default function Trip() {
         </Pressable>
       ) : null}
 
-      {/* On the way: where to, across the top of the map (until the sheet is pulled up over it). */}
-      {phase === 'onroute' && current && !sheetOpen ? (
-        <Pressable onPress={() => openDirections(current, options)} accessibilityRole="button" accessibilityLabel={`Directions to ${current.address}`}
-          style={[{ position: 'absolute', top: 12 + safeTop, left: space[4], right: space[4], zIndex: 2, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], paddingVertical: 10, borderRadius: radius.md, backgroundColor: color.surface }, shadow.float]}>
-          <Icon name="navigate" size={18} color={color.ink} />
-          <Text style={[type.body, { flex: 1 }]} numberOfLines={1}>{current.address}</Text>
+      {/* Top bar: back to where the driver came from and, on the way, where to (until the sheet is pulled up). */}
+      <View style={{ position: 'absolute', top: NAV_TOP + safeTop, left: space[4], right: space[4], height: NAV_H, zIndex: 3, flexDirection: 'row', alignItems: 'center', gap: space[2] }}
+        pointerEvents="box-none">
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={6}
+          style={({ pressed }) => [{ width: NAV_H, height: NAV_H, borderRadius: NAV_H / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface }, shadow.float, pressed && { opacity: 0.8 }]}>
+          <Icon name="back" size={20} color={color.ink} />
         </Pressable>
-      ) : null}
+        {phase === 'onroute' && current && !sheetOpen ? (
+          <Pressable onPress={() => openDirections(current, options)} accessibilityRole="button" accessibilityLabel={`Directions to ${current.address}`}
+            style={[{ flex: 1, height: NAV_H, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], borderRadius: radius.md, backgroundColor: color.surface }, shadow.float]}>
+            <Icon name="navigate" size={18} color={color.ink} />
+            <Text style={[type.body, { flex: 1 }]} numberOfLines={1}>{current.address}</Text>
+          </Pressable>
+        ) : null}
+      </View>
 
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
       <BottomSheet top={sheetTop} rest={peek} onOpenChange={setSheetOpen} resetKey={choosing ? `${phase}:mark` : phase} startOpen={phase === 'review' || choosing} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={

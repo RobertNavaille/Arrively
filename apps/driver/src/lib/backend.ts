@@ -5,7 +5,7 @@ import { OFFLINE_DEMO, SUPABASE_ANON_KEY, SUPABASE_URL } from './config';
 import { addDays, dayKey, distanceM } from './geo';
 import { storableLocation } from './mapbox';
 import { localEtas, localPlan, type RouteOptions, type RoutePlan } from './routing';
-import type { LatLng, MarkOutcome, Profile, Route, Stop } from './types';
+import type { LatLng, MarkOutcome, Profile, ProfileEdit, Route, Stop } from './types';
 
 /** Everything the app does against the server. Two implementations: Supabase and an offline demo. */
 /** What the driver fills in when adding a stop. */
@@ -20,6 +20,7 @@ export interface Backend {
   verifyCode(phone: string, code: string): Promise<void>;
   signOut(): Promise<void>;
   profile(): Promise<Profile>;
+  updateProfile(edit: ProfileEdit): Promise<void>;
   routes(fromDay: string, toDay: string): Promise<Route[]>;
   subscribe(onChange: () => void): () => void;
   startRoute(routeId: string): Promise<void>;
@@ -121,10 +122,19 @@ const supabaseBackend: Backend = {
   },
   async profile() {
     const { data: u } = await supabase().auth.getUser();
-    const row = check(await supabase().from('profiles').select('id,name,role,vehicle,orgs(name)').eq('id', u.user?.id ?? '').maybeSingle());
+    const row = check(await supabase().from('profiles').select('id,name,role,vehicle,email,orgs(name)').eq('id', u.user?.id ?? '').maybeSingle());
     if (!row) throw new Error("This phone number hasn't been invited to a business yet.");
     const org = (row as unknown as { orgs: { name: string } | null }).orgs;
-    return { id: row.id, name: row.name, role: row.role, vehicle: row.vehicle, org_name: org?.name ?? '' };
+    return {
+      id: row.id, name: row.name, role: row.role, vehicle: row.vehicle, org_name: org?.name ?? '',
+      phone: u.user?.phone ? `+${u.user.phone.replace(/^\+/, '')}` : null, email: (row as { email?: string | null }).email ?? null,
+    };
+  },
+  async updateProfile(edit) {
+    const { data: u } = await supabase().auth.getUser();
+    check(await supabase().from('profiles').update({
+      name: edit.name.trim(), email: edit.email?.trim() || null, vehicle: edit.vehicle?.trim() || null,
+    }).eq('id', u.user?.id ?? ''));
   },
   async routes(fromDay, toDay) {
     const { data: u } = await supabase().auth.getUser();
@@ -254,6 +264,8 @@ function finishIfDone(r: Route) {
   if (r.stops.every((s) => ['completed', 'no_show', 'skipped', 'cancelled'].includes(s.status))) r.status = 'completed';
 }
 
+const demoProfile: Profile = { id: 'demo', name: 'Bill Brien', role: 'driver', vehicle: 'White Ford Transit · 7KQ 204', org_name: 'Acme Plumbing (demo)', phone: '+14015550100', email: null };
+
 const offlineBackend: Backend = {
   offline: true,
   async isSignedIn() { return signedIn; },
@@ -261,7 +273,10 @@ const offlineBackend: Backend = {
   async sendCode() {},
   async verifyCode() { setSignedIn(true); },
   async signOut() { setSignedIn(false); },
-  async profile() { return { id: 'demo', name: 'Bill Brien', role: 'driver', vehicle: 'White Ford Transit · 7KQ 204', org_name: 'Acme Plumbing (demo)' }; },
+  async profile() { return { ...demoProfile }; },
+  async updateProfile(edit) {
+    Object.assign(demoProfile, { name: edit.name.trim(), email: edit.email?.trim() || null, vehicle: edit.vehicle?.trim() || null });
+  },
   async routes(from, to) {
     return ensureDemo().filter((r) => r.day >= from && r.day <= to)
       .map((r) => ({ ...r, stops: r.stops.filter((s) => s.status !== 'cancelled').sort((a, b) => a.position - b.position) }));

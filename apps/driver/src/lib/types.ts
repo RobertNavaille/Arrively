@@ -48,7 +48,14 @@ export interface Profile {
   role: 'admin' | 'driver';
   vehicle: string | null;
   org_name: string;
+  /** The number they sign in with (texted codes go here). */
+  phone?: string | null;
+  /** Contact email (optional; sign-in is by phone). */
+  email?: string | null;
 }
+
+/** What the driver can change on the Settings screen. */
+export interface ProfileEdit { name: string; email: string | null; vehicle: string | null }
 
 export type MarkOutcome = 'completed' | 'no_show' | 'skipped' | 'deferred';
 
