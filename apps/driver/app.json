@@ -15,7 +15,8 @@
           "location"
         ],
         "NSLocationWhenInUseUsageDescription": "Arrively shares your location with the customer you're driving to, so they know when you'll arrive.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Arrively keeps sharing your location while you're on a route, even when the app is in the background, so customers see an accurate ETA and stops are marked when you arrive and leave. Sharing stops when you end your shift."
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Arrively keeps sharing your location while you're on a route, even when the app is in the background, so customers see an accurate ETA and stops are marked when you arrive and leave. Sharing stops when you end your shift.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "web": {
