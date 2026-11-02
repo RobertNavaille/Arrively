@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { NATIVE_CHROME } from '../../src/ui/nativeChrome';
 import { useBottomInset } from '../../src/lib/viewport';
 import { backend } from '../../src/lib/backend';
 import { showMessage } from '../../src/lib/dialog';
@@ -56,7 +57,7 @@ export default function SkipScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: color.surface }}>
+    <SafeAreaView edges={NATIVE_CHROME ? ['bottom'] : undefined} style={{ flex: 1, backgroundColor: color.surface }}>
       <ScrollView contentContainerStyle={{ padding: space[4], paddingBottom: space[4] + bottomInset, gap: space[4] }}>
         <View style={{ gap: 4 }}>
           <Text style={type.title}>Skip or defer this stop</Text>

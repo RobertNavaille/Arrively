@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { backend } from '../src/lib/backend';
 import '../src/lib/location'; // registers the background location task
 import { DriverDataProvider } from '../src/lib/store';
+import { NATIVE_CHROME, nativeHeader, nativeSheet } from '../src/ui/nativeChrome';
 import { color } from '../src/ui/theme';
 
 export { ScreenError as ErrorBoundary } from '../src/ui/ScreenError';
@@ -49,11 +50,11 @@ export default function RootLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="sign-in" />
       <Stack.Screen name="trip" />
-      <Stack.Screen name="settings" />
-      <Stack.Screen name="stop/[id]" />
-      <Stack.Screen name="skip/[id]" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="edit/[id]" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="new-stop" options={{ presentation: 'modal' }} />
+      {/* iPhone: Apple's navigation bar and sheets (see nativeChrome.ts); elsewhere the screens draw their own. */}
+      <Stack.Screen name="settings" options={NATIVE_CHROME ? { ...nativeHeader, title: 'Settings' } : undefined} />
+      <Stack.Screen name="stop/[id]" options={NATIVE_CHROME ? { ...nativeHeader, title: '' } : undefined} />
+      <Stack.Screen name="skip/[id]" options={NATIVE_CHROME ? nativeSheet([0.75, 1]) : { presentation: 'modal' }} />
+      <Stack.Screen name="new-stop" options={NATIVE_CHROME ? nativeSheet([1]) : { presentation: 'modal' }} />
     </Stack>
   );
 

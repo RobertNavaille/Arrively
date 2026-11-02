@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { NATIVE_CHROME } from '../src/ui/nativeChrome';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
 import { fmtPhone, normalizePhone } from '../src/lib/geo';
@@ -72,7 +73,7 @@ export default function NewStop() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: color.surface }}>
+    <SafeAreaView edges={NATIVE_CHROME ? ['bottom'] : undefined} style={{ flex: 1, backgroundColor: color.surface }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: space[4] }}>
           {/* Where the stop is, edge to edge at the top; follows the address if it's changed below. */}

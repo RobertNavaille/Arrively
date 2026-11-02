@@ -10,6 +10,7 @@ import { stopSharing } from '../src/lib/location';
 import { useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
 import { Avatar, Button, IconButton } from '../src/ui/components';
+import { NATIVE_CHROME } from '../src/ui/nativeChrome';
 import { color, font, radius, space, type } from '../src/ui/theme';
 
 const field = {
@@ -59,13 +60,16 @@ export default function Settings() {
   }
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: color.surface }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[2], paddingVertical: space[1] }}>
-        <IconButton icon="back" label="Back" variant="plain" onPress={back} />
-        <Text style={[type.title, { flex: 1, textAlign: 'center', fontSize: 20, lineHeight: 28 }]} accessibilityRole="header">Settings</Text>
-        {/* Balances the back button so the title stays centred. */}
-        <View style={{ width: 44 }} />
-      </View>
+    <SafeAreaView edges={NATIVE_CHROME ? [] : ['top']} style={{ flex: 1, backgroundColor: color.surface }}>
+      {/* iPhone shows Apple's navigation bar instead (see _layout). */}
+      {NATIVE_CHROME ? null : (
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[2], paddingVertical: space[1] }}>
+          <IconButton icon="back" label="Back" variant="plain" onPress={back} />
+          <Text style={[type.title, { flex: 1, textAlign: 'center', fontSize: 20, lineHeight: 28 }]} accessibilityRole="header">Settings</Text>
+          {/* Balances the back button so the title stays centred. */}
+          <View style={{ width: 44 }} />
+        </View>
+      )}
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space[4], paddingBottom: space[6] + bottomInset, gap: space[6] }}>

@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ import { Banner, Button, IconButton, InfoRow, ShareTripRow, StatusPill } from '.
 import { RouteMap } from '../../src/ui/RouteMap';
 import { TripBar } from '../../src/ui/TripBar';
 import { Icon, type IconName } from '../../src/ui/Icon';
+import { NATIVE_CHROME } from '../../src/ui/nativeChrome';
 import { color, font, radius, shadow, space, type } from '../../src/ui/theme';
 
 /**
@@ -70,17 +71,28 @@ export default function StopScreen() {
   const message = stop.customer_phone ? () => contactCustomer('sms', stop.customer_phone!)
     : () => showMessage('No phone number', `There's no phone number for ${stop.customer_name}.`);
   const line = !done && pos ? [pos, ...(leg ? leg.path : []), stop] : undefined;
+  const dayTitle = (
+    <View style={{ alignItems: 'center' }}>
+      <Text style={type.heading}>{parseDay(route.day).toLocaleDateString('en-US', { weekday: 'long' })}</Text>
+      <Text style={type.caption}>{parseDay(route.day).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</Text>
+    </View>
+  );
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: color.surface }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[3], paddingVertical: space[2] }}>
-        <IconButton icon="back" label="Back" variant="plain" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={type.heading}>{parseDay(route.day).toLocaleDateString('en-US', { weekday: 'long' })}</Text>
-          <Text style={type.caption}>{parseDay(route.day).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</Text>
+    <SafeAreaView edges={NATIVE_CHROME ? [] : ['top']} style={{ flex: 1, backgroundColor: color.surface }}>
+      {NATIVE_CHROME ? (
+        // iPhone: the day and the More button sit in Apple's navigation bar, with its own back button.
+        <Stack.Screen options={{
+          headerTitle: () => dayTitle,
+          headerRight: () => <IconButton icon="more" label="More options" variant="plain" onPress={() => setMenu((m) => !m)} />,
+        }} />
+      ) : (
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[3], paddingVertical: space[2] }}>
+          <IconButton icon="back" label="Back" variant="plain" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
+          <View style={{ flex: 1, alignItems: 'center' }}>{dayTitle}</View>
+          <IconButton icon="more" label="More options" variant="plain" onPress={() => setMenu((m) => !m)} />
         </View>
-        <IconButton icon="more" label="More options" variant="plain" onPress={() => setMenu((m) => !m)} />
-      </View>
+      )}
 
       <ScrollView contentContainerStyle={{ paddingBottom: space[6] }}>
         <View style={{ paddingHorizontal: space[4] }}>
@@ -135,7 +147,7 @@ export default function StopScreen() {
       {menu ? (
         <>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setMenu(false)} accessibilityLabel="Close menu" />
-          <View style={[styles.menu, shadow.float]} accessibilityRole="menu">
+          <View style={[styles.menu, NATIVE_CHROME && { top: space[1] }, shadow.float]} accessibilityRole="menu">
             {!done ? (
               <MenuItem icon="edit" label="Edit details"
                 onPress={() => { setMenu(false); router.push({ pathname: '/new-stop', params: { id: stop.id, day: route.day } }); }} />
