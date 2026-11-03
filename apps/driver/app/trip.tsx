@@ -288,6 +288,9 @@ export default function Trip() {
       <TripTotals travelMin={tripMin} meters={tripMeters} stops={ahead.length} />
     </View>
   ) : null;
+  // Optimize / Confirm route float this far up from the bottom. In iPhone's sheet they sit
+  // closer, just clear of the home indicator.
+  const floatBottom = NATIVE_CHROME ? Math.max(space[2], bottomInset - space[1]) : bottomInset + space[4];
   const tripOverlay = (
     <>
         {/* On the way, with the sheet pulled up: Get directions, and More (arrived at location, cancel route), anchored to the bottom. */}
@@ -315,7 +318,7 @@ export default function Trip() {
         ) : null}
         {/* Reviewing: Confirm route takes Optimize route's place, in blue. */}
         {phase === 'review' && review ? (
-          <View style={[styles.floatBar, { bottom: bottomInset + space[4] }]}>
+          <View style={[styles.floatBar, { bottom: floatBottom }]}>
             <Button size="compact" icon="check" label="Confirm route" loading={busy === 'apply'} onPress={useOrder} style={shadow.float} />
             {/* Auto: back to the suggested best order (keeping locked stops); only while the order differs from it. */}
             <View style={styles.floatStart} pointerEvents="box-none">
@@ -325,7 +328,7 @@ export default function Trip() {
         ) : null}
         {/* Optimize route floats at the bottom, over the trip list, wherever it's scrolled. */}
         {floatOptimize ? (
-          <View style={[styles.floatBar, { bottom: bottomInset + space[4] }]}>
+          <View style={[styles.floatBar, { bottom: floatBottom }]}>
             <Button variant="neutral" icon="route" label="Optimize route" loading={busy === 'plan'} onPress={optimize} style={shadow.float} />
           </View>
         ) : null}
