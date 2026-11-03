@@ -17,6 +17,9 @@ export default function TripSheet() {
   onOpenChange.current = sheet?.onOpenChange;
   // TEMPORARY (trial): what Apple's sheet gives us.
   const [dbg, setDbg] = useState({ event: -1, h: 0 });
+  // The fixed part's height: Apple's sheet stretches the list from its very top, so the
+  // totals float over the list's top and the list starts this far down.
+  const [fixedH, setFixedH] = useState(0);
 
   // The two heights, as fractions of the screen: resting, and fully open (just below the trip screen's top bar).
   const full = sheet ? round((sheet.height - sheet.top) / sheet.height) : 0.9;
@@ -72,14 +75,20 @@ export default function TripSheet() {
   if (!sheet) return <View style={{ flex: 1, backgroundColor: color.surface }} />;
   return (
     <View style={{ flex: 1, backgroundColor: color.surface }} onLayout={(e) => onLayout(e.nativeEvent.layout.height)}>
-      {sheet.fixed}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: sheet.bottomInset }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: sheet.fixed ? fixedH : 0, paddingBottom: sheet.bottomInset }}
+        scrollIndicatorInsets={{ top: fixedH }} showsVerticalScrollIndicator={false}>
         {sheet.header}
         {sheet.children}
         <Text style={{ fontSize: 11, color: '#c00', padding: 16 }}>
           {`TEMP H ${Math.round(sheet.height)} detents ${detentsKey} h ${dbg.h} event ${dbg.event} open ${open.current}`}
         </Text>
       </ScrollView>
+      {sheet.fixed ? (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2, backgroundColor: color.surface }}
+          onLayout={(e) => setFixedH(Math.round(e.nativeEvent.layout.height))}>
+          {sheet.fixed}
+        </View>
+      ) : null}
       {sheet.overlay}
     </View>
   );
