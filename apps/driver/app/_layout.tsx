@@ -52,8 +52,11 @@ export default function RootLayout() {
       <Stack.Screen name="trip" />
       {/* iPhone (trial): the trip screen's sheet, presented by Apple over the map. */}
       <Stack.Screen name="trip-sheet" options={NATIVE_CHROME ? {
+        // Apple's own corners and margins (inset at the lower height on current iOS, edge to edge when fully open).
         presentation: 'formSheet', sheetAllowedDetents: [0.4, 0.9], sheetInitialDetentIndex: 0, sheetGrabberVisible: true,
-        sheetCornerRadius: 24, sheetLargestUndimmedDetentIndex: 'last', gestureEnabled: false,
+        sheetLargestUndimmedDetentIndex: 'last', gestureEnabled: false,
+        // Our list scrolls on its own; Apple doesn't take it over to resize the sheet.
+        sheetExpandsWhenScrolledToEdge: false,
       } : undefined} />
       {/* iPhone: Apple's navigation bar and sheets (see nativeChrome.ts); elsewhere the screens draw their own. */}
       <Stack.Screen name="settings" options={NATIVE_CHROME ? { ...nativeHeader, title: 'Settings' } : undefined} />

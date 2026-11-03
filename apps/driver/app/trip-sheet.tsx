@@ -1,5 +1,5 @@
 import { useNavigation } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSheetContent } from '../src/lib/sheetPortal';
 import { color } from '../src/ui/theme';
@@ -11,6 +11,9 @@ export default function TripSheet() {
   const sheet = useSheetContent();
   const navigation = useNavigation();
   const open = useRef(false);
+  // Which height the sheet is at (0 resting, last fully open): the content is sized to it,
+  // since inside Apple's sheet "fill the space" gets no height of its own.
+  const [at, setAt] = useState(0);
   const onOpenChange = useRef(sheet?.onOpenChange);
   onOpenChange.current = sheet?.onOpenChange;
 
@@ -31,6 +34,7 @@ export default function TripSheet() {
     if (!sheet) return;
     const target = startOpen ? full : resting;
     navigation.setOptions({ sheetAllowedDetents: [target] });
+    setAt(startOpen ? 1 : 0);
     setOpen(startOpen);
     const t = setTimeout(() => navigation.setOptions({ sheetAllowedDetents: detents }), 350);
     return () => clearTimeout(t);
@@ -41,7 +45,9 @@ export default function TripSheet() {
     const off = (navigation as unknown as { addListener: (e: string, cb: (ev: { data?: { index?: number; isStable?: boolean } }) => void) => () => void })
       .addListener('sheetDetentChange', (ev) => {
         if (ev.data?.isStable === false) return;
-        setOpen((ev.data?.index ?? 0) >= detentsRef.current.length - 1 && detentsRef.current.length > 1);
+        const top = (ev.data?.index ?? 0) >= detentsRef.current.length - 1 && detentsRef.current.length > 1;
+        setAt(top ? 1 : 0);
+        setOpen(top);
       });
     return off;
   }, [navigation]);
@@ -60,11 +66,12 @@ export default function TripSheet() {
   }, [sheet, navigation]);
 
   if (!sheet) return <View style={{ flex: 1, backgroundColor: color.surface }} />;
+  // The height showing now: resting or fully open.
+  const contentH = Math.round(sheet.height * (at === 1 || detents.length === 1 ? detents[detents.length - 1] : detents[0]));
   return (
-    <View style={{ flex: 1, backgroundColor: color.surface }}>
-      {/* One scroll view for the whole sheet, with the step's card pinned at its top while the list scrolls:
-          Apple's sheet lays out its scroll view from the top, so a card above it would sit underneath. */}
-      <ScrollView style={{ flex: 1 }} stickyHeaderIndices={[0]} contentContainerStyle={{ paddingBottom: sheet.bottomInset }}
+    <View style={{ height: contentH, backgroundColor: color.surface }}>
+      {/* One scroll view for the whole sheet, with the step's card pinned at its top while the list scrolls. */}
+      <ScrollView style={{ height: contentH }} stickyHeaderIndices={[0]} contentContainerStyle={{ paddingBottom: sheet.bottomInset }}
         showsVerticalScrollIndicator={false}>
         <View style={{ backgroundColor: color.surface }}>{sheet.header}</View>
         <View>{sheet.children}</View>
