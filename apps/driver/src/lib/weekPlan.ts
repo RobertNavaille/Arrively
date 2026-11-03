@@ -21,15 +21,13 @@ export interface WeekOptions {
   startPlace: Place | null;
   /** Most stops in a day; 0 is no limit. */
   maxStops: number;
-  /** Each day ends back where it started, or at its last stop. */
-  endAt: 'start' | 'last';
   avoidHighways: boolean;
   avoidTolls: boolean;
 }
 
 export const DEFAULT_WEEK_OPTIONS: WeekOptions = {
   start: 8 * 60, end: 17 * 60, days: [false, true, true, true, true, true, false],
-  startPlace: null, maxStops: 0, endAt: 'start', avoidHighways: false, avoidTolls: false,
+  startPlace: null, maxStops: 0, avoidHighways: false, avoidTolls: false,
 };
 
 const KEY = 'arrively.weekOptions';
@@ -109,6 +107,8 @@ export function planWeek({ routes, today, from, options, pins }: {
   const spread = 'even' as 'even' | 'fewer';
   const routeOn = new Map(routes.filter((r) => keys.includes(r.day)).map((r) => [r.day, r]));
   const speed = SPEED.drive;
+  // Each day ends back where it started.
+  const roundTrip = true;
   const capacity = Math.max(60, options.end - options.start);
   const cap = options.maxStops > 0 ? options.maxStops : Infinity;
 
@@ -121,10 +121,10 @@ export function planWeek({ routes, today, from, options, pins }: {
     if (!stops.length) return { minutes: 0, meters: 0 };
     let m = 0, at: LatLng = origin, meters = 0;
     for (const s of stops) { const d = distanceM(at, s) * ROAD; meters += d; m += d / speed / 60 + service(s); at = s; }
-    if (options.endAt === 'start') { const d = distanceM(at, origin) * ROAD; meters += d; m += d / speed / 60; }
+    if (roundTrip) { const d = distanceM(at, origin) * ROAD; meters += d; m += d / speed / 60; }
     return { minutes: m, meters };
   };
-  const order = (stops: Stop[]) => twoOpt(nearestFirst(stops, origin, travelMin), origin, travelMin, options.endAt === 'start');
+  const order = (stops: Stop[]) => twoOpt(nearestFirst(stops, origin, travelMin), origin, travelMin, roundTrip);
 
   // Before: the week as it is, in its current order.
   const before = { minutes: 0, meters: 0 };

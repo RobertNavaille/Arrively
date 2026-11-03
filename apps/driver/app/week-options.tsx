@@ -64,9 +64,8 @@ export default function WeekOptionsScreen() {
           </View>
         </Section>
 
-        <Section title="Start and end">
+        <Section title="Start" note="Each day ends back here.">
           <StartField place={o.startPlace} onChange={(startPlace) => set({ startPlace })} />
-          <Segmented value={o.endAt} onChange={(endAt) => set({ endAt })} options={[{ value: 'start', label: 'End back at start' }, { value: 'last', label: 'End at last stop' }]} />
         </Section>
 
         <Section title="Each day">
@@ -133,22 +132,6 @@ function Stepper({ label, onLess, onMore }: { label: string; onLess: () => void;
         style={({ pressed }) => [{ width: 40, height: 36, alignItems: 'center', justifyContent: 'center' }, pressed && { opacity: 0.6 }]}>
         <Text style={{ fontFamily: font.semibold, fontSize: 20, color: color.ink }}>+</Text>
       </Pressable>
-    </View>
-  );
-}
-function Segmented<T extends string | number>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[] }) {
-  return (
-    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', padding: 3, borderRadius: 10, backgroundColor: color.surfaceMuted }}>
-      {options.map((opt) => {
-        const on = opt.value === value;
-        return (
-          <Pressable key={String(opt.value)} onPress={() => onChange(opt.value)} accessibilityRole="radio" accessibilityState={{ checked: on }}
-            style={[{ flex: 1, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-              on && { backgroundColor: color.surface, shadowColor: '#1A1A1A', shadowOpacity: 0.12, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }]}>
-            <Text style={{ fontFamily: font.semibold, fontSize: 14, color: color.ink }}>{opt.label}</Text>
-          </Pressable>
-        );
-      })}
     </View>
   );
 }
