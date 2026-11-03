@@ -2,6 +2,7 @@ import { Button, HStack, Host, Image, ProgressView, Text } from '@expo/ui/swift-
 import { accessibilityLabel, buttonBorderShape, buttonStyle, controlSize, disabled as disabledMod, font, frame, tint } from '@expo/ui/swift-ui/modifiers';
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useState } from 'react';
+import { View } from 'react-native';
 import type { NativeButtonProps, NativeIconButtonProps } from './NativeButton';
 import { SF_SYMBOLS } from './sfSymbols';
 import { color } from './theme';
@@ -29,46 +30,59 @@ const FONT = { md: 16, compact: 15, sm: 13 } as const;
  * is corrected once after the button is drawn until the whole button is the
  * size we want. Apple's styling stays whole.
  */
-function useExactSize(target: number) {
+function useExactSize(target: number, targetW = 0) {
   const [extra, setExtra] = useState(0);
-  const onLayoutContent = (e: { nativeEvent: { height: number } }) => {
+  const [extraW, setExtraW] = useState(0);
+  const onLayoutContent = (e: { nativeEvent: { height: number; width: number } }) => {
     const off = target - e.nativeEvent.height;
-    if (Math.abs(off) > 0.5) setExtra((x) => Math.max(-target, x + off));
+    if (target && Math.abs(off) > 0.5) setExtra((x) => Math.max(-target, x + off));
+    const offW = targetW - e.nativeEvent.width;
+    if (targetW && Math.abs(offW) > 0.5) setExtraW((x) => Math.max(-targetW, x + offW));
   };
-  return { extra, onLayoutContent };
+  return { extra, extraW, onLayoutContent };
 }
 
 export function NativeButton({ label, onPress, variant, icon, size, iconOnly, disabled, loading, style }: NativeButtonProps) {
   const v = STYLE[variant];
   const h = HEIGHT[size];
-  const { extra, onLayoutContent } = useExactSize(variant === 'text' || variant === 'danger' ? 0 : h);
-  // Full-width buttons fill the space they're given; text, gray (Optimize) and round ones fit their label.
-  const fill = !iconOnly && (variant === 'primary' || variant === 'secondary');
-  const sym = icon ? SF_SYMBOLS[icon].name : undefined;
   const textOnly = variant === 'text' || variant === 'danger';
-  // Label height: the font's line to start with, then corrected (above).
+  // Full-width buttons take the width they're given, measured here, since some of
+  // Apple's styles (glass) size to their label; text, gray (Optimize) and round ones fit their label.
+  const fill = !iconOnly && (variant === 'primary' || variant === 'secondary');
+  const [boxW, setBoxW] = useState(0);
+  const { extra, extraW, onLayoutContent } = useExactSize(textOnly ? 0 : h, fill ? boxW : 0);
+  const sym = icon ? SF_SYMBOLS[icon].name : undefined;
+  // Label size: a first guess, then corrected (above) until the whole button is the size we want.
   const labelH = textOnly ? undefined : Math.max(1, Math.round(FONT[size] * 1.3) + extra);
+  const labelW = fill && boxW ? Math.max(1, Math.round(boxW - 2 * h * 0.4) + extraW) : undefined;
   const content = loading ? <ProgressView /> : (
     <HStack spacing={8}>
       {sym ? <Image systemName={sym} size={FONT[size] + 1} /> : null}
       {iconOnly ? null : <Text modifiers={[font({ family: 'Poppins_600SemiBold', size: FONT[size] })]}>{label}</Text>}
     </HStack>
   );
-  return (
-    <Host matchContents={fill ? { vertical: true } : true} onLayoutContent={textOnly ? undefined : onLayoutContent}
-      style={[fill ? { alignSelf: 'stretch' } : null, style]}>
+  const button = (
+    <Host matchContents onLayoutContent={textOnly ? undefined : onLayoutContent}>
       <Button onPress={onPress} modifiers={[
         buttonStyle(v.style), controlSize('regular'), tint(v.tint),
         buttonBorderShape(iconOnly ? 'circle' : 'capsule'), disabledMod(!!disabled || !!loading),
         ...(iconOnly ? [accessibilityLabel(label)] : []),
       ]}>
         <HStack modifiers={[frame({
-          ...(fill ? { maxWidth: 10000 } : {}),
+          ...(labelW != null ? { width: labelW } : {}),
           ...(labelH != null ? { height: labelH } : {}),
           ...(iconOnly && labelH != null ? { width: labelH } : {}),
         })]}>{content}</HStack>
       </Button>
     </Host>
+  );
+  if (!fill) return <View style={style}>{button}</View>;
+  // The space this button may fill (a column's width, or its share of a row).
+  return (
+    <View style={[{ alignSelf: 'stretch', alignItems: 'center' }, style]}
+      onLayout={(e) => { const w = Math.round(e.nativeEvent.layout.width); if (w !== boxW) setBoxW(w); }}>
+      {boxW ? button : <View style={{ height: h }} />}
+    </View>
   );
 }
 
