@@ -1,14 +1,15 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomInset } from '../src/lib/viewport';
 import { DEFAULT_WEEK_OPTIONS, fmtClock, loadWeekOptions, requestWeekRun, saveWeekOptions, type WeekOptions } from '../src/lib/weekPlan';
-import type { TravelMode } from '../src/lib/routing';
-import { SelectChip, ToggleChip } from '../src/ui/Chips';
+import { searchAddress, type Place } from '../src/lib/mapbox';
+import { ToggleChip } from '../src/ui/Chips';
+import { Icon } from '../src/ui/Icon';
 import { Button } from '../src/ui/components';
 import { NATIVE_CHROME } from '../src/ui/nativeChrome';
-import { color, font, radius, space, type } from '../src/ui/theme';
+import { bareInput, color, font, radius, space, type } from '../src/ui/theme';
 
 const DOW = [['S', 'Sunday'], ['M', 'Monday'], ['T', 'Tuesday'], ['W', 'Wednesday'], ['T', 'Thursday'], ['F', 'Friday'], ['S', 'Saturday']] as const;
 
@@ -63,39 +64,25 @@ export default function WeekOptionsScreen() {
           </View>
         </Section>
 
-        <Section title="Which week">
-          <Segmented value={o.week} onChange={(week) => set({ week })} options={[{ value: 0, label: 'This week' }, { value: 1, label: 'Next week' }]} />
-        </Section>
-
-        <Section title="Start and end" note="Each day starts from where you are.">
+        <Section title="Start and end">
+          <StartField place={o.startPlace} onChange={(startPlace) => set({ startPlace })} />
           <Segmented value={o.endAt} onChange={(endAt) => set({ endAt })} options={[{ value: 'start', label: 'End back at start' }, { value: 'last', label: 'End at last stop' }]} />
         </Section>
 
         <Section title="Each day">
           <Group>
-            <Row label="Most stops a day">
+            <Row label="Most stops a day" last>
               <Stepper label={o.maxStops ? `Up to ${o.maxStops}` : 'No limit'}
                 onLess={() => set({ maxStops: o.maxStops <= 1 ? 0 : o.maxStops - 1 })}
                 onMore={() => set({ maxStops: o.maxStops ? Math.min(30, o.maxStops + 1) : 4 })} />
             </Row>
-            <Row label="Lunch break" sub="30 minutes around midday" last>
-              <Switch value={o.lunch} onValueChange={(lunch) => set({ lunch })} accessibilityLabel="Lunch break"
-                trackColor={{ false: color.controlBorder, true: color.action }} thumbColor={color.surface} />
-            </Row>
           </Group>
-        </Section>
-
-        <Section title="Spread the stops" note={o.spread === 'even' ? 'About the same amount of work each day.' : 'Fill days up, so some days are left free.'}>
-          <Segmented value={o.spread} onChange={(spread) => set({ spread })} options={[{ value: 'even', label: 'Even days' }, { value: 'fewer', label: 'Fewer days' }]} />
         </Section>
 
         <Section title="Roads">
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
-            <ToggleChip label="Avoid highways" selected={o.avoidHighways} disabled={o.mode !== 'drive'} onPress={() => set({ avoidHighways: !o.avoidHighways })} />
-            <ToggleChip label="Avoid tolls" selected={o.avoidTolls} disabled={o.mode !== 'drive'} onPress={() => set({ avoidTolls: !o.avoidTolls })} />
-            <SelectChip<TravelMode> label="Vehicle type" value={o.mode}
-              options={[{ value: 'drive', label: 'Drive' }, { value: 'walk', label: 'Walk' }, { value: 'bike', label: 'Bike' }]}
-              onChange={(mode) => set({ mode })} />
+            <ToggleChip label="Avoid highways" selected={o.avoidHighways} onPress={() => set({ avoidHighways: !o.avoidHighways })} />
+            <ToggleChip label="Avoid tolls" selected={o.avoidTolls} onPress={() => set({ avoidTolls: !o.avoidTolls })} />
           </View>
         </Section>
       </ScrollView>
@@ -162,6 +149,67 @@ function Segmented<T extends string | number>({ value, onChange, options }: { va
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+/** Where each day starts: your current location (the default), or an address you search for. */
+function StartField({ place, onChange }: { place: Place | null; onChange: (p: Place | null) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState<Place[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!editing || !q.trim()) { setResults([]); setErr(null); return; }
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      searchAddress(q, place, ctrl.signal)
+        .then((r) => { setResults(r); setErr(r.length ? null : 'No matching addresses'); })
+        .catch((e) => { if (!ctrl.signal.aborted) setErr(e instanceof Error ? e.message : String(e)); });
+    }, 250);
+    return () => { clearTimeout(t); ctrl.abort(); };
+  }, [q, editing]); // eslint-disable-line react-hooks/exhaustive-deps
+  const done = (p: Place | null) => { onChange(p); setEditing(false); setQ(''); };
+  const field = { minHeight: 48, borderRadius: radius.sm, backgroundColor: color.surfaceMuted, borderWidth: 1, borderColor: color.divider, paddingHorizontal: space[3] } as const;
+  const option = (key: string, icon: 'navigate' | 'pin', name: string, detail: string | null, onPress: () => void, last = false) => (
+    <Pressable key={key} accessibilityRole="button" onPress={onPress}
+      style={({ pressed }) => [{ flexDirection: 'row', gap: space[3], alignItems: 'center', padding: space[3], borderBottomWidth: last ? 0 : 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
+      <Icon name={icon} size={20} color={icon === 'navigate' ? color.action : color.inkMuted} />
+      <View style={{ flex: 1 }}>
+        <Text style={type.bodyStrong}>{name}</Text>
+        {detail ? <Text style={type.caption}>{detail}</Text> : null}
+      </View>
+    </Pressable>
+  );
+  if (!editing) {
+    return (
+      <Pressable onPress={() => setEditing(true)} accessibilityRole="button" accessibilityLabel={`Start each day at ${place ? place.name : 'your current location'}. Change`}
+        style={({ pressed }) => [field, { flexDirection: 'row', alignItems: 'center', gap: space[2] }, pressed && { opacity: 0.7 }]}>
+        <Icon name={place ? 'pin' : 'navigate'} size={20} color={place ? color.inkMuted : color.action} />
+        <View style={{ flex: 1, paddingVertical: space[2] }}>
+          <Text style={{ fontFamily: font.regular, fontSize: 12, lineHeight: 16, color: color.inkMuted }}>Start each day at</Text>
+          <Text style={{ fontFamily: font.semibold, fontSize: 16, lineHeight: 22, color: color.ink }} numberOfLines={1}>{place ? place.name : 'Current location'}</Text>
+        </View>
+        <Text style={{ fontFamily: font.semibold, fontSize: 15, color: color.actionInk }}>Change</Text>
+      </Pressable>
+    );
+  }
+  return (
+    <View style={{ gap: space[2] }}>
+      <View style={[field, { flexDirection: 'row', alignItems: 'center', gap: space[2] }]}>
+        <Icon name="search" size={20} color={color.inkMuted} />
+        <TextInput value={q} onChangeText={setQ} autoFocus placeholder="Search for a start address" placeholderTextColor={color.inkMuted}
+          accessibilityLabel="Search for a start address" autoCorrect={false}
+          style={[{ flex: 1, fontFamily: font.regular, fontSize: 16, color: color.ink, paddingVertical: 0 }, bareInput]} />
+        <Pressable onPress={() => { setEditing(false); setQ(''); }} accessibilityLabel="Keep the current start" hitSlop={8}>
+          <Icon name="close" size={16} color={color.inkMuted} />
+        </Pressable>
+      </View>
+      <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: color.divider, overflow: 'hidden' }}>
+        {option('here', 'navigate', 'Current location', 'Wherever you are when you optimize', () => done(null), !results.length)}
+        {results.map((p, i) => option(p.id, 'pin', p.name, p.detail, () => done(p), i === results.length - 1))}
+      </View>
+      {err ? <Text style={type.caption}>{err}</Text> : null}
     </View>
   );
 }

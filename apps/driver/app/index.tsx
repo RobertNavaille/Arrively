@@ -176,7 +176,7 @@ export default function MyDay() {
   // Optimize week: plan it (with the saved options), then show it for review.
   async function runWeek(nextPins: Map<string, string> = new Map(), opts?: WeekOptions) {
     const o = opts ?? weekOpts ?? (await loadWeekOptions());
-    const plan = planWeek({ routes, today, from: pos, options: o, pins: nextPins });
+    const plan = planWeek({ routes, today, from: o.startPlace ?? pos, options: o, pins: nextPins });
     setWeekOpts(o); setPins(nextPins); setWeekPlan(plan);
     // Show the first day of the planned week (or today, if that's later).
     const first = plan.days.find((d) => d.day >= dayKey(today))?.day;

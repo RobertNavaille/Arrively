@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SPEED, type TravelMode } from './routing';
+import type { Place } from './mapbox';
+import { SPEED } from './routing';
 import { dayKey, distanceM } from './geo';
 import { isDone, type LatLng, type Route, type Stop } from './types';
 
@@ -16,24 +17,19 @@ export interface WeekOptions {
   end: number;
   /** Which days of the week are work days, Sunday first. */
   days: boolean[];
-  /** 0 this week, 1 next week. */
-  week: 0 | 1;
+  /** Where each day starts; null is wherever the driver is. */
+  startPlace: Place | null;
   /** Most stops in a day; 0 is no limit. */
   maxStops: number;
-  /** A 30-minute break inside the hours. */
-  lunch: boolean;
-  /** Even: about the same work each day. Fewer: fill days up, leaving some free. */
-  spread: 'even' | 'fewer';
   /** Each day ends back where it started, or at its last stop. */
   endAt: 'start' | 'last';
   avoidHighways: boolean;
   avoidTolls: boolean;
-  mode: TravelMode;
 }
 
 export const DEFAULT_WEEK_OPTIONS: WeekOptions = {
-  start: 8 * 60, end: 17 * 60, days: [false, true, true, true, true, true, false], week: 0,
-  maxStops: 0, lunch: true, spread: 'even', endAt: 'start', avoidHighways: false, avoidTolls: false, mode: 'drive',
+  start: 8 * 60, end: 17 * 60, days: [false, true, true, true, true, true, false],
+  startPlace: null, maxStops: 0, endAt: 'start', avoidHighways: false, avoidTolls: false,
 };
 
 const KEY = 'arrively.weekOptions';
@@ -106,10 +102,14 @@ export function planWeek({ routes, today, from, options, pins }: {
   pins: Map<string, string>;
 }): WeekPlan {
   const todayKey = dayKey(today);
-  const keys = weekDays(today, options.week);
+  // This week, or next week once this week has no work days left.
+  const left = weekDays(today, 0).some((k) => options.days[new Date(`${k}T12:00:00`).getDay()] && k >= todayKey);
+  const keys = weekDays(today, left ? 0 : 1);
+  // Even days, driving; no lunch break.
+  const spread = 'even' as 'even' | 'fewer';
   const routeOn = new Map(routes.filter((r) => keys.includes(r.day)).map((r) => [r.day, r]));
-  const speed = SPEED[options.mode] ?? SPEED.drive;
-  const capacity = Math.max(60, options.end - options.start - (options.lunch ? 30 : 0));
+  const speed = SPEED.drive;
+  const capacity = Math.max(60, options.end - options.start);
   const cap = options.maxStops > 0 ? options.maxStops : Infinity;
 
   const allStops = [...routeOn.values()].flatMap((r) => r.stops.filter((s) => s.status !== 'cancelled'));
@@ -189,18 +189,18 @@ export function planWeek({ routes, today, from, options, pins }: {
       const ranked = [...targets].sort((a, b) => (routeOn.get(b)?.stops.length ?? 0) - (routeOn.get(a)?.stops.length ?? 0) || a.localeCompare(b));
       return ranked.slice(0, k).sort();
     };
-    let k = options.spread === 'even' ? targets.length : Math.min(targets.length, Math.max(1, Math.ceil(totalWork / capacity)));
+    let k = spread === 'even' ? targets.length : Math.min(targets.length, Math.max(1, Math.ceil(totalWork / capacity)));
     groups = tryWith(k);
-    while (options.spread === 'fewer' && k < targets.length && [...groups.values()].some((st) => work(st) > capacity || st.length > cap)) {
+    while (spread === 'fewer' && k < targets.length && [...groups.values()].some((st) => work(st) > capacity || st.length > cap)) {
       k++; groups = tryWith(k);
     }
     // Even: no day gets much more than its share of the work or the stops.
     const share = [...groups.values()].reduce((n, st) => n + work(st), 0) / Math.max(1, targets.length);
     const stopShare = Math.ceil(([...groups.values()].reduce((n, st) => n + st.length, 0)) / Math.max(1, targets.length)) + 1;
-    const dayLimit = options.spread === 'even' ? Math.min(capacity, Math.max(share * 1.25, share + 45)) : capacity;
+    const dayLimit = spread === 'even' ? Math.min(capacity, Math.max(share * 1.25, share + 45)) : capacity;
     groups = improve(groups, new Set(moving.map((m) => m.stop.id)), targets, work, dayLimit,
-      options.spread === 'even' ? Math.min(cap, stopShare) : cap);
-    if (options.spread === 'even') groups = balance(groups, new Set(moving.map((m) => m.stop.id)), targets, cap, origin);
+      spread === 'even' ? Math.min(cap, stopShare) : cap);
+    if (spread === 'even') groups = balance(groups, new Set(moving.map((m) => m.stop.id)), targets, cap, origin);
   }
 
   const days: PlanDay[] = keys.map((k) => {
