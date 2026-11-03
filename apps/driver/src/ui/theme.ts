@@ -35,6 +35,8 @@ export const font = {
   regular: 'Poppins_400Regular',
   medium: 'Poppins_500Medium',
   semibold: 'Poppins_600SemiBold',
+  // Button labels.
+  bold: 'Poppins_700Bold',
 } as const;
 
 export const type = {

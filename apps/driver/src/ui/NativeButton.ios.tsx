@@ -58,7 +58,7 @@ export function NativeButton({ label, onPress, variant, icon, size, iconOnly, di
   const content = loading ? <ProgressView /> : (
     <HStack spacing={8}>
       {sym ? <Image systemName={sym} size={FONT[size] + 1} /> : null}
-      {iconOnly ? null : <Text modifiers={[font({ family: 'Poppins_600SemiBold', size: FONT[size] })]}>{label}</Text>}
+      {iconOnly ? null : <Text modifiers={[font({ family: 'Poppins_700Bold', size: FONT[size] })]}>{label}</Text>}
     </HStack>
   );
   const button = (

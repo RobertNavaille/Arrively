@@ -185,7 +185,7 @@ export const styles = StyleSheet.create({
   btnCompact: { height: 44, paddingHorizontal: space[6] - 4 },
   btnSm: { height: 32, paddingHorizontal: space[4] },
   btnText: { backgroundColor: 'transparent', paddingHorizontal: space[3] },
-  btnLabel: { fontFamily: font.semibold, fontSize: 14, lineHeight: 20 },
+  btnLabel: { fontFamily: font.bold, fontSize: 14, lineHeight: 20 },
   iconBtn: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   // Call, message, directions: 56px like the buttons, for use while driving (plain ones are header chrome).
   iconBtnLarge: { width: 56, height: 56 },
