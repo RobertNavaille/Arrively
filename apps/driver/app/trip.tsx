@@ -15,7 +15,8 @@ import { useBottomInset, useScreenHeight } from '../src/lib/viewport';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
 import { AutoButton } from '../src/ui/AutoButton';
-import { BottomSheet } from '../src/ui/BottomSheet';
+import { TRIP_SCREENS_TO_LEAVE, TripSheetHost } from '../src/ui/TripSheetHost';
+import { NATIVE_CHROME } from '../src/ui/nativeChrome';
 import { ReorderList } from '../src/ui/ReorderList';
 import { SelectChip, ToggleChip } from '../src/ui/Chips';
 import { useCountTo } from '../src/ui/useCountTo';
@@ -279,6 +280,52 @@ export default function Trip() {
   // On the way and arrived, the sheet rests with its card just in view.
   const peek = (phase === 'onroute' || (phase === 'arrived' && !choosing)) && cardRest != null ? cardRest : Math.min(Math.round(height * 0.36) + REST_FROM - sheetTop, cardRest ?? Infinity);
 
+  // Fixed over the bottom: the bottom bar when pulled up, and Optimize / Confirm route.
+  // Over the screen here; inside the sheet on iPhone (TripSheetHost.ios.tsx).
+  const tripOverlay = (
+    <>
+        {/* On the way, with the sheet pulled up: Get directions, and More (arrived at location, cancel route), anchored to the bottom. */}
+        {phase === 'onroute' && current && sheetOpen ? (
+          <FadeIn from={16} style={[styles.bottomBar, { paddingBottom: bottomInset + space[4] }]}>
+            <Button icon="navigate" label="Get directions" style={{ flex: 1 }}
+              onPress={() => openDirections(current, options)} />
+            <IconButton icon="more" label="More options" onPress={() => {
+              // iPhone: Apple's action sheet; elsewhere the drawn menu below.
+              if (!showIOSActionSheet([
+                { label: 'Arrived at location', onPress: markArrivedHere },
+                { label: 'Cancel route', destructive: true, onPress: cancelRoute },
+              ])) setBarMenu(true);
+            }} />
+          </FadeIn>
+        ) : null}
+        {/* Arrived, with the sheet pulled up: Stop Complete and Continue route, anchored to the bottom. */}
+        {phase === 'arrived' && current && !choosing && sheetOpen ? (
+          <FadeIn from={16} style={[styles.bottomBar, { paddingBottom: bottomInset + space[4] }]}>
+            <Button label="Stop Complete" style={{ flex: 1 }} onPress={() => setChoosing(true)} />
+            {/* Arrived by mistake: back to on the way. */}
+            <Button variant="text" label="Continue route" loading={busy === 'undo'}
+              onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
+          </FadeIn>
+        ) : null}
+        {/* Reviewing: Confirm route takes Optimize route's place, in blue. */}
+        {phase === 'review' && review ? (
+          <View style={[styles.floatBar, { bottom: bottomInset + space[4] }]}>
+            <Button size="compact" icon="check" label="Confirm route" loading={busy === 'apply'} onPress={useOrder} style={shadow.float} />
+            {/* Auto: back to the suggested best order (keeping locked stops); only while the order differs from it. */}
+            <View style={styles.floatStart} pointerEvents="box-none">
+              <AutoButton floating visible={!!best && !!shown && shown.join() !== best.join()} onPress={() => best && showOrder(best)} />
+            </View>
+          </View>
+        ) : null}
+        {/* Optimize route floats at the bottom, over the trip list, wherever it's scrolled. */}
+        {floatOptimize ? (
+          <View style={[styles.floatBar, { bottom: bottomInset + space[4] }]}>
+            <Button variant="neutral" icon="route" label="Optimize route" loading={busy === 'plan'} onPress={optimize} style={shadow.float} />
+          </View>
+        ) : null}
+    </>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: color.mapGround }}>
       <RouteMap height={height} stops={mapStops} driver={pos} line={line}
@@ -308,7 +355,8 @@ export default function Trip() {
       <View style={{ position: 'absolute', top: NAV_TOP + safeTop, left: space[4], right: space[4], height: NAV_H, zIndex: 3, flexDirection: 'row', alignItems: 'center', gap: space[2] }}
         pointerEvents="box-none">
         {/* Floating over the map: Liquid Glass on iPhone, white elsewhere (FloatingSurface). */}
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={6}
+        <Pressable onPress={() => (!router.canGoBack() ? router.replace('/') : TRIP_SCREENS_TO_LEAVE > 1 ? router.dismiss(TRIP_SCREENS_TO_LEAVE) : router.back())}
+          accessibilityRole="button" accessibilityLabel="Back" hitSlop={6}
           style={({ pressed }) => pressed && { opacity: 0.8 }}>
           <FloatingSurface style={{ width: NAV_H, height: NAV_H, borderRadius: NAV_H / 2, alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="back" size={20} color={color.ink} />
@@ -326,12 +374,13 @@ export default function Trip() {
       </View>
 
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
-      <BottomSheet top={sheetTop} rest={peek} onOpenChange={setSheetOpen} resetKey={choosing ? `${phase}:mark` : phase} startOpen={phase === 'review' || choosing} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
+      <TripSheetHost height={height} overlay={tripOverlay} top={sheetTop} rest={peek} onOpenChange={setSheetOpen} resetKey={choosing ? `${phase}:mark` : phase} startOpen={phase === 'review' || choosing} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
         // Pulled up (arrived, on the way), the card changes for the details: its resting height stays measured from before.
         <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH && !(sheetOpen && (phase === 'arrived' || phase === 'onroute'))) setCardH(h); }}
           style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' || phase === 'next' || phase === 'review' || phase === 'onroute' ? 0 : 1, borderBottomColor: color.divider }}>
-          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: color.divider, alignSelf: 'center' }} />
+          {/* iPhone's sheet has its own grabber. */}
+          {NATIVE_CHROME ? null : <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: color.divider, alignSelf: 'center' }} />}
 
           {phase === 'next' && current ? (
             <>
@@ -517,22 +566,8 @@ export default function Trip() {
             </>
           ) : null}
         </View>
-      </BottomSheet>
+      </TripSheetHost>
 
-      {/* On the way, with the sheet pulled up: Get directions, and More (arrived at location, cancel route), anchored to the bottom. */}
-      {phase === 'onroute' && current && sheetOpen ? (
-        <FadeIn from={16} style={[styles.bottomBar, { paddingBottom: bottomInset + space[4] }]}>
-          <Button icon="navigate" label="Get directions" style={{ flex: 1 }}
-            onPress={() => openDirections(current, options)} />
-          <IconButton icon="more" label="More options" onPress={() => {
-            // iPhone: Apple's action sheet; elsewhere the drawn menu below.
-            if (!showIOSActionSheet([
-              { label: 'Arrived at location', onPress: markArrivedHere },
-              { label: 'Cancel route', destructive: true, onPress: cancelRoute },
-            ])) setBarMenu(true);
-          }} />
-        </FadeIn>
-      ) : null}
       <Modal transparent visible={barMenu && phase === 'onroute' && !!current} animationType="fade" onRequestClose={() => setBarMenu(false)}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => setBarMenu(false)} accessibilityLabel="Close menu" />
         {current ? (
@@ -544,31 +579,6 @@ export default function Trip() {
           </View>
         ) : null}
       </Modal>
-      {/* Arrived, with the sheet pulled up: Stop Complete and Continue route, anchored to the bottom. */}
-      {phase === 'arrived' && current && !choosing && sheetOpen ? (
-        <FadeIn from={16} style={[styles.bottomBar, { paddingBottom: bottomInset + space[4] }]}>
-          <Button label="Stop Complete" style={{ flex: 1 }} onPress={() => setChoosing(true)} />
-          {/* Arrived by mistake: back to on the way. */}
-          <Button variant="text" label="Continue route" loading={busy === 'undo'}
-            onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
-        </FadeIn>
-      ) : null}
-      {/* Reviewing: Confirm route takes Optimize route's place, in blue. */}
-      {phase === 'review' && review ? (
-        <View style={[styles.floatBar, { bottom: bottomInset + space[4] }]}>
-          <Button size="compact" icon="check" label="Confirm route" loading={busy === 'apply'} onPress={useOrder} style={shadow.float} />
-          {/* Auto: back to the suggested best order (keeping locked stops); only while the order differs from it. */}
-          <View style={styles.floatStart} pointerEvents="box-none">
-            <AutoButton floating visible={!!best && !!shown && shown.join() !== best.join()} onPress={() => best && showOrder(best)} />
-          </View>
-        </View>
-      ) : null}
-      {/* Optimize route floats at the bottom, over the trip list, wherever it's scrolled. */}
-      {floatOptimize ? (
-        <View style={[styles.floatBar, { bottom: bottomInset + space[4] }]}>
-          <Button variant="neutral" icon="route" label="Optimize route" loading={busy === 'plan'} onPress={optimize} style={shadow.float} />
-        </View>
-      ) : null}
     </View>
   );
 }

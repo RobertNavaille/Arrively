@@ -50,6 +50,11 @@ export default function RootLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="sign-in" />
       <Stack.Screen name="trip" />
+      {/* iPhone (trial): the trip screen's sheet, presented by Apple over the map. */}
+      <Stack.Screen name="trip-sheet" options={NATIVE_CHROME ? {
+        presentation: 'formSheet', sheetAllowedDetents: [0.4, 0.9], sheetInitialDetentIndex: 0, sheetGrabberVisible: true,
+        sheetCornerRadius: 24, sheetLargestUndimmedDetentIndex: 'last', gestureEnabled: false,
+      } : undefined} />
       {/* iPhone: Apple's navigation bar and sheets (see nativeChrome.ts); elsewhere the screens draw their own. */}
       <Stack.Screen name="settings" options={NATIVE_CHROME ? { ...nativeHeader, title: 'Settings' } : undefined} />
       <Stack.Screen name="stop/[id]" options={NATIVE_CHROME ? { ...nativeHeader, title: '' } : undefined} />
