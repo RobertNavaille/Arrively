@@ -4,6 +4,7 @@ import {
   AppState, FlatList, Modal, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { showIOSActionSheet } from '../src/lib/actionSheet';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
 import { addDays, dayKey, fmtTime } from '../src/lib/geo';
@@ -134,6 +135,13 @@ export default function MyDay() {
   const goToRef = useRef(goTo);
   goToRef.current = goTo;
 
+  async function demoDay() {
+    const here = pos ?? (await currentPosition()) ?? { lat: 41.824, lng: -71.4128 };
+    try { await backend.createDemoDay(here, null); goTo(range.todayIndex); await refresh(); }
+    catch (e) { showMessage('Could not create demo day', e instanceof Error ? e.message : String(e)); }
+  }
+  async function signOut() { await stopSharing(); await backend.signOut(); }
+
   const current = currentStop(route);
   const trip = useActiveTrip();
   const bottomInset = useBottomInset();
@@ -150,7 +158,13 @@ export default function MyDay() {
           <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]} accessibilityRole="header">{day.toLocaleDateString('en-US', { weekday: 'long' })}</Text>
           <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]}>{day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}{isToday ? ' · Today' : ''}</Text>
         </View>
-        <IconButton icon="more" label="More" variant="plain" onPress={() => setMenu(true)} />
+        <IconButton icon="more" label="More" variant="plain" onPress={() => {
+          // iPhone: Apple's action sheet; elsewhere the drawn panel.
+          if (!showIOSActionSheet([
+            { label: 'Create a demo day around me', onPress: demoDay },
+            { label: 'End shift and sign out', destructive: true, onPress: signOut },
+          ], { title: backend.offline ? 'Offline demo mode' : 'Signed in' })) setMenu(true);
+        }} />
       </View>
 
       {/* Date strip */}
@@ -264,12 +278,8 @@ export default function MyDay() {
           </View>
       </View>
 
-      <Menu visible={menu} onClose={() => setMenu(false)} offline={backend.offline} onDemo={async () => {
-        setMenu(false);
-        const here = pos ?? (await currentPosition()) ?? { lat: 41.824, lng: -71.4128 };
-        try { await backend.createDemoDay(here, null); goTo(range.todayIndex); await refresh(); }
-        catch (e) { showMessage('Could not create demo day', e instanceof Error ? e.message : String(e)); }
-      }} onSignOut={async () => { setMenu(false); await stopSharing(); await backend.signOut(); }} />
+      <Menu visible={menu} onClose={() => setMenu(false)} offline={backend.offline} onDemo={() => { setMenu(false); demoDay(); }}
+        onSignOut={() => { setMenu(false); signOut(); }} />
     </SafeAreaView>
   );
 }

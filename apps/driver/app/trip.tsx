@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, TextInput, StyleSheet, Text, View } from 'react-native';
+import { showIOSActionSheet } from '../src/lib/actionSheet';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
@@ -144,6 +145,9 @@ export default function Trip() {
     }
     finally { setBusy(null); }
   }
+  // On the way's More menu: arrival is detected, this is the fallback; Cancel route goes back to the trip view.
+  const markArrivedHere = () => { if (current) run('arrived', async () => { await backend.markArrived(current.id); await refresh(); }); };
+  const cancelRoute = () => { if (current) run('cancel', async () => { await backend.cancelTrip(current.id); await stopSharing(); await refresh(); }); };
   const optimize = () => run('plan', async () => {
     const here = pos ?? (await currentPosition());
     setCustom(null);
@@ -520,7 +524,13 @@ export default function Trip() {
         <FadeIn from={16} style={[styles.bottomBar, { paddingBottom: bottomInset + space[4] }]}>
           <Button icon="navigate" label="Get directions" style={{ flex: 1 }}
             onPress={() => openDirections(current, options)} />
-          <IconButton icon="more" label="More options" onPress={() => setBarMenu(true)} />
+          <IconButton icon="more" label="More options" onPress={() => {
+            // iPhone: Apple's action sheet; elsewhere the drawn menu below.
+            if (!showIOSActionSheet([
+              { label: 'Arrived at location', onPress: markArrivedHere },
+              { label: 'Cancel route', destructive: true, onPress: cancelRoute },
+            ])) setBarMenu(true);
+          }} />
         </FadeIn>
       ) : null}
       <Modal transparent visible={barMenu && phase === 'onroute' && !!current} animationType="fade" onRequestClose={() => setBarMenu(false)}>
@@ -528,9 +538,9 @@ export default function Trip() {
         {current ? (
           <View style={[styles.barMenu, shadow.float, { bottom: bottomInset + space[4] + 56 + space[2] }]} accessibilityRole="menu">
             {/* A fallback: arrival is detected. */}
-            <BarMenuItem icon="pin" label="Arrived at location" onPress={() => { setBarMenu(false); run('arrived', async () => { await backend.markArrived(current.id); await refresh(); }); }} />
+            <BarMenuItem icon="pin" label="Arrived at location" onPress={() => { setBarMenu(false); markArrivedHere(); }} />
             {/* Started by mistake, or plans changed: back to the trip view. */}
-            <BarMenuItem icon="close" label="Cancel route" danger onPress={() => { setBarMenu(false); run('cancel', async () => { await backend.cancelTrip(current.id); await stopSharing(); await refresh(); }); }} />
+            <BarMenuItem icon="close" label="Cancel route" danger onPress={() => { setBarMenu(false); cancelRoute(); }} />
           </View>
         ) : null}
       </Modal>

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { showIOSActionSheet } from '../lib/actionSheet';
 import { Icon } from './Icon';
 import { color, font, radius, shadow, space } from './theme';
 
@@ -32,8 +33,13 @@ export function SelectChip<T extends string>({ label, value, options, onChange }
   const current = options.find((o) => o.value === value) ?? options[0];
   // The menu opens just under the chip, over everything (the sheet would clip it).
   // Kept on screen when the chip sits near the right edge.
-  const open = () => chip.current?.measureInWindow((x, y, _w, h) =>
-    setAt({ x: Math.max(space[4], Math.min(x, Dimensions.get('window').width - MENU_W - space[4])), y: y + h + 4 }));
+  const open = () => {
+    // iPhone: Apple's action sheet; elsewhere the drawn menu under the chip.
+    if (showIOSActionSheet(options.map((o) => ({ label: o.label, onPress: () => { if (o.value !== value) onChange(o.value); } })),
+      { title: label, message: `Now: ${current.label}` })) return;
+    chip.current?.measureInWindow((x, y, _w, h) =>
+      setAt({ x: Math.max(space[4], Math.min(x, Dimensions.get('window').width - MENU_W - space[4])), y: y + h + 4 }));
+  };
   return (
     <>
       <Pressable ref={chip} onPress={open} accessibilityRole="button" accessibilityLabel={`${label}: ${current.label}`}
