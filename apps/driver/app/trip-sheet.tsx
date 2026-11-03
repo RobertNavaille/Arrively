@@ -1,8 +1,8 @@
 import { useNavigation } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSheetContent } from '../src/lib/sheetPortal';
-import { color } from '../src/ui/theme';
+import { color, space } from '../src/ui/theme';
 
 // iPhone (trial): Apple's sheet over the trip map, showing what the trip
 // screen hands it (src/lib/sheetPortal.ts). It rests low or opens full height
@@ -15,8 +15,6 @@ export default function TripSheet() {
   const open = useRef(false);
   const onOpenChange = useRef(sheet?.onOpenChange);
   onOpenChange.current = sheet?.onOpenChange;
-  // TEMPORARY (trial): what Apple's sheet gives us.
-  const [dbg, setDbg] = useState({ event: -1, h: 0 });
   // The fixed part's height: Apple's sheet stretches the list from its very top, so the
   // totals float over the list's top and the list starts this far down.
   const [fixedH, setFixedH] = useState(0);
@@ -55,13 +53,11 @@ export default function TripSheet() {
     const off = (navigation as unknown as { addListener: (e: string, cb: (ev: { data?: { index?: number } }) => void) => () => void })
       .addListener('sheetDetentChange', (ev) => {
         const i = ev.data?.index ?? 0;
-        setDbg((d) => ({ ...d, event: i }));
         setOpen(detentsRef.current.length > 1 && i >= detentsRef.current.length - 1);
       });
     return off;
   }, [navigation]);
   const onLayout = (h: number) => {
-    setDbg((d) => ({ ...d, h: Math.round(h) }));
     if (!sheet || detentsRef.current.length < 2) return;
     const [a, b] = detentsRef.current;
     setOpen(h > sheet.height * ((a + b) / 2));
@@ -86,14 +82,11 @@ export default function TripSheet() {
       {/* The list in a box of its own, with iOS's automatic edge padding off: inside Apple's sheet that
           padding pushed the list out of view (blank) or out of place (under the totals). */}
       <View style={{ flex: 1 }} collapsable={false}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: sheet.fixed ? fixedH : 0, paddingBottom: sheet.bottomInset }}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: sheet.fixed ? fixedH : space[4], paddingBottom: sheet.bottomInset }}
         contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} automaticallyAdjustsScrollIndicatorInsets={false}
         scrollIndicatorInsets={{ top: fixedH }} showsVerticalScrollIndicator={false}>
         {sheet.header}
         {sheet.children}
-        <Text style={{ fontSize: 11, color: '#c00', padding: 16 }}>
-          {`TEMP H ${Math.round(sheet.height)} detents ${detentsKey} h ${dbg.h} event ${dbg.event} open ${open.current}`}
-        </Text>
       </ScrollView>
       </View>
       {sheet.overlay}

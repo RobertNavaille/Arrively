@@ -284,7 +284,7 @@ export default function Trip() {
   // Over the screen here; inside the sheet on iPhone (TripSheetHost.ios.tsx).
   // iPhone: the trip totals stay put at the top of the sheet; the stops scroll under them.
   const sheetFixed = NATIVE_CHROME && ((phase === 'next' && current) || (phase === 'review' && review)) ? (
-    <View style={{ paddingHorizontal: space[4], paddingTop: space[3] }}>
+    <View style={{ paddingHorizontal: space[4], paddingTop: space[6] }}>
       <TripTotals travelMin={tripMin} meters={tripMeters} stops={ahead.length} />
     </View>
   ) : null;
