@@ -293,7 +293,7 @@ function sideSwipe(node: HTMLElement, onInput: () => void, step: (dir: 1 | -1) =
 
 const TOOLBAR_H = 88;
 // Fixed heights, so each day's place in the list can be worked out.
-const HEADING_H = 70;
+const HEADING_H = 52;
 const ROW_H = 68;
 const EMPTY_H = 42;
 
@@ -308,9 +308,11 @@ function DayHeading({ day, route, isToday, past }: { day: Date; route: Route | u
   const label = day.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + (isToday ? ' · Today' : '');
   return (
     <View accessibilityRole="header"
-      style={{ height: HEADING_H, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space[3], paddingHorizontal: space[4], paddingTop: space[6], backgroundColor: color.surface }}>
-      <Text style={[type.title, { fontSize: 22, lineHeight: 30 }, past && { color: color.inkMuted }]} numberOfLines={1} maxFontSizeMultiplier={1}>{label}</Text>
-      {count ? <Text style={[type.body, { color: color.inkMuted }]}>{count}</Text> : null}
+      style={{ height: HEADING_H, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space[3], paddingHorizontal: space[4], paddingTop: 20, backgroundColor: color.surface }}>
+      {/* A quiet label over each day's stops; today's reads a little stronger. */}
+      <Text style={{ fontFamily: font.semibold, fontSize: 15, lineHeight: 20, color: isToday && !past ? color.ink : color.inkMuted }}
+        numberOfLines={1} maxFontSizeMultiplier={1}>{label}</Text>
+      {count ? <Text style={{ fontFamily: font.regular, fontSize: 14, lineHeight: 20, color: color.inkMuted }} maxFontSizeMultiplier={1}>{count}</Text> : null}
     </View>
   );
 }
