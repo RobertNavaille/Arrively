@@ -83,7 +83,11 @@ export default function TripSheet() {
           {sheet.fixed}
         </View>
       ) : <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 1 }} pointerEvents="none" />}
+      {/* The list in a box of its own, with iOS's automatic edge padding off: inside Apple's sheet that
+          padding pushed the list out of view (blank) or out of place (under the totals). */}
+      <View style={{ flex: 1 }} collapsable={false}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: sheet.fixed ? fixedH : 0, paddingBottom: sheet.bottomInset }}
+        contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} automaticallyAdjustsScrollIndicatorInsets={false}
         scrollIndicatorInsets={{ top: fixedH }} showsVerticalScrollIndicator={false}>
         {sheet.header}
         {sheet.children}
@@ -91,6 +95,7 @@ export default function TripSheet() {
           {`TEMP H ${Math.round(sheet.height)} detents ${detentsKey} h ${dbg.h} event ${dbg.event} open ${open.current}`}
         </Text>
       </ScrollView>
+      </View>
       {sheet.overlay}
     </View>
   );
