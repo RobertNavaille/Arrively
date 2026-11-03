@@ -4,6 +4,7 @@ import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useState } from 'react';
 import { View } from 'react-native';
 import type { NativeButtonProps, NativeIconButtonProps } from './NativeButton';
+import type { ShapeStyle } from '@expo/ui/swift-ui/modifiers';
 import { SF_SYMBOLS } from './sfSymbols';
 import { color } from './theme';
 
@@ -87,10 +88,11 @@ export function NativeButton({ label, onPress, variant, icon, size, iconOnly, di
 }
 
 // Round icon buttons: call and text (tinted glass), More and back (glass), and solid ones.
-const ICON_STYLE: Record<NativeIconButtonProps['variant'], { style: SwiftStyle; tint: string }> = {
+const ICON_STYLE: Record<NativeIconButtonProps['variant'], { style: SwiftStyle; tint: ShapeStyle }> = {
   tint: { style: GLASS ? 'glass' : 'bordered', tint: color.action },
   solid: { style: GLASS ? 'glassProminent' : 'borderedProminent', tint: color.action },
-  plain: { style: GLASS ? 'glass' : 'borderless', tint: color.ink },
+  // The label color, so it reads in light and dark.
+  plain: { style: GLASS ? 'glass' : 'borderless', tint: { type: 'hierarchical', style: 'primary' } },
 };
 // The web app's sizes (plain ones are 40 there too).
 const DIAMETER = { md: 56, compact: 40, xl: 72 } as const;

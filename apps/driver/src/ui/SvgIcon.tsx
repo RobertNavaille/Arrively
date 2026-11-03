@@ -1,3 +1,4 @@
+import type { ColorValue } from 'react-native';
 import { useId } from 'react';
 import Svg, { Defs, G, Mask, Path, Rect } from 'react-native-svg';
 
@@ -41,7 +42,7 @@ const SHAPES = {
 export type IconName = keyof typeof SHAPES;
 
 export function SvgIcon({ name, size = 20, color = '#1A1A1A', strokeWidth = 2.25 }: {
-  name: IconName; size?: number; color?: string; strokeWidth?: number;
+  name: IconName; size?: number; color?: ColorValue; strokeWidth?: number;
 }) {
   const s: Shape = SHAPES[name];
   const mask = `icon-cut-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;

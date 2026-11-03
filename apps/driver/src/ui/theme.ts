@@ -1,5 +1,9 @@
+import { Platform, PlatformColor, type ColorValue } from 'react-native';
+
 // Arrively design tokens (mirrors the Arrively design system's tokens.json).
-export const color = {
+// The light values, as plain colors, for places that need a color string
+// (map styles, SVG, HTML markers) and for the web.
+export const colorHex = {
   brand: '#009DFE',
   brandTint: '#D1EDFF',
   action: '#009DFF',
@@ -26,6 +30,22 @@ export const color = {
   routeStart: '#0059A3',
   routeEnd: '#A6DCFF',
   scrim: 'rgba(26, 26, 26, 0.4)',
+} as const;
+
+// iPhone: backgrounds, sheets, text and dividers are Apple's system colors, which
+// follow light and dark mode by themselves. Buttons and brand colors stay ours.
+const ios = Platform.OS === 'ios';
+const sys = (name: string, light: string): ColorValue => (ios ? PlatformColor(name) : light);
+
+export const color = {
+  ...colorHex,
+  ink: sys('label', colorHex.ink),
+  inkMuted: sys('secondaryLabel', colorHex.inkMuted),
+  surface: sys('systemBackground', colorHex.surface),
+  surfaceMuted: sys('secondarySystemBackground', colorHex.surfaceMuted),
+  divider: sys('separator', colorHex.divider),
+  controlBorder: sys('tertiaryLabel', colorHex.controlBorder),
+  mapGround: sys('secondarySystemBackground', colorHex.mapGround),
 } as const;
 
 export const space = { 1: 4, 2: 8, 3: 12, 4: 16, 6: 24, 8: 32 } as const;

@@ -22,3 +22,16 @@ export const BASEMAP_CONFIG = {
   colorMotorways: '#FBE7B8',
   colorBuildings: '#E6E3DD',
 } as const;
+
+/** Dark mode (iPhone): Mapbox's night lighting with the same muted, uncluttered map. */
+export const BASEMAP_CONFIG_DARK = {
+  lightPreset: 'night',
+  theme: 'faded',
+  showPointOfInterestLabels: false,
+  showTransitLabels: false,
+  show3dObjects: false,
+  show3dBuildings: false,
+  show3dLandmarks: false,
+  show3dTrees: false,
+  show3dFacades: false,
+} as const;

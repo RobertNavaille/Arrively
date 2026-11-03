@@ -1,5 +1,5 @@
 import { Circle, Defs, G, Path, RadialGradient, Stop } from 'react-native-svg';
-import { color } from './theme';
+import { color, colorHex } from './theme';
 
 // The driver's location in the style of Apple Maps: a blue dot in a white
 // ring, and, when we know which way they face, a soft beam fanning out that
@@ -46,5 +46,5 @@ export function puckSvg(withBeam: boolean): string {
       + `</radialGradient></defs><path d="${BEAM_PATH}" fill="url(#driver-beam-gl)"/>`
     : '';
   return `<svg width="${s}" height="${s}" viewBox="${-h} ${-h} ${s} ${s}" xmlns="http://www.w3.org/2000/svg">${beam}`
-    + `<circle r="11" cy="1" fill="rgba(26,26,26,0.16)"/><circle r="10" fill="${color.surface}"/><circle r="7" fill="${color.brand}"/></svg>`;
+    + `<circle r="11" cy="1" fill="rgba(26,26,26,0.16)"/><circle r="10" fill="${colorHex.surface}"/><circle r="7" fill="${colorHex.brand}"/></svg>`;
 }

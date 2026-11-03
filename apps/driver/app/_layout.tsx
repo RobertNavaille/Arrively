@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { loadAppearance } from '../src/lib/appearance';
 import { backend } from '../src/lib/backend';
 import '../src/lib/location'; // registers the background location task
 import { DriverDataProvider } from '../src/lib/store';
@@ -34,6 +35,8 @@ function useAuthGate() {
 }
 
 export default function RootLayout() {
+  // Light, dark or automatic, as chosen in Settings.
+  useEffect(() => { loadAppearance(); }, []);
   const [fontsLoaded] = useFonts({ Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold });
   const { ready, signedIn } = useAuthGate();
 
@@ -68,7 +71,7 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
+      <StatusBar style="auto" />
       <DriverDataProvider enabled={signedIn}>{stack}</DriverDataProvider>
     </SafeAreaProvider>
   );

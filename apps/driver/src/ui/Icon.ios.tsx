@@ -1,3 +1,4 @@
+import type { ColorValue } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { SvgIcon, type IconName } from './SvgIcon';
 import { SF_SYMBOLS as SYMBOLS } from './sfSymbols';
@@ -6,7 +7,7 @@ export type { IconName };
 
 
 export function Icon({ name, size = 20, color = '#1A1A1A', strokeWidth }: {
-  name: IconName; size?: number; color?: string; strokeWidth?: number;
+  name: IconName; size?: number; color?: ColorValue; strokeWidth?: number;
 }) {
   const s = SYMBOLS[name];
   return (

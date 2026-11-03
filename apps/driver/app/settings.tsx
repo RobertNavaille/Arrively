@@ -3,12 +3,14 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { setAppearance, useAppearanceMode, type AppearanceMode } from '../src/lib/appearance';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { fmtPhone } from '../src/lib/geo';
 import { stopSharing } from '../src/lib/location';
 import { useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
+import { SelectChip } from '../src/ui/Chips';
 import { Avatar, Button, IconButton } from '../src/ui/components';
 import { NATIVE_CHROME } from '../src/ui/nativeChrome';
 import { color, font, radius, space, type } from '../src/ui/theme';
@@ -25,6 +27,7 @@ export default function Settings() {
   const router = useRouter();
   const { profile, refresh } = useDriverData();
   const bottomInset = useBottomInset();
+  const appearance = useAppearanceMode();
   const [name, setName] = useState(profile?.name ?? '');
   const [email, setEmail] = useState(profile?.email ?? '');
   const [vehicle, setVehicle] = useState(profile?.vehicle ?? '');
@@ -106,6 +109,19 @@ export default function Settings() {
             <TextInput value={vehicle} onChangeText={setVehicle} placeholder="White Ford Transit · 7KQ 204 (optional)" placeholderTextColor={color.inkMuted}
               accessibilityLabel="Vehicle" style={field} />
           </View>
+
+          {/* Light, dark or follow the iPhone (the web app stays light for now). */}
+          {Platform.OS === 'web' ? null : (
+            <View style={{ gap: space[2] }}>
+              <Text style={[type.label, { textTransform: 'uppercase' }]}>Appearance</Text>
+              <View style={{ flexDirection: 'row' }}>
+                <SelectChip<AppearanceMode> label="Appearance" value={appearance}
+                  options={[{ value: 'auto', label: 'Automatic' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]}
+                  onChange={setAppearance} />
+              </View>
+              <Text style={type.caption}>Automatic follows your iPhone's light or dark setting.</Text>
+            </View>
+          )}
 
           {changed ? <Button label="Save changes" onPress={save} loading={busy} /> : null}
 

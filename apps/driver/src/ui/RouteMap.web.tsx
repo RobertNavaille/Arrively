@@ -5,7 +5,7 @@ import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop, Text as SvgText
 import { MAPBOX_TOKEN } from '../lib/config';
 import { BASEMAP_CONFIG, BASEMAP_STYLE } from './basemap';
 import { PUCK_SIZE, PuckShapes, puckSvg } from './DriverPuck';
-import { color, font } from './theme';
+import { color, colorHex, font } from './theme';
 import { FOLLOW_ZOOM, MARKER, ROUTE_GRADIENT, byDrawOrder, framePoints, routeColorAt, type MapStop, type RouteMapProps } from './RouteMap.types';
 
 // Browser map: real Mapbox GL when a token is set, otherwise a drawn stand-in
@@ -17,8 +17,8 @@ export function RouteMap(props: RouteMapProps) {
 function stopEl(s: MapStop) {
   const el = document.createElement('div');
   const { size, ring } = MARKER[s.state];
-  const fill = s.state === 'next' ? color.action : s.state === 'done' ? color.inkMuted : color.surface;
-  const edge = s.state === 'upcoming' ? color.action : color.surface;
+  const fill = s.state === 'next' ? colorHex.action : s.state === 'done' ? colorHex.inkMuted : colorHex.surface;
+  const edge = s.state === 'upcoming' ? colorHex.action : colorHex.surface;
   el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;box-sizing:border-box;`
     + `background:${fill};border:${ring}px solid ${edge};box-shadow:0 1px 4px rgba(26,26,26,.25);`;
   return el;
