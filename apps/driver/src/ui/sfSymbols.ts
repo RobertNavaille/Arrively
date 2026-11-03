@@ -27,4 +27,5 @@ export const SF_SYMBOLS: Record<IconName, { name: SFSymbol; weight?: SymbolViewP
   lock: { name: 'lock.fill' },
   trash: { name: 'trash.fill' },
   more: { name: 'ellipsis', weight: 'bold' },
+  calendar: { name: 'calendar' },
 };

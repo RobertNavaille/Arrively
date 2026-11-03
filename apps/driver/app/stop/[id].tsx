@@ -8,26 +8,23 @@ import { useRoadRoute } from '../../src/lib/directions';
 import { contactCustomer } from '../../src/lib/navigation';
 import { fmtTime, fmtWindow, parseDay } from '../../src/lib/geo';
 import { useLivePosition } from '../../src/lib/location';
-import { useActiveTrip, useDriverData } from '../../src/lib/store';
+import { useDriverData } from '../../src/lib/store';
 import { isDone, type Stop } from '../../src/lib/types';
 import { Banner, Button, IconButton, InfoRow, ShareTripRow, StatusPill } from '../../src/ui/components';
 import { RouteMap } from '../../src/ui/RouteMap';
-import { TripBar } from '../../src/ui/TripBar';
 import { Icon, type IconName } from '../../src/ui/Icon';
 import { NATIVE_CHROME } from '../../src/ui/nativeChrome';
 import { color, font, radius, shadow, space, type } from '../../src/ui/theme';
 
 /**
  * A stop's details, opened from My day or the trip's list. The drive, arrival
- * and marking happen in the Trip screen; while a trip is under way the trip
- * bar leads back to it.
+ * and marking happen in the Trip screen.
  */
 export default function StopScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { stopById } = useDriverData();
   const found = stopById(String(id));
-  const trip = useActiveTrip();
   const [busy, setBusy] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   // An open stop's map shows the drive to it from where you are.
@@ -141,7 +138,6 @@ export default function StopScreen() {
 
         </View>
       </ScrollView>
-      {!done && trip ? <TripBar route={trip} /> : null}
 
       {/* The overflow menu: edit the stop's details, or delete it */}
       {menu ? (

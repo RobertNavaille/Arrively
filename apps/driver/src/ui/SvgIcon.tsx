@@ -37,6 +37,7 @@ const SHAPES = {
   lock: { fill: ['M7 10h10a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z'], line: ['M8.3 10V7.7a3.7 3.7 0 0 1 7.4 0V10'] },
   trash: { fill: ['M6.3 8.5h11.4l-.9 11.3a1.8 1.8 0 0 1-1.8 1.7H9a1.8 1.8 0 0 1-1.8-1.7z'], line: ['M4.5 6h15', 'M9.5 6V4.6c0-.6.4-1 1-1h3c.6 0 1 .4 1 1V6'], cut: ['M10.4 11.5v6.5', 'M13.6 11.5v6.5'] },
   more: { fill: [circle(5, 12, 2), circle(12, 12, 2), circle(19, 12, 2)] },
+  calendar: { fill: ['M7 3.5h1.6v2h6.8v-2H17v2h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2h1z'], cut: ['M4.8 9.6h14.4'] },
 } satisfies Record<string, Shape>;
 
 export type IconName = keyof typeof SHAPES;

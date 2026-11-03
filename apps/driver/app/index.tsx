@@ -1,24 +1,21 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AppState, FlatList, Modal, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions,
+  AppState, FlatList, Modal, Platform, Pressable, ScrollView, Text, View, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { showIOSActionSheet } from '../src/lib/actionSheet';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
-import { addDays, dayKey, fmtTime } from '../src/lib/geo';
+import { addDays, dayKey } from '../src/lib/geo';
 import { currentPosition, stopSharing, useLivePosition } from '../src/lib/location';
-import { searchAddress, type Place } from '../src/lib/mapbox';
-import { currentStop, dayRange, useActiveTrip, useDriverData } from '../src/lib/store';
+import { currentStop, dayRange, useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
 import { isDone, type LatLng, type Route, type Stop } from '../src/lib/types';
 import { Avatar, Button, IconButton } from '../src/ui/components';
-import { Icon } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
 import type { MapStop } from '../src/ui/RouteMap.types';
-import { TripBar } from '../src/ui/TripBar';
-import { bareInput, color, font, radius, shadow, space, type } from '../src/ui/theme';
+import { color, font, radius, space, type } from '../src/ui/theme';
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -32,29 +29,53 @@ export default function MyDay() {
   const range = useMemo(() => dayRange(today), [today]);
   const days = useMemo(() => Array.from({ length: range.count }, (_, i) => addDays(range.start, i)), [range]);
   const [index, setIndex] = useState(range.todayIndex);
-  // Each day page is exactly as tall as the pager, so its stop list scrolls
-  // inside it instead of running off the bottom (browsers don't stretch pages).
-  const [pagerH, setPagerH] = useState(0);
-  const listRef = useRef<FlatList<Date>>(null);
-  // Only the driver's own swipe or tap changes the day. Scrolling the browser
-  // does by itself (Safari restores the pager's old position after a reload,
-  // layout can nudge it) is undone, so the app opens on today.
-  const touched = useRef(false);
-  useEffect(() => {
-    const t = setTimeout(() => listRef.current?.scrollToOffset({ offset: width * index, animated: false }), 0);
-    return () => clearTimeout(t);
-  }, [width]); // eslint-disable-line react-hooks/exhaustive-deps
   const indexRef = useRef(index);
   indexRef.current = index;
-  const daysRef = useRef(days);
-  daysRef.current = days;
+  // All the days in one vertical list, each under its own heading. Scrolling past
+  // a day's last stop selects the next day (header, week strip and map follow).
+  const listRef = useRef<ScrollView>(null);
+  // Where each day starts in the list. Headings and rows have fixed heights, so
+  // the positions are worked out rather than measured (the web doesn't report
+  // the layout of rows far down the list).
+  const [listH, setListH] = useState(0);
+  const offsets = useMemo(() => {
+    const out: number[] = [];
+    let y = 0;
+    for (const d of days) {
+      out.push(y);
+      const n = routeFor(dayKey(d))?.stops.length ?? 0;
+      y += HEADING_H + (n ? n * ROW_H : EMPTY_H);
+    }
+    return out;
+  }, [days, routeFor]);
+  const offsetsRef = useRef(offsets);
+  offsetsRef.current = offsets;
+  const dayY = (i: number) => offsetsRef.current[i] ?? null;
+  // The list opens on today (asked again until the list has laid out, for the web).
+  const placed = useRef(false);
+  const pendingY = useRef<number | null>(null);
+  function place(y: number) {
+    pendingY.current = y;
+    [0, 50, 150, 400, 800].forEach((ms) => setTimeout(() => {
+      if (pendingY.current != null) listRef.current?.scrollTo({ y: pendingY.current, animated: false });
+    }, ms));
+  }
+  // Once the day's stops have loaded: today at the top.
   useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const node = (listRef.current as unknown as { getScrollableNode?: () => HTMLElement | null })?.getScrollableNode?.();
-    if (!node) return;
-    return sideSwipe(node, () => { touched.current = true; },
-      (dir) => goToRef.current(Math.min(Math.max(indexRef.current + dir, 0), daysRef.current.length - 1)));
-  }, []);
+    if (placed.current || loading) return;
+    placed.current = true;
+    place(offsets[range.todayIndex] ?? 0);
+  }, [loading, offsets, range.todayIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  function onListScroll(y: number) {
+    if (pendingY.current != null) {
+      if (Math.abs(y - pendingY.current) > 2) return;
+      pendingY.current = null;
+    }
+    let at = 0;
+    const offs = offsetsRef.current;
+    for (let i = 0; i < offs.length; i++) if (offs[i] <= y + 1) at = i;
+    if (at !== indexRef.current) setIndex(at);
+  }
 
   // The week strip pages too: swiping it moves to the same weekday in the next
   // or previous week, and the day pages follow.
@@ -109,31 +130,25 @@ export default function MyDay() {
       setToday(now);
       setIndex(at);
       refresh();
-      touched.current = false;
-      setTimeout(() => listRef.current?.scrollToOffset({ offset: width * at, animated: false }), 0);
+      placed.current = false;
+      const y = dayY(at);
+      if (y != null) { placed.current = true; place(y); }
     };
     const sub = AppState.addEventListener('change', (st) => { if (st === 'active') check(); });
     const timer = setInterval(check, 60_000);
     return () => { sub.remove(); clearInterval(timer); };
-  }, [today, width, refresh]);
+  }, [today, refresh]);
   const day = days[index];
   const dayK = dayKey(day);
   const isToday = dayK === dayKey(today);
   const route = routeFor(dayK);
   const [menu, setMenu] = useState(false);
-  // Address search for adding a stop; it sits at the top of each day page and closes when the day changes.
-  const [q, setQ] = useState('');
-  const found = useAddressSearch(q, pos);
-  useEffect(() => { setQ(''); }, [index]);
+  // Picking a day in the strip scrolls the list to it.
   function goTo(i: number) {
-    touched.current = true;
-    // Jumps of more than a day skip the animation: the pages in between aren't drawn.
-    const near = Math.abs(i - indexRef.current) <= 1;
+    const y = dayY(i);
+    if (y != null) listRef.current?.scrollTo({ y, animated: Math.abs(i - indexRef.current) <= 7 });
     setIndex(i);
-    listRef.current?.scrollToIndex({ index: i, animated: near });
   }
-  const goToRef = useRef(goTo);
-  goToRef.current = goTo;
 
   async function demoDay() {
     const here = pos ?? (await currentPosition()) ?? { lat: 41.824, lng: -71.4128 };
@@ -142,9 +157,13 @@ export default function MyDay() {
   }
   async function signOut() { await stopSharing(); await backend.signOut(); }
 
-  const current = currentStop(route);
-  const trip = useActiveTrip();
   const bottomInset = useBottomInset();
+  // The selected day's stops on the map; the next one stands out once its trip is under way.
+  const current = currentStop(route);
+  const mapStops: MapStop[] = (route?.stops ?? []).map((st, i) => ({
+    id: st.id, lat: st.lat, lng: st.lng, n: i + 1,
+    state: isDone(st) ? 'done' : route?.status === 'active' && st.id === current?.id ? 'next' : 'upcoming',
+  }));
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: color.surface }}>
@@ -208,74 +227,34 @@ export default function MyDay() {
         />
       </View>
 
-      {/* Day pages: search, map, summary and stops scroll together */}
-      <View style={{ flex: 1 }}>
-          <FlatList
-            ref={listRef}
-            data={days}
-            horizontal
-            pagingEnabled
-            initialScrollIndex={range.todayIndex}
-            // Every day is a real page, so the browser's snapping only ever lands on
-            // a day (stand-in spacers for undrawn days made iOS jump weeks back).
-            // Only the day on screen and its neighbours draw their map and list.
-            initialNumToRender={days.length}
-            windowSize={days.length * 2}
-            extraData={index}
-            onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h && h !== pagerH) setPagerH(h); }}
-            getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(d) => dayKey(d)}
-            onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
-            onScroll={Platform.OS === 'web' ? (e) => {
-              const i = Math.round(e.nativeEvent.contentOffset.x / width);
-              if (!touched.current) {
-                // Not the driver: put the pager back on the selected day.
-                if (i !== index) listRef.current?.scrollToOffset({ offset: width * index, animated: false });
-                return;
-              }
-              if (i !== index) setIndex(i);
-            } : undefined}
-            scrollEventThrottle={64}
-            renderItem={({ item, index: i }) => {
-              if (Math.abs(i - index) > 1) return <View style={{ width, height: pagerH || undefined }} />;
-              const k = dayKey(item);
-              // A weekday alone is clear within a week of today; further out it gets the date.
-              const label = k === dayKey(today) ? 'today'
-                : Math.abs(item.getTime() - today.getTime()) < 6.5 * 86400000 ? item.toLocaleDateString('en-US', { weekday: 'long' })
-                : item.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-              return (
-                <View style={{ width, height: pagerH || undefined }}>
-                  <DayPanel route={routeFor(k)} isToday={k === dayKey(today)} driver={k === dayKey(today) ? pos : null}
-                    onOpenStop={(s) => router.push(`/stop/${s.id}`)} loading={loading}
-                    search={
-                      <SearchHeader label={label} q={k === dayK ? q : ''} setQ={setQ} {...found}
-                        onPick={(p) => {
-                          // Picking an address opens New stop for the name, notes and a last check of the address.
-                          setQ('');
-                          router.push({ pathname: '/new-stop', params: { day: k, name: p.name, detail: p.detail, lat: String(p.lat), lng: String(p.lng) } });
-                        }} />
-                    } />
-                </View>
-              );
-            }}
-          />
-      {/* Footer: while a trip is under way, the trip bar on every day; otherwise Start trip on today. */}
-          <View>
-            {q.trim() ? <Pressable accessibilityLabel="Close search" onPress={() => setQ('')} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: color.scrim, zIndex: 2 }} /> : null}
-            {error ? <Text style={[type.caption, { color: color.danger, paddingHorizontal: space[4], paddingTop: space[2] }]}>{error}</Text> : null}
-            {trip ? <TripBar route={trip} /> : (
-              <View style={{ padding: space[4], paddingBottom: space[6] + bottomInset }}>
-                {isToday && current ? (
-                  <Button label="Start trip" onPress={() => router.push('/trip')} />
-                ) : (
-                  <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted, textAlign: 'center', paddingVertical: space[3] }]}>
-                    {footerText(route, day, today)}
-                  </Text>
-                )}
-              </View>
-            )}
-          </View>
+      {/* The selected day's map stays put above the list. */}
+      <View style={{ paddingHorizontal: space[4] }}>
+        <View style={{ borderRadius: radius.md, overflow: 'hidden' }}>
+          <RouteMap height={190} stops={mapStops} driver={isToday ? pos : null} />
+        </View>
+      </View>
+      {error ? <Text style={[type.caption, { color: color.danger, paddingHorizontal: space[4], paddingTop: space[2] }]}>{error}</Text> : null}
+
+      {/* Every day in one list, each under a heading that stays at the top while its stops scroll. */}
+      <ScrollView ref={listRef} style={{ flex: 1 }} onLayout={(e) => setListH(Math.round(e.nativeEvent.layout.height))}
+        stickyHeaderIndices={days.map((_, i) => i * 2)} scrollEventThrottle={16}
+        onScroll={(e) => onListScroll(e.nativeEvent.contentOffset.y)}
+        // Room after the last day so it can reach the top, clear of the toolbar.
+        contentContainerStyle={{ paddingBottom: Math.max(TOOLBAR_H + bottomInset, listH - 160) }}>
+        {days.flatMap((d, i) => {
+          const k = dayKey(d);
+          const r = routeFor(k);
+          return [
+            <DayHeading key={`h${k}`} day={d} route={r} isToday={k === dayKey(today)} past={k < dayKey(today)} />,
+            <DayStops key={`s${k}`} route={r} loading={loading} onOpenStop={(st) => router.push(`/stop/${st.id}`)} />,
+          ];
+        })}
+      </ScrollView>
+
+      {/* Toolbar, floating over the bottom of the list: today's trip, and adding a stop. */}
+      <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: space[4] + bottomInset }}>
+        <Button label="View my day" onPress={() => router.push('/trip')} style={{ flex: 1 }} />
+        <IconButton icon="plus" label="Add stop" onPress={() => router.push('/new-stop')} />
       </View>
 
       <Menu visible={menu} onClose={() => setMenu(false)} offline={backend.offline} onDemo={() => { setMenu(false); demoDay(); }}
@@ -312,69 +291,49 @@ function sideSwipe(node: HTMLElement, onInput: () => void, step: (dir: 1 | -1) =
   };
 }
 
-function footerText(route: Route | undefined, day: Date, today: Date) {
-  if (!route || route.stops.length === 0) return 'No stops this day';
-  if (route.status === 'completed') {
-    const last = [...route.stops].sort((a, b) => (b.marked_at ?? '').localeCompare(a.marked_at ?? ''))[0];
-    return `Route finished${last?.marked_at ? ` at ${fmtTime(last.marked_at)}` : ''}`;
-  }
-  if (day > today) return 'Starts on the day';
-  return 'This route was not finished';
+const TOOLBAR_H = 88;
+// Fixed heights, so each day's place in the list can be worked out.
+const HEADING_H = 70;
+const ROW_H = 68;
+const EMPTY_H = 42;
+
+/** A day's heading in the list: the date, and how many stops (or how many are left). */
+function DayHeading({ day, route, isToday, past }: { day: Date; route: Route | undefined; isToday: boolean; past: boolean }) {
+  const stops = route?.stops ?? [];
+  const left = stops.filter((s) => !isDone(s)).length;
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const count = !stops.length ? ''
+    : route?.status === 'completed' || !left ? plural(stops.length, 'stop', 'stops')
+    : left < stops.length ? plural(left, 'stop left', 'stops left') : plural(stops.length, 'stop', 'stops');
+  const label = day.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + (isToday ? ' · Today' : '');
+  return (
+    <View accessibilityRole="header"
+      style={{ height: HEADING_H, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space[3], paddingHorizontal: space[4], paddingTop: space[6], backgroundColor: color.surface }}>
+      <Text style={[type.title, { fontSize: 22, lineHeight: 30 }, past && { color: color.inkMuted }]} numberOfLines={1} maxFontSizeMultiplier={1}>{label}</Text>
+      {count ? <Text style={[type.body, { color: color.inkMuted }]}>{count}</Text> : null}
+    </View>
+  );
 }
 
-function DayPanel({ route, isToday, driver, onOpenStop, loading, search }: {
-  route: Route | undefined; isToday: boolean; driver: LatLng | null; onOpenStop: (s: Stop) => void; loading: boolean;
-  search: React.ReactNode;
-}) {
+/** A day's stops under its heading (or a line saying there are none). */
+function DayStops({ route, loading, onOpenStop }: { route: Route | undefined; loading: boolean; onOpenStop: (s: Stop) => void }) {
   const stops = route?.stops ?? [];
   const current = currentStop(route);
-  const remaining = stops.filter((s) => !isDone(s));
-  const done = stops.length - remaining.length;
-  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-  // Stops only: the order, drive time and route line live in the Trip screen.
-  const count = route?.status === 'completed' ? plural(stops.length, 'stop', 'stops')
-    : done ? plural(remaining.length, 'stop left', 'stops left') : plural(stops.length, 'stop', 'stops');
-  const countMeta = route?.status === 'completed' ? `${stops.filter((s) => s.status === 'completed').length} completed`
-    : done ? `${done} done` : isToday && remaining.length > 1 ? 'Order is set when you start the trip' : '';
-
-  const mapStops: MapStop[] = stops.map((s, i) => ({
-    id: s.id, lat: s.lat, lng: s.lng, n: i + 1,
-    // The next stop stands out only once the trip is under way.
-    state: isDone(s) ? 'done' : route?.status === 'active' && s.id === current?.id ? 'next' : 'upcoming',
-  }));
-
   if (!stops.length) {
     return (
-      <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
-        {search}
-        <View style={{ alignItems: 'center', paddingVertical: space[8], paddingHorizontal: space[6], gap: space[2] }}>
-          <Icon name="route" size={28} color={color.inkMuted} />
-          <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted, textAlign: 'center' }]}>
-            {loading ? 'Loading…' : 'No stops this day. Search above to add one.'}
-          </Text>
-        </View>
-      </ScrollView>
+      <View style={{ height: EMPTY_H }}>
+        <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted, paddingHorizontal: space[4] }]} maxFontSizeMultiplier={1}>
+          {loading ? 'Loading…' : 'No stops this day'}
+        </Text>
+      </View>
     );
   }
-
   return (
-    <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: space[4] }}>
-      {search}
-      <View style={{ paddingHorizontal: space[4] }}>
-        <View style={{ borderRadius: radius.md, overflow: 'hidden' }}>
-          <RouteMap height={190} stops={mapStops} driver={isToday ? driver : null} />
-        </View>
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space[3], paddingHorizontal: space[4], paddingTop: space[6], paddingBottom: space[4] }}>
-        <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]}>{count}</Text>
-        {countMeta ? <Text style={[type.body, { color: color.inkMuted, flexShrink: 1, textAlign: 'right' }]}>{countMeta}</Text> : null}
-      </View>
-      <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
-        {stops.map((s) => (
-          <StopListRow key={s.id} stop={s} isCurrent={route?.status === 'active' && s.id === current?.id} onPress={() => onOpenStop(s)} />
-        ))}
-      </View>
-    </ScrollView>
+    <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
+      {stops.map((s) => (
+        <StopListRow key={s.id} stop={s} isCurrent={route?.status === 'active' && s.id === current?.id} onPress={() => onOpenStop(s)} />
+      ))}
+    </View>
   );
 }
 
@@ -383,71 +342,14 @@ function StopListRow({ stop, isCurrent, onPress }: { stop: Stop; isCurrent: bool
   const done = isDone(stop);
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${stop.customer_name}, ${stop.address}${done ? ', done' : isCurrent ? ', next' : ''}`}
-      style={({ pressed }) => [{ paddingBottom: 20 }, pressed && { opacity: 0.6 }]}>
+      style={({ pressed }) => [{ height: ROW_H }, pressed && { opacity: 0.6 }]}>
       <View>
-        <Text style={{ fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: done ? color.inkMuted : color.ink }}>{stop.customer_name}</Text>
-        <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }} numberOfLines={1}>
+        <Text style={{ fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: done ? color.inkMuted : color.ink }} numberOfLines={1} maxFontSizeMultiplier={1}>{stop.customer_name}</Text>
+        <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }} numberOfLines={1} maxFontSizeMultiplier={1}>
           {stop.address.split(',')[0]}{stop.notes ? ` · ${stop.notes}` : ''}
         </Text>
       </View>
     </Pressable>
-  );
-}
-
-function useAddressSearch(q: string, near: LatLng | null) {
-  const [results, setResults] = useState<Place[]>([]);
-  const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    if (!q.trim()) { setResults([]); setErr(null); return; }
-    const ctrl = new AbortController();
-    const t = setTimeout(() => {
-      searchAddress(q, near, ctrl.signal).then((r) => { setResults(r); setErr(null); }).catch((e) => {
-        if (!ctrl.signal.aborted) setErr(e instanceof Error ? e.message : String(e));
-      });
-    }, 250);
-    return () => { clearTimeout(t); ctrl.abort(); };
-  }, [q, near]);
-  return { results, err };
-}
-
-/** The address search at the top of a day page. Results drop down over the page, which is dimmed. */
-function SearchHeader({ label, q, setQ, results, err, onPick }: {
-  label: string; q: string; setQ: (v: string) => void; results: Place[]; err: string | null; onPick: (p: Place) => void;
-}) {
-  const open = q.trim().length > 0;
-  return (
-    <View style={{ padding: space[4], paddingTop: space[3], paddingBottom: space[3], backgroundColor: color.surface, zIndex: 10 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], height: 44, paddingHorizontal: space[3], borderRadius: radius.full, backgroundColor: color.surfaceMuted }}>
-        <Icon name="search" size={20} color={color.inkMuted} />
-        <TextInput value={q} onChangeText={setQ} placeholder={`Add a stop to ${label}`} placeholderTextColor={color.inkMuted}
-          accessibilityLabel={`Add a stop to ${label}`} autoCorrect={false}
-          style={[{ flex: 1, fontFamily: font.regular, fontSize: 16, color: color.ink, paddingVertical: 0 }, bareInput]} />
-        {open ? <Pressable onPress={() => setQ('')} accessibilityLabel="Clear search" hitSlop={8}><Icon name="close" size={16} color={color.inkMuted} /></Pressable> : null}
-      </View>
-      {open ? (
-        <>
-          {/* Dims everything under the search bar; tapping it closes the search. */}
-          <Pressable accessibilityLabel="Close search" onPress={() => setQ('')}
-            style={{ position: 'absolute', top: '100%', left: 0, right: 0, height: 3000, backgroundColor: color.scrim }} />
-          <View style={[{ position: 'absolute', top: '100%', left: space[4], right: space[4], backgroundColor: color.surface, borderRadius: radius.md, borderWidth: 1, borderColor: color.divider, overflow: 'hidden' }, shadow.float]}>
-            {results.map((p) => (
-              <Pressable key={p.id} accessibilityRole="button" onPress={() => onPick(p)}
-                style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3] }, pressed && { backgroundColor: color.surfaceMuted }]}>
-                <Icon name="pin" size={20} color={color.inkMuted} />
-                <View style={{ flex: 1 }}>
-                  <Text style={type.bodyStrong} numberOfLines={1}>{p.name}</Text>
-                  <Text style={type.caption} numberOfLines={1}>{p.detail}</Text>
-                </View>
-                <Text style={[type.caption, { fontFamily: font.semibold, color: color.actionInk }]}>Add to {label}</Text>
-              </Pressable>
-            ))}
-            {!results.length || err ? (
-              <Text style={[type.body, { color: err ? color.danger : color.inkMuted, padding: space[3] }]}>{err ?? 'No matching addresses'}</Text>
-            ) : null}
-          </View>
-        </>
-      ) : null}
-    </View>
   );
 }
 

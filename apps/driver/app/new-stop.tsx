@@ -5,12 +5,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NATIVE_CHROME } from '../src/ui/nativeChrome';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
-import { fmtPhone, normalizePhone } from '../src/lib/geo';
+import { dayKey, fmtPhone, normalizePhone } from '../src/lib/geo';
 import { searchAddress, type Place } from '../src/lib/mapbox';
 import { useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
 import { Button, ShareTripRow } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
+import { MonthCalendar } from '../src/ui/MonthCalendar';
 import { RouteMap } from '../src/ui/RouteMap';
 import { bareInput, color, font, radius, space, type } from '../src/ui/theme';
 
@@ -20,8 +21,9 @@ const field = {
 } as const;
 
 /**
- * Add a stop: the address picked in My day's search, plus a name, phone and notes
- * (DRV-24). With `id`, the same form edits that stop: name, phone, address, notes.
+ * Add a stop, in one sheet: first search for the address, then the name, phone,
+ * the date (required, no default) and notes (DRV-24). With `id`, the same form
+ * edits that stop: name, phone, address, notes.
  */
 export default function NewStop() {
   const params = useLocalSearchParams<{ id?: string; day: string; name: string; detail: string; lat: string; lng: string }>();
@@ -36,6 +38,12 @@ export default function NewStop() {
     }
     return { id: 'picked', name: String(params.name ?? ''), detail: String(params.detail ?? ''), lat: Number(params.lat), lng: Number(params.lng) };
   });
+  // A new stop starts with the address search; picking one moves on to the details.
+  const [searching, setSearching] = useState(!editing && !params.name);
+  // The stop's date: required for a new stop, and never filled in for the driver.
+  const [day, setDay] = useState<string | null>(params.day ? String(params.day) : null);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [dateMissing, setDateMissing] = useState(false);
   const [name, setName] = useState(editing?.customer_name ?? '');
   const [notes, setNotes] = useState(editing?.notes ?? '');
   // Optional; for calling the customer. Texts only go to numbers with consent recorded in the console.
@@ -45,12 +53,12 @@ export default function NewStop() {
   const [busy, setBusy] = useState(false);
   const [nameMissing, setNameMissing] = useState(false);
 
-  const day = String(params.day);
   const label = (p: Place) => (p.detail ? `${p.name}, ${p.detail}` : p.name);
 
   async function save() {
     // The customer's name is required.
     if (!name.trim()) { setNameMissing(true); return; }
+    if (!editing && !day) { setDateMissing(true); setDateOpen(true); return; }
     const storedPhone = normalizePhone(phone);
     if (storedPhone === undefined) { setPhoneBad(true); return; }
     setBusy(true);
@@ -62,7 +70,7 @@ export default function NewStop() {
         }
         if (shareTrip !== (editing.share_trip !== false)) await backend.setShareTrip(editing.id, shareTrip);
       } else {
-        await backend.addStop(day, label(place), place, { name, notes, phone: storedPhone, shareTrip });
+        await backend.addStop(day!, label(place), place, { name, notes, phone: storedPhone, shareTrip });
       }
       await refresh();
       router.back();
@@ -70,6 +78,21 @@ export default function NewStop() {
       showMessage(editing ? 'Could not save the changes' : 'Could not add the stop', e instanceof Error ? e.message : String(e));
       setBusy(false);
     }
+  }
+
+  if (searching) {
+    return (
+      <SafeAreaView edges={NATIVE_CHROME ? ['bottom'] : undefined} style={{ flex: 1, backgroundColor: color.surface }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[2], paddingTop: NATIVE_CHROME ? space[4] : space[2], paddingBottom: space[2] }}>
+          <View style={{ flex: 1, alignItems: 'flex-start' }}><Button variant="text" label="Cancel" onPress={() => router.back()} /></View>
+          <Text style={[type.heading, { fontSize: 17 }]} accessibilityRole="header">Add stop</Text>
+          <View style={{ flex: 1 }} />
+        </View>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: space[4] }}>
+          <AddressSearch near={null} onPick={(p) => { setPlace(p); setSearching(false); }} />
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -100,6 +123,22 @@ export default function NewStop() {
 
             <AddressField place={place} onChange={setPlace} />
 
+            {editing ? null : (
+              <View style={{ gap: space[2] }}>
+                <Text style={[type.label, { textTransform: 'uppercase' }]}>Date</Text>
+                <Pressable onPress={() => setDateOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: dateOpen }}
+                  accessibilityLabel={`Date: ${day ? dayLabel(day) : 'none chosen'}. ${dateOpen ? 'Close' : 'Choose'}`}
+                  style={({ pressed }) => [field, { flexDirection: 'row', alignItems: 'center', gap: space[3] },
+                    dateMissing && !day && { borderColor: color.danger }, dateOpen && { borderColor: color.action }, pressed && { backgroundColor: color.divider }]}>
+                  <Icon name="calendar" size={20} color={color.inkMuted} />
+                  <Text style={[type.body, { flex: 1, fontSize: 16, color: day ? color.ink : color.inkMuted }]}>{day ? dayLabel(day) : 'Choose a date'}</Text>
+                  <Icon name="chevronDown" size={16} color={color.inkMuted} />
+                </Pressable>
+                {dateMissing && !day ? <Text style={[type.caption, { color: color.danger }]} accessibilityLiveRegion="polite">Choose a date for this stop.</Text> : null}
+                {dateOpen ? <MonthCalendar value={day} from={new Date()} onPick={(k) => { setDay(k); setDateOpen(false); setDateMissing(false); }} /> : null}
+              </View>
+            )}
+
             <ShareTripRow on={shareTrip} onChange={setShareTrip} />
 
             <View style={{ gap: space[2] }}>
@@ -115,6 +154,59 @@ export default function NewStop() {
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+/** "Tuesday, November 3", and "· Today" on today. */
+function dayLabel(k: string) {
+  const d = new Date(`${k}T12:00:00`);
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + (k === dayKey(new Date()) ? ' · Today' : '');
+}
+
+/** The first step of a new stop: search for the address and pick one of the suggestions. */
+function AddressSearch({ near, onPick }: { near: Place | null; onPick: (p: Place) => void }) {
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState<Place[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!q.trim()) { setResults([]); setErr(null); return; }
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      searchAddress(q, near, ctrl.signal)
+        .then((r) => { setResults(r); setErr(r.length ? null : 'No matching addresses'); })
+        .catch((e) => { if (!ctrl.signal.aborted) setErr(e instanceof Error ? e.message : String(e)); });
+    }, 250);
+    return () => { clearTimeout(t); ctrl.abort(); };
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <View style={{ gap: space[2] }}>
+      <Text style={[type.label, { textTransform: 'uppercase' }]}>Address</Text>
+      <View style={[field, { flexDirection: 'row', alignItems: 'center', gap: space[2] }]}>
+        <Icon name="search" size={20} color={color.inkMuted} />
+        <TextInput value={q} onChangeText={setQ} autoFocus placeholder="Search for an address" placeholderTextColor={color.inkMuted}
+          accessibilityLabel="Search for an address" autoCorrect={false}
+          style={[{ flex: 1, fontFamily: font.regular, fontSize: 16, color: color.ink, paddingVertical: 0 }, bareInput]} />
+        {q ? (
+          <Pressable onPress={() => setQ('')} accessibilityLabel="Clear" hitSlop={8}>
+            <Icon name="close" size={16} color={color.inkMuted} />
+          </Pressable>
+        ) : null}
+      </View>
+      {results.length ? (
+        <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: color.divider, overflow: 'hidden' }}>
+          {results.map((p) => (
+            <Pressable key={p.id} accessibilityRole="button" onPress={() => onPick(p)}
+              style={({ pressed }) => [{ flexDirection: 'row', gap: space[3], alignItems: 'center', padding: space[3], borderBottomWidth: 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
+              <Icon name="pin" size={20} color={color.inkMuted} />
+              <View style={{ flex: 1 }}>
+                <Text style={type.bodyStrong}>{p.name}</Text>
+                <Text style={type.caption}>{p.detail}</Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      ) : err ? <Text style={type.caption}>{err}</Text> : null}
+    </View>
   );
 }
 
