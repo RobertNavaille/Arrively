@@ -75,6 +75,14 @@ export default function TripSheet() {
   if (!sheet) return <View style={{ flex: 1, backgroundColor: color.surface }} />;
   return (
     <View style={{ flex: 1, backgroundColor: color.surface }} onLayout={(e) => onLayout(e.nativeEvent.layout.height)}>
+      {/* First inside the sheet, before the list: with the list first, Apple's sheet leaves it blank.
+          The totals float over the list's top (absolute); without totals, an empty marker takes their place. */}
+      {sheet.fixed ? (
+        <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2, backgroundColor: color.surface }}
+          onLayout={(e) => setFixedH(Math.round(e.nativeEvent.layout.height))}>
+          {sheet.fixed}
+        </View>
+      ) : <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 1 }} pointerEvents="none" />}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: sheet.fixed ? fixedH : 0, paddingBottom: sheet.bottomInset }}
         scrollIndicatorInsets={{ top: fixedH }} showsVerticalScrollIndicator={false}>
         {sheet.header}
@@ -83,12 +91,6 @@ export default function TripSheet() {
           {`TEMP H ${Math.round(sheet.height)} detents ${detentsKey} h ${dbg.h} event ${dbg.event} open ${open.current}`}
         </Text>
       </ScrollView>
-      {sheet.fixed ? (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2, backgroundColor: color.surface }}
-          onLayout={(e) => setFixedH(Math.round(e.nativeEvent.layout.height))}>
-          {sheet.fixed}
-        </View>
-      ) : null}
       {sheet.overlay}
     </View>
   );
