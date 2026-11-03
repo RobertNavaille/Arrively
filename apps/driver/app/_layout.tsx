@@ -66,6 +66,7 @@ export default function RootLayout() {
       <Stack.Screen name="stop/[id]" options={NATIVE_CHROME ? { ...nativeHeader, title: '' } : undefined} />
       <Stack.Screen name="skip/[id]" options={NATIVE_CHROME ? nativeSheet([0.75, 1]) : { presentation: 'modal' }} />
       <Stack.Screen name="new-stop" options={NATIVE_CHROME ? nativeSheet([1]) : { presentation: 'modal' }} />
+      <Stack.Screen name="week-options" options={NATIVE_CHROME ? nativeSheet([1]) : { presentation: 'modal' }} />
     </Stack>
   );
 

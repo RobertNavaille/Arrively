@@ -47,6 +47,8 @@ export interface Backend {
   /** Saves an order the driver accepted, then refreshes ETAs from `from`. */
   /** Saves the order, and the options with it when given. */
   applyPlan(routeId: string, order: string[], from: LatLng | null, options?: RouteOptions): Promise<void>;
+  /** Optimize week: put each day's stops on that day, in that order (moved customers get a text). Returns how many moved. */
+  applyWeek(days: { day: string; stops: string[] }[]): Promise<number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +202,11 @@ const supabaseBackend: Backend = {
   },
   planRoute(routeId, from, options) { return invoke<RoutePlan>('route-plan', { route_id: routeId, from, options }); },
   async applyPlan(routeId, order, from, options) { await invoke('route-plan', { route_id: routeId, apply: order, from, options }); },
+  async applyWeek(days) {
+    const moved = check(await supabase().rpc('apply_week', { p_days: days })) as number;
+    refreshEtas(true);
+    return moved ?? 0;
+  },
   async createDemoDay(at, phone) {
     check(await supabase().rpc('create_demo_day', { p_lat: at.lat, p_lng: at.lng, p_stop_count: 6, p_customer_phone: phone }));
   },
@@ -321,6 +328,29 @@ const offlineBackend: Backend = {
       s.mark_reason = reason; s.marked_outside = outside;
     }
     finishIfDone(r); emit();
+  },
+  async applyWeek(days) {
+    let moved = 0;
+    for (const d of days) {
+      let r = ensureDemo().find((x) => x.day === d.day);
+      if (!r) { r = { id: `r${seq++}`, day: d.day, status: 'planned', stops: [] }; ensureDemo().push(r); }
+      d.stops.forEach((id) => {
+        const [from, s] = findStop(id);
+        if (from.id === r!.id || (s.status !== 'scheduled' && s.status !== 'queued')) return;
+        from.stops = from.stops.filter((x) => x.id !== id);
+        s.route_id = r!.id; s.position = Math.max(0, ...r!.stops.map((x) => x.position)) + 1;
+        s.status = r!.status === 'active' ? 'queued' : 'scheduled';
+        r!.stops.push(s);
+        moved++;
+      });
+      // Same rule as reorder_route: upcoming stops take the slots upcoming stops hold.
+      const up = d.stops.map((id) => r!.stops.find((x) => x.id === id)).filter((x): x is Stop => !!x && (x.status === 'scheduled' || x.status === 'queued'));
+      const slots = up.map((x) => x.position).sort((a, b) => a - b);
+      up.forEach((x, i) => { x.position = slots[i]; });
+      r.stops.sort((a, b) => a.position - b.position);
+    }
+    emit();
+    return moved;
   },
   async addStop(day, address, at, details) {
     let r = ensureDemo().find((x) => x.day === day);

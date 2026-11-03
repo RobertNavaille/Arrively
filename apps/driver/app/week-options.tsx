@@ -1,0 +1,167 @@
+import { useRouter } from 'expo-router';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useBottomInset } from '../src/lib/viewport';
+import { DEFAULT_WEEK_OPTIONS, fmtClock, loadWeekOptions, requestWeekRun, saveWeekOptions, type WeekOptions } from '../src/lib/weekPlan';
+import type { TravelMode } from '../src/lib/routing';
+import { SelectChip, ToggleChip } from '../src/ui/Chips';
+import { Button } from '../src/ui/components';
+import { NATIVE_CHROME } from '../src/ui/nativeChrome';
+import { color, font, radius, space, type } from '../src/ui/theme';
+
+const DOW = [['S', 'Sunday'], ['M', 'Monday'], ['T', 'Tuesday'], ['W', 'Wednesday'], ['T', 'Thursday'], ['F', 'Friday'], ['S', 'Saturday']] as const;
+
+/**
+ * Optimize week's options (press and hold the optimize button). Kept on the
+ * phone and used every time; "Optimize week" saves them and runs it.
+ */
+export default function WeekOptionsScreen() {
+  const router = useRouter();
+  const bottomInset = useBottomInset();
+  const [o, setO] = useState<WeekOptions>(DEFAULT_WEEK_OPTIONS);
+  useEffect(() => { loadWeekOptions().then(setO); }, []);
+  const set = (patch: Partial<WeekOptions>) => setO((x) => ({ ...x, ...patch }));
+  const tooShort = o.end - o.start < 60;
+  const noDays = !o.days.some(Boolean);
+
+  async function run() {
+    if (tooShort || noDays) return;
+    await saveWeekOptions(o);
+    requestWeekRun();
+    router.back();
+  }
+
+  return (
+    <SafeAreaView edges={NATIVE_CHROME ? ['bottom'] : undefined} style={{ flex: 1, backgroundColor: color.surface }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[2], paddingTop: NATIVE_CHROME ? space[4] : space[2], paddingBottom: space[2] }}>
+        <View style={{ flex: 1, alignItems: 'flex-start' }}><Button variant="text" label="Cancel" onPress={() => router.back()} /></View>
+        <Text style={[type.heading, { fontSize: 17 }]} accessibilityRole="header">Optimize week</Text>
+        <View style={{ flex: 1 }} />
+      </View>
+      <ScrollView contentContainerStyle={{ padding: space[4], gap: space[6], paddingBottom: space[6] }}>
+        <Section title="Work hours" note={tooShort ? 'The day needs to be at least an hour long.' : "Each day's stops, driving and time on site fit inside these hours."} warn={tooShort}>
+          <Group>
+            <Row label="Day starts"><TimeStepper value={o.start} onChange={(start) => set({ start })} /></Row>
+            <Row label="Day ends" last><TimeStepper value={o.end} onChange={(end) => set({ end })} /></Row>
+          </Group>
+        </Section>
+
+        <Section title="Work days" note={noDays ? 'Choose at least one day.' : undefined} warn={noDays}>
+          <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            {DOW.map(([d, name], i) => {
+              const on = o.days[i];
+              return (
+                <Pressable key={i} onPress={() => set({ days: o.days.map((x, j) => (j === i ? !x : x)) })} accessibilityRole="checkbox"
+                  accessibilityState={{ checked: on }} accessibilityLabel={name}
+                  style={({ pressed }) => [{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1,
+                    borderColor: on ? color.action : color.divider, backgroundColor: on ? color.action : 'transparent' }, pressed && { opacity: 0.8 }]}>
+                  <Text style={{ fontFamily: font.semibold, fontSize: 14, color: on ? color.onAction : color.inkMuted }}>{d}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Section>
+
+        <Section title="Which week">
+          <Segmented value={o.week} onChange={(week) => set({ week })} options={[{ value: 0, label: 'This week' }, { value: 1, label: 'Next week' }]} />
+        </Section>
+
+        <Section title="Start and end" note="Each day starts from where you are.">
+          <Segmented value={o.endAt} onChange={(endAt) => set({ endAt })} options={[{ value: 'start', label: 'End back at start' }, { value: 'last', label: 'End at last stop' }]} />
+        </Section>
+
+        <Section title="Each day">
+          <Group>
+            <Row label="Most stops a day">
+              <Stepper label={o.maxStops ? `Up to ${o.maxStops}` : 'No limit'}
+                onLess={() => set({ maxStops: o.maxStops <= 1 ? 0 : o.maxStops - 1 })}
+                onMore={() => set({ maxStops: o.maxStops ? Math.min(30, o.maxStops + 1) : 4 })} />
+            </Row>
+            <Row label="Lunch break" sub="30 minutes around midday" last>
+              <Switch value={o.lunch} onValueChange={(lunch) => set({ lunch })} accessibilityLabel="Lunch break"
+                trackColor={{ false: color.controlBorder, true: color.action }} thumbColor={color.surface} />
+            </Row>
+          </Group>
+        </Section>
+
+        <Section title="Spread the stops" note={o.spread === 'even' ? 'About the same amount of work each day.' : 'Fill days up, so some days are left free.'}>
+          <Segmented value={o.spread} onChange={(spread) => set({ spread })} options={[{ value: 'even', label: 'Even days' }, { value: 'fewer', label: 'Fewer days' }]} />
+        </Section>
+
+        <Section title="Roads">
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
+            <ToggleChip label="Avoid highways" selected={o.avoidHighways} disabled={o.mode !== 'drive'} onPress={() => set({ avoidHighways: !o.avoidHighways })} />
+            <ToggleChip label="Avoid tolls" selected={o.avoidTolls} disabled={o.mode !== 'drive'} onPress={() => set({ avoidTolls: !o.avoidTolls })} />
+            <SelectChip<TravelMode> label="Vehicle type" value={o.mode}
+              options={[{ value: 'drive', label: 'Drive' }, { value: 'walk', label: 'Walk' }, { value: 'bike', label: 'Bike' }]}
+              onChange={(mode) => set({ mode })} />
+          </View>
+        </Section>
+      </ScrollView>
+      <View style={{ padding: space[4], paddingBottom: space[4] + (NATIVE_CHROME ? 0 : bottomInset), borderTopWidth: 1, borderTopColor: color.divider }}>
+        <Button icon="route" label="Optimize week" onPress={run} disabled={tooShort || noDays} />
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function Section({ title, note, warn, children }: { title: string; note?: string; warn?: boolean; children: ReactNode }) {
+  return (
+    <View style={{ gap: space[2] }}>
+      <Text style={[type.label, { textTransform: 'uppercase' }]} accessibilityRole="header">{title}</Text>
+      {children}
+      {note ? <Text style={[type.caption, warn && { color: color.danger }]}>{note}</Text> : null}
+    </View>
+  );
+}
+function Group({ children }: { children: ReactNode }) {
+  return <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: color.divider, overflow: 'hidden' }}>{children}</View>;
+}
+function Row({ label, sub, last, children }: { label: string; sub?: string; last?: boolean; children: ReactNode }) {
+  return (
+    <View style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], paddingVertical: space[2],
+      borderBottomWidth: last ? 0 : 1, borderBottomColor: color.divider }}>
+      <View style={{ flex: 1 }}>
+        <Text style={[type.body, { fontSize: 16, lineHeight: 22 }]}>{label}</Text>
+        {sub ? <Text style={type.caption}>{sub}</Text> : null}
+      </View>
+      {children}
+    </View>
+  );
+}
+/** − 8:00 AM + in half-hour steps. */
+function TimeStepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return <Stepper label={fmtClock(value)} onLess={() => onChange(Math.max(0, value - 30))} onMore={() => onChange(Math.min(24 * 60 - 30, value + 30))} />;
+}
+function Stepper({ label, onLess, onMore }: { label: string; onLess: () => void; onMore: () => void }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: radius.sm, backgroundColor: color.surfaceMuted }}>
+      <Pressable onPress={onLess} accessibilityRole="button" accessibilityLabel={`Less than ${label}`} hitSlop={4}
+        style={({ pressed }) => [{ width: 40, height: 36, alignItems: 'center', justifyContent: 'center' }, pressed && { opacity: 0.6 }]}>
+        <Text style={{ fontFamily: font.semibold, fontSize: 20, color: color.ink }}>−</Text>
+      </Pressable>
+      <Text style={{ minWidth: 80, textAlign: 'center', fontFamily: font.semibold, fontSize: 15, color: color.ink }} accessibilityLiveRegion="polite">{label}</Text>
+      <Pressable onPress={onMore} accessibilityRole="button" accessibilityLabel={`More than ${label}`} hitSlop={4}
+        style={({ pressed }) => [{ width: 40, height: 36, alignItems: 'center', justifyContent: 'center' }, pressed && { opacity: 0.6 }]}>
+        <Text style={{ fontFamily: font.semibold, fontSize: 20, color: color.ink }}>+</Text>
+      </Pressable>
+    </View>
+  );
+}
+function Segmented<T extends string | number>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[] }) {
+  return (
+    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', padding: 3, borderRadius: 10, backgroundColor: color.surfaceMuted }}>
+      {options.map((opt) => {
+        const on = opt.value === value;
+        return (
+          <Pressable key={String(opt.value)} onPress={() => onChange(opt.value)} accessibilityRole="radio" accessibilityState={{ checked: on }}
+            style={[{ flex: 1, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+              on && { backgroundColor: color.surface, shadowColor: '#1A1A1A', shadowOpacity: 0.12, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }]}>
+            <Text style={{ fontFamily: font.semibold, fontSize: 14, color: color.ink }}>{opt.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
