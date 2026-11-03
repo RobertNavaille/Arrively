@@ -55,8 +55,8 @@ export default function RootLayout() {
         // Apple's own corners and margins (inset at the lower height on current iOS, edge to edge when fully open).
         presentation: 'formSheet', sheetAllowedDetents: [0.4, 0.9], sheetInitialDetentIndex: 0, sheetGrabberVisible: true,
         sheetLargestUndimmedDetentIndex: 'last', gestureEnabled: false,
-        // Our list scrolls on its own; Apple doesn't take it over to resize the sheet.
-        sheetExpandsWhenScrolledToEdge: false,
+        // Dragging the list up at the resting height opens the sheet first (Apple's behaviour).
+        sheetExpandsWhenScrolledToEdge: true,
       } : undefined} />
       {/* iPhone: Apple's navigation bar and sheets (see nativeChrome.ts); elsewhere the screens draw their own. */}
       <Stack.Screen name="settings" options={NATIVE_CHROME ? { ...nativeHeader, title: 'Settings' } : undefined} />

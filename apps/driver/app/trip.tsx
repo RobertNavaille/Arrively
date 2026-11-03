@@ -282,6 +282,12 @@ export default function Trip() {
 
   // Fixed over the bottom: the bottom bar when pulled up, and Optimize / Confirm route.
   // Over the screen here; inside the sheet on iPhone (TripSheetHost.ios.tsx).
+  // iPhone: the trip totals stay put at the top of the sheet; the stops scroll under them.
+  const sheetFixed = NATIVE_CHROME && ((phase === 'next' && current) || (phase === 'review' && review)) ? (
+    <View style={{ paddingHorizontal: space[4], paddingTop: space[3] }}>
+      <TripTotals travelMin={tripMin} meters={tripMeters} stops={ahead.length} />
+    </View>
+  ) : null;
   const tripOverlay = (
     <>
         {/* On the way, with the sheet pulled up: Get directions, and More (arrived at location, cancel route), anchored to the bottom. */}
@@ -374,7 +380,7 @@ export default function Trip() {
       </View>
 
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
-      <TripSheetHost height={height} overlay={tripOverlay} top={sheetTop} rest={peek} onOpenChange={setSheetOpen} resetKey={choosing ? `${phase}:mark` : phase} startOpen={phase === 'review' || choosing} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
+      <TripSheetHost height={height} overlay={tripOverlay} fixed={sheetFixed} top={sheetTop} rest={peek} onOpenChange={setSheetOpen} resetKey={choosing ? `${phase}:mark` : phase} startOpen={phase === 'review' || choosing} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
         // Pulled up (arrived, on the way), the card changes for the details: its resting height stays measured from before.
         <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH && !(sheetOpen && (phase === 'arrived' || phase === 'onroute'))) setCardH(h); }}
@@ -384,7 +390,7 @@ export default function Trip() {
 
           {phase === 'next' && current ? (
             <>
-              <TripTotals travelMin={tripMin} meters={tripMeters} stops={ahead.length} />
+              {NATIVE_CHROME ? null : <TripTotals travelMin={tripMin} meters={tripMeters} stops={ahead.length} />}
               {/* The next stop sits on the trip's line: its circle and line run on into the stops after it. */}
               <View style={{ flexDirection: 'row', gap: space[3] }}>
                 <View style={{ width: 20, alignItems: 'center' }} importantForAccessibility="no-hide-descendants">
@@ -409,7 +415,7 @@ export default function Trip() {
           {/* Optimize route: the same totals as the trip, following the order as stops are dragged. */}
           {phase === 'review' && review ? (
             <>
-              <TripTotals travelMin={tripMin} meters={tripMeters} stops={ahead.length} />
+              {NATIVE_CHROME ? null : <TripTotals travelMin={tripMin} meters={tripMeters} stops={ahead.length} />}
               {/* How to plan it: each change re-plans the route. Walking and biking don't take the avoid options. */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space[4] }}
                 contentContainerStyle={{ gap: space[2], paddingHorizontal: space[4] }}>

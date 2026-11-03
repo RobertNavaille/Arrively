@@ -14,6 +14,8 @@ export interface SheetContent {
   header: ReactNode; children: ReactNode;
   /** Fixed over the bottom of the sheet: the bottom bar, Optimize / Confirm route. */
   overlay: ReactNode;
+  /** Stays put at the top, above what scrolls (the trip totals). */
+  fixed: ReactNode;
   onOpenChange?: (open: boolean) => void;
 }
 

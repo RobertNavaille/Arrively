@@ -9,10 +9,12 @@ export interface TripSheetHostProps {
   header: ReactNode; children: ReactNode;
   /** Fixed over the bottom of the screen (here) or of the sheet (iPhone): bottom bar, Optimize. */
   overlay?: ReactNode;
+  /** iPhone: stays put at the top of the sheet above what scrolls (the trip totals). Drawn into the header elsewhere. */
+  fixed?: ReactNode;
 }
 
 /** Web and Android: the drawn sheet, with the bars over the bottom of the screen. iPhone: TripSheetHost.ios.tsx. */
-export function TripSheetHost({ overlay, height: _height, ...sheet }: TripSheetHostProps) {
+export function TripSheetHost({ overlay, fixed: _fixed, height: _height, ...sheet }: TripSheetHostProps) {
   return (
     <>
       <BottomSheet {...sheet} />

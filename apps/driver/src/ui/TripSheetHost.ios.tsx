@@ -9,11 +9,11 @@ export type { TripSheetHostProps };
  * iPhone (trial): the trip sheet is Apple's own sheet. This hands the content
  * to app/trip-sheet.tsx and presents it over the map once; it draws nothing here.
  */
-export function TripSheetHost({ top, rest, resetKey, startOpen = false, bottomInset = 0, height, onOpenChange, header, children, overlay }: TripSheetHostProps) {
+export function TripSheetHost({ top, rest, resetKey, startOpen = false, bottomInset = 0, height, onOpenChange, header, children, overlay, fixed }: TripSheetHostProps) {
   const router = useRouter();
   // The latest content on every render (the sheet screen redraws from it).
   useEffect(() => {
-    publishSheet({ height, top, rest, resetKey, startOpen, bottomInset, header, children, overlay: overlay ?? null, onOpenChange });
+    publishSheet({ height, top, rest, resetKey, startOpen, bottomInset, header, children, overlay: overlay ?? null, fixed: fixed ?? null, onOpenChange });
   });
   const presented = useRef(false);
   useEffect(() => {
