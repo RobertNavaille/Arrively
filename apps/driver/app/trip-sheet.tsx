@@ -62,9 +62,12 @@ export default function TripSheet() {
   if (!sheet) return <View style={{ flex: 1, backgroundColor: color.surface }} />;
   return (
     <View style={{ flex: 1, backgroundColor: color.surface }}>
-      {sheet.header}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: sheet.bottomInset }} showsVerticalScrollIndicator={false}>
-        {sheet.children}
+      {/* One scroll view for the whole sheet, with the step's card pinned at its top while the list scrolls:
+          Apple's sheet lays out its scroll view from the top, so a card above it would sit underneath. */}
+      <ScrollView style={{ flex: 1 }} stickyHeaderIndices={[0]} contentContainerStyle={{ paddingBottom: sheet.bottomInset }}
+        showsVerticalScrollIndicator={false}>
+        <View style={{ backgroundColor: color.surface }}>{sheet.header}</View>
+        <View>{sheet.children}</View>
       </ScrollView>
       {sheet.overlay}
     </View>
