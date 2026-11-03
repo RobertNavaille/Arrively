@@ -1,6 +1,6 @@
 import { useNavigation } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useSheetContent } from '../src/lib/sheetPortal';
 import { color } from '../src/ui/theme';
 
@@ -14,6 +14,8 @@ export default function TripSheet() {
   // Which height the sheet is at (0 resting, last fully open): the content is sized to it,
   // since inside Apple's sheet "fill the space" gets no height of its own.
   const [at, setAt] = useState(0);
+  // TEMPORARY (trial): what Apple's sheet actually gives us, shown at the top of the sheet.
+  const [dbg, setDbg] = useState({ event: -1, outer: '', inner: '' });
   const onOpenChange = useRef(sheet?.onOpenChange);
   onOpenChange.current = sheet?.onOpenChange;
 
@@ -45,6 +47,7 @@ export default function TripSheet() {
     const off = (navigation as unknown as { addListener: (e: string, cb: (ev: { data?: { index?: number; isStable?: boolean } }) => void) => () => void })
       .addListener('sheetDetentChange', (ev) => {
         if (ev.data?.isStable === false) return;
+        setDbg((d) => ({ ...d, event: ev.data?.index ?? -2 }));
         const top = (ev.data?.index ?? 0) >= detentsRef.current.length - 1 && detentsRef.current.length > 1;
         setAt(top ? 1 : 0);
         setOpen(top);
@@ -69,7 +72,11 @@ export default function TripSheet() {
   // The height showing now: resting or fully open.
   const contentH = Math.round(sheet.height * (at === 1 || detents.length === 1 ? detents[detents.length - 1] : detents[0]));
   return (
-    <View style={{ height: contentH, backgroundColor: color.surface }}>
+    <View style={{ flex: 1 }} onLayout={(e) => { const l = e.nativeEvent.layout; setDbg((d) => ({ ...d, outer: `${Math.round(l.y)}/${Math.round(l.height)}` })); }}>
+    <Text style={{ fontSize: 11, color: '#c00', paddingHorizontal: 16 }}>
+      {`H ${Math.round(sheet.height)} top ${Math.round(sheet.top)} rest ${Math.round(sheet.rest)} detents ${detents.join(',')} at ${at} event ${dbg.event} outer ${dbg.outer} inner ${dbg.inner}`}
+    </Text>
+    <View style={{ height: contentH, backgroundColor: color.surface }} onLayout={(e) => { const l = e.nativeEvent.layout; setDbg((d) => ({ ...d, inner: `${Math.round(l.y)}/${Math.round(l.height)}` })); }}>
       {/* One scroll view for the whole sheet, with the step's card pinned at its top while the list scrolls. */}
       <ScrollView style={{ height: contentH }} stickyHeaderIndices={[0]} contentContainerStyle={{ paddingBottom: sheet.bottomInset }}
         showsVerticalScrollIndicator={false}>
@@ -77,6 +84,7 @@ export default function TripSheet() {
         <View>{sheet.children}</View>
       </ScrollView>
       {sheet.overlay}
+    </View>
     </View>
   );
 }
