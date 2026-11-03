@@ -24,7 +24,14 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./node_modules/@expo-google-fonts/poppins/700Bold/Poppins_700Bold.ttf"
+          ]
+        }
+      ],
       [
         "expo-location",
         {

@@ -12,7 +12,8 @@ export type { NativeButtonProps, NativeIconButtonProps };
 
 // iPhone: Apple's own SwiftUI buttons (press highlight, disabled look,
 // VoiceOver), in Liquid Glass where the iPhone has it, in Arrively's colors,
-// Poppins, and the same sizes as the web app's buttons.
+// Poppins Bold (bundled into the app, see app.json, so SwiftUI can find it by its
+// real name), and the same sizes as the web app's buttons.
 const GLASS = isLiquidGlassAvailable();
 type SwiftStyle = 'borderedProminent' | 'bordered' | 'borderless' | 'glass' | 'glassProminent';
 const STYLE: Record<NativeButtonProps['variant'], { style: SwiftStyle; tint: string }> = {
@@ -59,7 +60,7 @@ export function NativeButton({ label, onPress, variant, icon, size, iconOnly, di
   const content = loading ? <ProgressView /> : (
     <HStack spacing={8}>
       {sym ? <Image systemName={sym} size={FONT[size] + 1} /> : null}
-      {iconOnly ? null : <Text modifiers={[font({ family: 'Poppins_700Bold', size: FONT[size] })]}>{label}</Text>}
+      {iconOnly ? null : <Text modifiers={[font({ family: 'Poppins-Bold', size: FONT[size] })]}>{label}</Text>}
     </HStack>
   );
   const button = (
