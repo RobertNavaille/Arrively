@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { color, font, radius, space, type } from './theme';
 import { Icon, type IconName } from './Icon';
+import { NativeButton, NativeIconButton } from './NativeButton';
+import { NATIVE_CHROME } from './nativeChrome';
 
 /** neutral: dark gray with a white label, compact (44px) by default, for a supporting action (Optimize route). */
 type ButtonVariant = 'primary' | 'secondary' | 'neutral' | 'text' | 'danger';
@@ -13,6 +15,8 @@ export function Button({ label, onPress, variant = 'primary', icon, size = varia
   /** Round button showing just the icon; the label is still read out. */
   iconOnly?: boolean; disabled?: boolean; loading?: boolean; style?: StyleProp<ViewStyle>;
 }) {
+  // iPhone: Apple's own buttons (NativeButton.ios.tsx).
+  if (NATIVE_CHROME) return <NativeButton label={label} onPress={onPress} variant={variant} icon={icon} size={size} iconOnly={iconOnly} disabled={disabled} loading={loading} style={style} />;
   const fg = variant === 'primary' ? color.onAction : variant === 'secondary' ? color.action
     : variant === 'neutral' ? color.onAction : variant === 'danger' ? color.danger : color.actionInk;
   return (
@@ -49,6 +53,7 @@ export function IconButton({ icon, label, onPress, variant = 'tint', size = 'md'
   /** md 56px (tint and solid; also call and text beside the phone number), compact 40px (inline where 56px would crowd), xl 72px (call and text, arrived). */
   size?: 'md' | 'compact' | 'xl';
 }) {
+  if (NATIVE_CHROME) return <NativeIconButton icon={icon} label={label} onPress={onPress} variant={variant} size={size} />;
   const fg = variant === 'tint' ? color.action : variant === 'solid' ? color.onAction : color.ink;
   return (
     <Pressable
