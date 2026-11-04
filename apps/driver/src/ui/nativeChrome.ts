@@ -18,6 +18,12 @@ export const nativeHeader = {
   headerBackButtonDisplayMode: 'minimal' as const,
 };
 
+/**
+ * Apple's page sheet: the full-height card that slides up over the screen,
+ * which shrinks back behind it. Swipe down (or Cancel) to close.
+ */
+export const nativePageSheet = { presentation: 'modal' as const };
+
 /** An iPhone sheet: grabber, rounded corners, swipe down to close. */
 export const nativeSheet = (detents: number[]) => ({
   presentation: 'formSheet' as const,

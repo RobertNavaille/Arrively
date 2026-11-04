@@ -47,51 +47,28 @@ export default function MyDay() {
   const [index, setIndex] = useState(range.todayIndex);
   const indexRef = useRef(index);
   indexRef.current = index;
-  // All the days in one vertical list, each under its own heading. Scrolling past
-  // a day's last stop selects the next day (header, week strip and map follow).
-  const listRef = useRef<ScrollView>(null);
-  // Where each day starts in the list. Headings and rows have fixed heights, so
-  // the positions are worked out rather than measured (the web doesn't report
-  // the layout of rows far down the list).
-  const [listH, setListH] = useState(0);
-  const offsets = useMemo(() => {
-    const out: number[] = [];
-    let y = 0;
-    for (const d of days) {
-      out.push(y);
-      const n = shownRouteFor(dayKey(d))?.stops.length ?? 0;
-      y += HEADING_H + (n ? n * ROW_H : EMPTY_H);
-    }
-    return out;
-  }, [days, shownRouteFor]);
-  const offsetsRef = useRef(offsets);
-  offsetsRef.current = offsets;
-  const dayY = (i: number) => offsetsRef.current[i] ?? null;
-  // The list opens on today (asked again until the list has laid out, for the web).
-  const placed = useRef(false);
-  const pendingY = useRef<number | null>(null);
-  function place(y: number) {
-    pendingY.current = y;
-    [0, 50, 150, 400, 800].forEach((ms) => setTimeout(() => {
-      if (pendingY.current != null) listRef.current?.scrollTo({ y: pendingY.current, animated: false });
-    }, ms));
-  }
-  // Once the day's stops have loaded: today at the top.
+  // One page per day; swipe sideways for the next or previous day. Each page is
+  // exactly as tall as the pager, so its stops scroll inside it (browsers don't
+  // stretch pages).
+  const [pagerH, setPagerH] = useState(0);
+  const listRef = useRef<FlatList<Date>>(null);
+  // Only the driver's own swipe or tap changes the day. Scrolling the browser
+  // does by itself (Safari restores the pager's old position after a reload,
+  // layout can nudge it) is undone, so the app opens on today.
+  const touched = useRef(false);
   useEffect(() => {
-    if (placed.current || loading) return;
-    placed.current = true;
-    place(offsets[range.todayIndex] ?? 0);
-  }, [loading, offsets, range.todayIndex]); // eslint-disable-line react-hooks/exhaustive-deps
-  function onListScroll(y: number) {
-    if (pendingY.current != null) {
-      if (Math.abs(y - pendingY.current) > 2) return;
-      pendingY.current = null;
-    }
-    let at = 0;
-    const offs = offsetsRef.current;
-    for (let i = 0; i < offs.length; i++) if (offs[i] <= y + 1) at = i;
-    if (at !== indexRef.current) setIndex(at);
-  }
+    const t = setTimeout(() => listRef.current?.scrollToOffset({ offset: width * indexRef.current, animated: false }), 0);
+    return () => clearTimeout(t);
+  }, [width]);
+  const daysRef = useRef(days);
+  daysRef.current = days;
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const node = (listRef.current as unknown as { getScrollableNode?: () => HTMLElement | null })?.getScrollableNode?.();
+    if (!node) return;
+    return sideSwipe(node, () => { touched.current = true; },
+      (dir) => goToRef.current(Math.min(Math.max(indexRef.current + dir, 0), daysRef.current.length - 1)));
+  }, []);
 
   // The week strip pages too: swiping it moves to the same weekday in the next
   // or previous week, and the day pages follow.
@@ -146,24 +123,25 @@ export default function MyDay() {
       setToday(now);
       setIndex(at);
       refresh();
-      placed.current = false;
-      const y = dayY(at);
-      if (y != null) { placed.current = true; place(y); }
+      touched.current = false;
+      setTimeout(() => listRef.current?.scrollToOffset({ offset: width * at, animated: false }), 0);
     };
     const sub = AppState.addEventListener('change', (st) => { if (st === 'active') check(); });
     const timer = setInterval(check, 60_000);
     return () => { sub.remove(); clearInterval(timer); };
-  }, [today, refresh]);
+  }, [today, width, refresh]);
   const day = days[index];
   const dayK = dayKey(day);
   const isToday = dayK === dayKey(today);
   const route = shownRouteFor(dayK);
   const [menu, setMenu] = useState(false);
-  // Picking a day in the strip scrolls the list to it.
+  // Picking a day in the strip (or a week swipe) pages to it.
   function goTo(i: number) {
-    const y = dayY(i);
-    if (y != null) listRef.current?.scrollTo({ y, animated: Math.abs(i - indexRef.current) <= 7 });
+    touched.current = true;
+    // Jumps of more than a day skip the animation: the pages in between aren't drawn.
+    const near = Math.abs(i - indexRef.current) <= 1;
     setIndex(i);
+    listRef.current?.scrollToIndex({ index: i, animated: near });
   }
 
   async function demoDay() {
@@ -213,12 +191,6 @@ export default function MyDay() {
   const saved = weekPlan ? { min: weekPlan.before.minutes - weekPlan.after.minutes, mi: (weekPlan.before.meters - weekPlan.after.meters) / 1609.34 } : null;
 
   const bottomInset = useBottomInset();
-  // The selected day's stops on the map; the next one stands out once its trip is under way.
-  const current = currentStop(route);
-  const mapStops: MapStop[] = (route?.stops ?? []).map((st, i) => ({
-    id: st.id, lat: st.lat, lng: st.lng, n: i + 1,
-    state: isDone(st) ? 'done' : route?.status === 'active' && st.id === current?.id ? 'next' : 'upcoming',
-  }));
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: color.surface }}>
@@ -282,47 +254,53 @@ export default function MyDay() {
         />
       </View>
 
-      {/* The selected day's map stays put above the list. */}
-      <View style={{ paddingHorizontal: space[4] }}>
-        <View style={{ borderRadius: radius.md, overflow: 'hidden' }}>
-          <RouteMap height={190} stops={mapStops} driver={isToday ? pos : null} />
-        </View>
-      </View>
-      {error ? <Text style={[type.caption, { color: color.danger, paddingHorizontal: space[4], paddingTop: space[2] }]}>{error}</Text> : null}
-      {weekPlan && saved ? (
-        <View accessibilityRole="summary" style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], marginHorizontal: space[4], marginTop: space[3], padding: space[3], borderRadius: radius.md, backgroundColor: color.brandTint }}>
-          <Icon name="route" size={24} color={color.onTint} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: font.bold, fontSize: 15, lineHeight: 20, color: color.onTint }}>
-              {saved.min >= 5 ? `Saves ${fmtHours(saved.min)}${saved.mi >= 1 ? ` and ${Math.round(saved.mi)} miles` : ''}` : 'Your week is already well grouped'}
-            </Text>
-            <Text style={{ fontFamily: font.regular, fontSize: 13, lineHeight: 18, color: color.onTint }}>
-              {moved ? `${moved} ${moved === 1 ? 'stop moves' : 'stops move'} to a new day · their customers get a text` : 'No stops need to change day'}
-            </Text>
-          </View>
-        </View>
-      ) : null}
+      {error ? <Text style={[type.caption, { color: color.danger, paddingHorizontal: space[4], paddingBottom: space[2] }]}>{error}</Text> : null}
 
-      {/* Every day in one list, each under a heading that stays at the top while its stops scroll. */}
-      <ScrollView ref={listRef} style={{ flex: 1 }} onLayout={(e) => setListH(Math.round(e.nativeEvent.layout.height))}
-        stickyHeaderIndices={days.map((_, i) => i * 2)} scrollEventThrottle={16}
-        onScroll={(e) => onListScroll(e.nativeEvent.contentOffset.y)}
-        // Room after the last day so it can reach the top, clear of the toolbar.
-        contentContainerStyle={{ paddingBottom: Math.max(TOOLBAR_H + bottomInset, listH - 160) }}>
-        {days.flatMap((d, i) => {
-          const k = dayKey(d);
-          const r = shownRouteFor(k);
-          const pd = planDay(k);
-          return [
-            <DayHeading key={`h${k}`} day={d} route={r} isToday={k === dayKey(today)} past={k < dayKey(today)}
-              extra={pd && pd.stops.length ? `${fmtHours(pd.minutes)}${pd.over ? ' · over hours' : ''}` : undefined}
-              emptyText={pd ? 'Free day' : undefined} />,
-            <DayStops key={`s${k}`} route={r} loading={loading} onOpenStop={(st) => router.push(`/stop/${st.id}`)}
-              emptyText={pd ? 'Free day' : undefined}
-              review={weekPlan && pd ? { movedFrom: weekPlan.movedFrom, pins, onPin: (st) => togglePin(st, k) } : undefined} />,
-          ];
-        })}
-      </ScrollView>
+      {/* Day pages: map, the day's count and its stops scroll together. */}
+      <View style={{ flex: 1 }}>
+        <FlatList
+          ref={listRef}
+          data={days}
+          horizontal
+          pagingEnabled
+          initialScrollIndex={range.todayIndex}
+          // Every day is a real page, so the browser's snapping only ever lands on
+          // a day. Only the day on screen and its neighbours draw their map and list.
+          initialNumToRender={days.length}
+          windowSize={days.length * 2}
+          extraData={{ index, shownRouteFor, pins, loading }}
+          onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h && h !== pagerH) setPagerH(h); }}
+          getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(d) => dayKey(d)}
+          onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
+          onScroll={Platform.OS === 'web' ? (e) => {
+            const i = Math.round(e.nativeEvent.contentOffset.x / width);
+            if (!touched.current) {
+              // Not the driver: put the pager back on the selected day.
+              if (i !== index) listRef.current?.scrollToOffset({ offset: width * index, animated: false });
+              return;
+            }
+            if (i !== index) setIndex(i);
+          } : undefined}
+          scrollEventThrottle={64}
+          renderItem={({ item, index: i }) => {
+            if (Math.abs(i - index) > 1) return <View style={{ width, height: pagerH || undefined }} />;
+            const k = dayKey(item);
+            const pd = planDay(k);
+            return (
+              <View style={{ width, height: pagerH || undefined }}>
+                <DayPanel route={shownRouteFor(k)} isToday={k === dayKey(today)} driver={k === dayKey(today) ? pos : null}
+                  loading={loading} onOpenStop={(st) => router.push(`/stop/${st.id}`)} bottomPad={TOOLBAR_H + bottomInset}
+                  summary={weekPlan && saved ? <WeekSummary saved={saved} moved={moved} /> : null}
+                  planMeta={pd && pd.stops.length ? `${fmtHours(pd.minutes)}${pd.over ? ' · over hours' : ''}` : undefined}
+                  emptyText={pd ? 'Free day' : undefined}
+                  review={weekPlan && pd ? { movedFrom: weekPlan.movedFrom, pins, onPin: (st) => togglePin(st, k) } : undefined} />
+              </View>
+            );
+          }}
+        />
+      </View>
 
       {/* Toolbar, floating over the bottom of the list: today's trip, and adding a stop. */}
       <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: space[4] + bottomInset }}>
@@ -384,62 +362,82 @@ function sideSwipe(node: HTMLElement, onInput: () => void, step: (dir: 1 | -1) =
 }
 
 const TOOLBAR_H = 88;
-// Fixed heights, so each day's place in the list can be worked out.
-const HEADING_H = 48;
+// A stop row has a fixed height, so the pin button lines up.
 const ROW_H = 68;
-const EMPTY_H = 42;
 
-/** A day's heading in the list: the date, and how many stops (or how many are left). */
-function DayHeading({ day, route, isToday, past, extra }: {
-  day: Date; route: Route | undefined; isToday: boolean; past: boolean;
-  /** While reviewing an optimized week: the day's working time. */
-  extra?: string; emptyText?: string;
-}) {
-  const stops = route?.stops ?? [];
-  const left = stops.filter((s) => !isDone(s)).length;
-  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-  const count = !stops.length ? ''
-    : route?.status === 'completed' || !left ? plural(stops.length, 'stop', 'stops')
-    : left < stops.length ? plural(left, 'stop left', 'stops left') : plural(stops.length, 'stop', 'stops');
-  const label = day.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + (isToday ? ' · Today' : '');
-  return (
-    <View accessibilityRole="header"
-      style={{ height: HEADING_H, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space[3], paddingHorizontal: space[4], paddingTop: 20, backgroundColor: color.surface }}>
-      {/* A quiet label over each day's stops; today's reads a little stronger. */}
-      <Text style={{ fontFamily: font.semibold, fontSize: 13, lineHeight: 18, color: isToday && !past ? color.ink : color.inkMuted }}
-        numberOfLines={1} maxFontSizeMultiplier={1}>{label}</Text>
-      {count ? <Text style={{ fontFamily: font.regular, fontSize: 13, lineHeight: 18, color: color.inkMuted }} maxFontSizeMultiplier={1}>{count}{extra ? ` · ${extra}` : ''}</Text> : null}
-    </View>
-  );
-}
-
-/** A day's stops under its heading (or a line saying there are none). */
 interface WeekReview { movedFrom: Record<string, string>; pins: Map<string, string>; onPin: (s: Stop) => void }
 
-function DayStops({ route, loading, onOpenStop, emptyText, review }: {
-  route: Route | undefined; loading: boolean; onOpenStop: (s: Stop) => void; emptyText?: string; review?: WeekReview;
+/** A day's page: its map, how many stops, then the stops. */
+function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad, summary, planMeta, emptyText, review }: {
+  route: Route | undefined; isToday: boolean; driver: LatLng | null; onOpenStop: (s: Stop) => void; loading: boolean;
+  bottomPad: number;
+  /** While reviewing an optimized week: the week's summary, the day's working time, and pins. */
+  summary: React.ReactNode; planMeta?: string; emptyText?: string; review?: WeekReview;
 }) {
   const stops = route?.stops ?? [];
   const current = currentStop(route);
-  if (!stops.length) {
-    return (
-      <View style={{ height: EMPTY_H }}>
-        <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted, paddingHorizontal: space[4] }]} maxFontSizeMultiplier={1}>
-          {loading ? 'Loading…' : emptyText ?? 'No stops this day'}
+  const remaining = stops.filter((s) => !isDone(s));
+  const done = stops.length - remaining.length;
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const count = route?.status === 'completed' ? plural(stops.length, 'stop', 'stops')
+    : done ? plural(remaining.length, 'stop left', 'stops left') : plural(stops.length, 'stop', 'stops');
+  const countMeta = planMeta ?? (route?.status === 'completed' ? `${stops.filter((s) => s.status === 'completed').length} completed`
+    : done ? `${done} done` : '');
+  const mapStops: MapStop[] = stops.map((s, i) => ({
+    id: s.id, lat: s.lat, lng: s.lng, n: i + 1,
+    // The next stop stands out only once the trip is under way.
+    state: isDone(s) ? 'done' : route?.status === 'active' && s.id === current?.id ? 'next' : 'upcoming',
+  }));
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: bottomPad }}>
+      <View style={{ paddingHorizontal: space[4] }}>
+        <View style={{ borderRadius: radius.md, overflow: 'hidden' }}>
+          <RouteMap height={190} stops={mapStops} driver={isToday ? driver : null} />
+        </View>
+      </View>
+      {summary}
+      {!stops.length ? (
+        <View style={{ alignItems: 'center', paddingVertical: space[8], paddingHorizontal: space[6], gap: space[2] }}>
+          <Icon name="route" size={28} color={color.inkMuted} />
+          <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted, textAlign: 'center' }]}>
+            {loading ? 'Loading…' : emptyText ?? 'No stops this day. Tap + to add one.'}
+          </Text>
+        </View>
+      ) : (
+        <>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space[3], paddingHorizontal: space[4], paddingTop: space[6], paddingBottom: space[4] }}>
+            <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]}>{count}</Text>
+            {countMeta ? <Text style={[type.body, { color: color.inkMuted, flexShrink: 1, textAlign: 'right' }]}>{countMeta}</Text> : null}
+          </View>
+          <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
+            {stops.map((s) => (
+              <StopListRow key={s.id} stop={s} isCurrent={route?.status === 'active' && s.id === current?.id} onPress={() => onOpenStop(s)} review={review} />
+            ))}
+          </View>
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
+/** Reviewing an optimized week: what it saves and how many stops change day. */
+function WeekSummary({ saved, moved }: { saved: { min: number; mi: number }; moved: number }) {
+  return (
+    <View accessibilityRole="summary" style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], marginHorizontal: space[4], marginTop: space[3], padding: space[3], borderRadius: radius.md, backgroundColor: color.brandTint }}>
+      <Icon name="route" size={24} color={color.onTint} />
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontFamily: font.bold, fontSize: 15, lineHeight: 20, color: color.onTint }}>
+          {saved.min >= 5 ? `Saves ${fmtHours(saved.min)}${saved.mi >= 1 ? ` and ${Math.round(saved.mi)} miles` : ''}` : 'Your week is already well grouped'}
+        </Text>
+        <Text style={{ fontFamily: font.regular, fontSize: 13, lineHeight: 18, color: color.onTint }}>
+          {moved ? `${moved} ${moved === 1 ? 'stop moves' : 'stops move'} to a new day · their customers get a text` : 'No stops need to change day'}
         </Text>
       </View>
-    );
-  }
-  return (
-    <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
-      {stops.map((s) => (
-        <StopListRow key={s.id} stop={s} isCurrent={route?.status === 'active' && s.id === current?.id} onPress={() => onOpenStop(s)} review={review} />
-      ))}
     </View>
   );
 }
 
-/** A stop on the day, styled like the trip's stop list: name and address (gray once done). No markers or dividers. */
+/** A stop on the day, styled like/** A stop on the day, styled like the trip's stop list: name and address (gray once done). No markers or dividers. */
 function StopListRow({ stop, isCurrent, onPress, review }: { stop: Stop; isCurrent: boolean; onPress: () => void; review?: WeekReview }) {
   const done = isDone(stop);
   const from = review?.movedFrom[stop.id];
