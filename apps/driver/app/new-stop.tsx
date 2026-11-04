@@ -83,14 +83,18 @@ export default function NewStop() {
   if (searching) {
     return (
       <SafeAreaView edges={NATIVE_CHROME ? ['bottom'] : undefined} style={{ flex: 1, backgroundColor: color.surface }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[2], paddingTop: NATIVE_CHROME ? space[4] : space[2], paddingBottom: space[2] }}>
-          <View style={{ flex: 1, alignItems: 'flex-start' }}><Button variant="text" label="Cancel" onPress={() => router.back()} /></View>
-          <Text style={[type.heading, { fontSize: 17 }]} accessibilityRole="header">Add stop</Text>
-          <View style={{ flex: 1 }} />
-        </View>
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: space[4] }}>
-          <AddressSearch near={null} onPick={(p) => { setPlace(p); setSearching(false); }} />
-        </ScrollView>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={{ alignItems: 'center', paddingHorizontal: space[2], paddingTop: NATIVE_CHROME ? space[6] : space[4], paddingBottom: space[4] }}>
+            <Text style={[type.heading, { fontSize: 17 }]} accessibilityRole="header">Add stop</Text>
+          </View>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: space[4] }}>
+            <AddressSearch near={null} onPick={(p) => { setPlace(p); setSearching(false); }} />
+          </ScrollView>
+          {/* Cancel at the bottom, as on the stop's details. */}
+          <View style={{ padding: space[4], paddingBottom: space[6] + bottomInset, borderTopWidth: 1, borderTopColor: color.divider }}>
+            <Button variant="text" label="Cancel" onPress={() => router.back()} />
+          </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
@@ -193,10 +197,10 @@ function AddressSearch({ near, onPick }: { near: Place | null; onPick: (p: Place
         ) : null}
       </View>
       {results.length ? (
-        <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: color.divider, overflow: 'hidden' }}>
-          {results.map((p) => (
+        <View>
+          {results.map((p, i) => (
             <Pressable key={p.id} accessibilityRole="button" onPress={() => onPick(p)}
-              style={({ pressed }) => [{ flexDirection: 'row', gap: space[3], alignItems: 'center', padding: space[3], borderBottomWidth: 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
+              style={({ pressed }) => [{ flexDirection: 'row', gap: space[3], alignItems: 'center', padding: space[3], borderBottomWidth: i === results.length - 1 ? 0 : 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
               <Icon name="pin" size={20} color={color.inkMuted} />
               <View style={{ flex: 1 }}>
                 <Text style={type.bodyStrong}>{p.name}</Text>
@@ -243,10 +247,10 @@ function AddressField({ place, onChange }: { place: Place; onChange: (p: Place) 
             </Pressable>
           </View>
           {results.length ? (
-            <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: color.divider, overflow: 'hidden' }}>
-              {results.map((p) => (
+            <View>
+              {results.map((p, i) => (
                 <Pressable key={p.id} accessibilityRole="button" onPress={() => { onChange(p); setEditing(false); setQ(''); }}
-                  style={({ pressed }) => [{ flexDirection: 'row', gap: space[3], alignItems: 'center', padding: space[3], borderBottomWidth: 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
+                  style={({ pressed }) => [{ flexDirection: 'row', gap: space[3], alignItems: 'center', padding: space[3], borderBottomWidth: i === results.length - 1 ? 0 : 1, borderBottomColor: color.divider }, pressed && { backgroundColor: color.surfaceMuted }]}>
                   <Icon name="pin" size={20} color={color.inkMuted} />
                   <View style={{ flex: 1 }}>
                     <Text style={type.bodyStrong}>{p.name}</Text>

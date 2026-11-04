@@ -188,7 +188,7 @@ function StartField({ place, onChange }: { place: Place | null; onChange: (p: Pl
           <Icon name="close" size={16} color={color.inkMuted} />
         </Pressable>
       </View>
-      <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: color.divider, overflow: 'hidden' }}>
+      <View>
         {option('here', 'navigate', 'Current location', 'Wherever you are when you optimize', () => done(null), !results.length)}
         {results.map((p, i) => option(p.id, 'pin', p.name, p.detail, () => done(p), i === results.length - 1))}
       </View>
