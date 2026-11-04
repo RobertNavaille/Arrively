@@ -66,6 +66,8 @@ export default function RootLayout() {
       <Stack.Screen name="stop/[id]" options={NATIVE_CHROME ? { ...nativeHeader, title: '' } : undefined} />
       <Stack.Screen name="skip/[id]" options={NATIVE_CHROME ? nativeSheet([0.75, 1]) : { presentation: 'modal' }} />
       <Stack.Screen name="new-stop" options={NATIVE_CHROME ? nativePageSheet : { presentation: 'modal' }} />
+      {/* Optimize route: no swipe to close, so a drag in the list can't lose the new order (Cancel closes it). */}
+      <Stack.Screen name="optimize-route" options={NATIVE_CHROME ? { ...nativePageSheet, gestureEnabled: false } : { presentation: 'modal' }} />
       <Stack.Screen name="week-options" options={NATIVE_CHROME ? nativePageSheet : { presentation: 'modal' }} />
     </Stack>
   );

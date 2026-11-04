@@ -1,25 +1,22 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, TextInput, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Modal, Pressable, TextInput, StyleSheet, Text, View } from 'react-native';
 import { showIOSActionSheet } from '../src/lib/actionSheet';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
 import { bearingDeg, dayKey, distanceM, pathAhead, pathLengthM, estimateDriveMin, fmtDuration, fmtPhone, fmtTime, fmtWindow, miles, routeTotals } from '../src/lib/geo';
 import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
-import { lockedOrder, optionsOf, SPEED, type RouteOptions, type RoutePlan, type TravelMode } from '../src/lib/routing';
+import { optionsOf, SPEED, type RouteOptions } from '../src/lib/routing';
 import { currentStop, useDriverData } from '../src/lib/store';
 import { avoidList, avoidNotPassed, contactCustomer, openDirections, shareTripMessage } from '../src/lib/navigation';
 import { TRACKING_BASE_URL } from '../src/lib/config';
 import { useBottomInset, useScreenHeight } from '../src/lib/viewport';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
-import { AutoButton } from '../src/ui/AutoButton';
+import { AheadRow, TripTotals } from '../src/ui/TripParts';
 import { TRIP_SCREENS_TO_LEAVE, TripSheetHost } from '../src/ui/TripSheetHost';
 import { NATIVE_CHROME } from '../src/ui/nativeChrome';
-import { ReorderList } from '../src/ui/ReorderList';
-import { SelectChip, ToggleChip } from '../src/ui/Chips';
-import { useCountTo } from '../src/ui/useCountTo';
 import { FadeIn } from '../src/ui/FadeIn';
 import { FloatingSurface } from '../src/ui/FloatingSurface';
 import { Button, IconButton, StatusPill } from '../src/ui/components';
@@ -56,13 +53,6 @@ export default function Trip() {
   const travel = useTravelBearing(pos);
   const compass = useCompassHeading();
   const route = routeFor(dayKey(new Date()));
-  const [review, setReview] = useState<{ plan: RoutePlan; from: LatLng | null } | null>(null);
-  // In review the driver can drag the stops into their own order; null = the suggested one.
-  const [custom, setCustom] = useState<string[] | null>(null);
-  // Stops the driver locked in place (tapping their circle); the rest are optimized around them.
-  const [locked, setLocked] = useState<string[]>([]);
-  // The options being tried in review (round trip, avoid highways / tolls, travel mode); saved with Confirm route.
-  const [tryOptions, setTryOptions] = useState<RouteOptions | null>(null);
   // Set while a stop is held by its grip, so the sheet doesn't move with the drag.
   const holding = useRef(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -87,25 +77,17 @@ export default function Trip() {
   const done = stops.filter(isDone);
   const remaining = stops.filter((s) => !isDone(s));
   const current = currentStop(route);
-  const phase = !current ? 'finished' : review ? 'review' : current.status === 'en_route' ? 'onroute' : current.status === 'arrived' ? 'arrived' : 'next';
-  // In review the whole suggested order is listed; otherwise the stops after the current one.
-  const shown = review ? custom ?? review.plan.order : null;
-  const reviewOrder = shown ? shown.map((id) => byId.get(id)).filter((s): s is Stop => !!s) : null;
-  const ahead = reviewOrder ?? remaining;
-  const after = reviewOrder ?? remaining.filter((s) => s.id !== current?.id);
-  const was = new Map((review?.plan.current.order ?? []).map((id, i) => [id, i]));
-  // Where each locked stop sits, and the best order that keeps them there (Auto's order).
-  const slots = Object.fromEntries(locked.map((id) => [id, shown?.indexOf(id) ?? -1]).filter(([, i]) => (i as number) >= 0));
-  const slotsKey = JSON.stringify(slots);
-  const best = useMemo(() => review && route ? lockedOrder(review.plan, route, review.from, slots) : null,
-    [review, slotsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const phase = !current ? 'finished' : current.status === 'en_route' ? 'onroute' : current.status === 'arrived' ? 'arrived' : 'next';
+  // The stops after the current one.
+  const ahead = remaining;
+  const after = remaining.filter((s) => s.id !== current?.id);
 
-  // How the trip is travelled: the options being tried in review, else the route's own.
-  const options: RouteOptions = (review && tryOptions) || (route ? optionsOf(route) : {});
+  // How the trip is travelled (round trip, avoid highways / tolls, travel mode).
+  const options: RouteOptions = route ? optionsOf(route) : {};
   const back = !!options.roundTrip && !!pos && ahead.length > 0;
   // The road route for the whole trip ahead (back to the start on a round trip), and for the leg to the current stop.
-  // (Only where it's shown: the trip view and Optimize route. On the way, the leg is enough.)
-  const road = useRoadPath(pos, phase === 'next' || phase === 'review' ? ahead : [], options);
+  // (Only where it's shown: the trip view. On the way, the leg is enough.)
+  const road = useRoadPath(pos, phase === 'next' ? ahead : [], options);
   const heading = phase === 'next' || phase === 'onroute';
   const leg = useRoadRoute(heading ? pos : null, heading && current ? current : null, options);
   // The leg isn't asked for again while the driver stays on it, so what's left counts down along its line.
@@ -121,7 +103,7 @@ export default function Trip() {
   const tripMeters = road ? road.distanceM : straight.meters;
 
   const canOptimize = !!route && route.status !== 'completed' && remaining.filter((s) => s.status === 'scheduled' || s.status === 'queued').length >= 2;
-  // Optimize route floats over the list while the next stop is up (not mid-drive, at a stop or in review).
+  // Optimize route floats over the list while the next stop is up (not mid-drive or at a stop).
   const floatOptimize = phase === 'next' && canOptimize;
   // Each step starts with the sheet at its resting height.
   // Each step follows the driver again (the sheet itself goes back to rest on its own).
@@ -149,43 +131,9 @@ export default function Trip() {
   // On the way's More menu: arrival is detected, this is the fallback; Cancel route goes back to the trip view.
   const markArrivedHere = () => { if (current) run('arrived', async () => { await backend.markArrived(current.id); await refresh(); }); };
   const cancelRoute = () => { if (current) run('cancel', async () => { await backend.cancelTrip(current.id); await stopSharing(); await refresh(); }); };
-  const optimize = () => run('plan', async () => {
-    const here = pos ?? (await currentPosition());
-    setCustom(null);
-    setLocked([]);
-    setTryOptions(optionsOf(route));
-    setReview({ plan: await backend.planRoute(route.id, here, optionsOf(route)), from: here });
-  });
-  const useOrder = () => run('apply', async () => {
-    if (!review) return;
-    await backend.applyPlan(route.id, custom ?? review.plan.order, review.from, tryOptions ?? undefined);
-    setReview(null);
-    setCustom(null);
-    setLocked([]);
-    setTryOptions(null);
-    await refresh();
-  });
-  // A changed option plans the route again with it; locked stops stay where they are.
-  const changeOptions = (next: RouteOptions) => run('options', async () => {
-    if (!review || !shown) return;
-    setTryOptions(next);
-    const plan = await backend.planRoute(route.id, review.from, next);
-    setReview({ plan, from: review.from });
-    const pins = Object.fromEntries(locked.map((id) => [id, shown.indexOf(id)]));
-    const order = lockedOrder(plan, route, review.from, pins);
-    setCustom(order.join() === plan.order.join() ? null : order);
-  });
-  // The suggested order is shown as null (no custom order).
-  const showOrder = (order: string[]) => setCustom(review && order.join() === review.plan.order.join() ? null : order);
-  // Locking keeps the stop where it is now and re-optimizes the others around it; unlocking
-  // leaves the order alone (Auto then offers the best order without that lock).
-  const toggleLock = (id: string) => {
-    if (!review || !shown) return;
-    if (locked.includes(id)) { setLocked(locked.filter((x) => x !== id)); return; }
-    const next = [...locked, id];
-    setLocked(next);
-    showOrder(lockedOrder(review.plan, route, review.from, Object.fromEntries(next.map((x) => [x, shown.indexOf(x)]))));
-  };
+
+  // Optimize route opens in its own sheet (Apple's page sheet on iPhone).
+  const optimize = () => router.push('/optimize-route');
   // Share trip (on unless the stop has it off): Start driving also opens Messages with a text
   // to the customer and their live tracking link. Opened first, straight from the tap,
   // since phones only open another app from one.
@@ -262,7 +210,7 @@ export default function Trip() {
   const focus = phase === 'arrived' || phase === 'onroute';
   const mapStops: MapStop[] = focus ? [] : order.map((s, i) => ({
     id: s.id, lat: s.lat, lng: s.lng, n: i + 1,
-    state: isDone(s) ? 'done' : s.id === (reviewOrder?.[0] ?? current)?.id ? 'next' : 'upcoming',
+    state: isDone(s) ? 'done' : s.id === current?.id ? 'next' : 'upcoming',
   }));
   // The route line starts at the driver: the road route is fetched only every
   // so often, so what's already behind them is trimmed off on every fix.
@@ -280,15 +228,15 @@ export default function Trip() {
   // On the way and arrived, the sheet rests with its card just in view.
   const peek = (phase === 'onroute' || (phase === 'arrived' && !choosing)) && cardRest != null ? cardRest : Math.min(Math.round(height * 0.36) + REST_FROM - sheetTop, cardRest ?? Infinity);
 
-  // Fixed over the bottom: the bottom bar when pulled up, and Optimize / Confirm route.
+  // Fixed over the bottom: the bottom bar when pulled up, and Optimize route.
   // Over the screen here; inside the sheet on iPhone (TripSheetHost.ios.tsx).
   // iPhone: the trip totals stay put at the top of the sheet; the stops scroll under them.
-  const sheetFixed = NATIVE_CHROME && ((phase === 'next' && current) || (phase === 'review' && review)) ? (
+  const sheetFixed = NATIVE_CHROME && (phase === 'next' && current) ? (
     <View style={{ paddingHorizontal: space[4], paddingTop: space[6] }}>
       <TripTotals travelMin={tripMin} meters={tripMeters} stops={ahead.length} />
     </View>
   ) : null;
-  // Optimize / Confirm route float this far up from the bottom. In iPhone's sheet they sit
+  // Optimize route floats this far up from the bottom. In iPhone's sheet they sit
   // closer, just clear of the home indicator.
   const floatBottom = NATIVE_CHROME ? Math.max(space[2], bottomInset - space[1]) : bottomInset + space[4];
   const tripOverlay = (
@@ -316,20 +264,10 @@ export default function Trip() {
               onPress={() => run('undo', async () => { await backend.undoArrived(current.id); await refresh(); })} />
           </FadeIn>
         ) : null}
-        {/* Reviewing: Confirm route takes Optimize route's place, in blue. */}
-        {phase === 'review' && review ? (
-          <View style={[styles.floatBar, { bottom: floatBottom }]}>
-            <Button size="compact" icon="check" label="Confirm route" loading={busy === 'apply'} onPress={useOrder} style={shadow.float} />
-            {/* Auto: back to the suggested best order (keeping locked stops); only while the order differs from it. */}
-            <View style={styles.floatStart} pointerEvents="box-none">
-              <AutoButton floating visible={!!best && !!shown && shown.join() !== best.join()} onPress={() => best && showOrder(best)} />
-            </View>
-          </View>
-        ) : null}
         {/* Optimize route floats at the bottom, over the trip list, wherever it's scrolled. */}
         {floatOptimize ? (
           <View style={[styles.floatBar, { bottom: floatBottom }]}>
-            <Button variant="neutral" icon="route" label="Optimize route" loading={busy === 'plan'} onPress={optimize} style={shadow.float} />
+            <Button variant="neutral" icon="route" label="Optimize route" onPress={optimize} style={shadow.float} />
           </View>
         ) : null}
     </>
@@ -383,11 +321,11 @@ export default function Trip() {
       </View>
 
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
-      <TripSheetHost height={height} overlay={tripOverlay} fixed={sheetFixed} top={sheetTop} rest={peek} onOpenChange={setSheetOpen} resetKey={choosing ? `${phase}:mark` : phase} startOpen={phase === 'review' || choosing} bottomInset={bottomInset + barSpace + (floatOptimize || phase === 'review' ? OPTIMIZE_SPACE : 0)} hold={holding} header={
+      <TripSheetHost height={height} overlay={tripOverlay} fixed={sheetFixed} top={sheetTop} rest={peek} onOpenChange={setSheetOpen} resetKey={choosing ? `${phase}:mark` : phase} startOpen={choosing} bottomInset={bottomInset + barSpace + (floatOptimize ? OPTIMIZE_SPACE : 0)} hold={holding} header={
         // The step the driver is on: stays at the top of the sheet while the list scrolls.
         // Pulled up (arrived, on the way), the card changes for the details: its resting height stays measured from before.
         <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== cardH && !(sheetOpen && (phase === 'arrived' || phase === 'onroute'))) setCardH(h); }}
-          style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' || phase === 'next' || phase === 'review' || phase === 'onroute' ? 0 : 1, borderBottomColor: color.divider }}>
+          style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[3], borderBottomWidth: phase === 'arrived' || phase === 'next' || phase === 'onroute' ? 0 : 1, borderBottomColor: color.divider }}>
           {/* iPhone's sheet has its own grabber. */}
           {NATIVE_CHROME ? null : <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: color.divider, alignSelf: 'center' }} />}
 
@@ -415,24 +353,6 @@ export default function Trip() {
             </>
           ) : null}
 
-          {/* Optimize route: the same totals as the trip, following the order as stops are dragged. */}
-          {phase === 'review' && review ? (
-            <>
-              {NATIVE_CHROME ? null : <TripTotals travelMin={tripMin} meters={tripMeters} stops={ahead.length} />}
-              {/* How to plan it: each change re-plans the route. Walking and biking don't take the avoid options. */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space[4] }}
-                contentContainerStyle={{ gap: space[2], paddingHorizontal: space[4] }}>
-                <ToggleChip label="Round trip" selected={!!options.roundTrip} onPress={() => changeOptions({ ...options, roundTrip: !options.roundTrip })} />
-                <ToggleChip label="Avoid highways" selected={!!options.avoidHighways} disabled={options.mode !== 'drive' && !!options.mode}
-                  onPress={() => changeOptions({ ...options, avoidHighways: !options.avoidHighways })} />
-                <ToggleChip label="Avoid tolls" selected={!!options.avoidTolls} disabled={options.mode !== 'drive' && !!options.mode}
-                  onPress={() => changeOptions({ ...options, avoidTolls: !options.avoidTolls })} />
-                <SelectChip<TravelMode> label="Vehicle type" value={options.mode ?? 'drive'}
-                  options={[{ value: 'drive', label: 'Drive' }, { value: 'walk', label: 'Walk' }, { value: 'bike', label: 'Bike' }]}
-                  onChange={(mode) => changeOptions({ ...options, mode })} />
-              </ScrollView>
-            </>
-          ) : null}
 
           {/* On the way: the drive leads; who it's to comes second. */}
           {phase === 'onroute' && current ? (
@@ -527,7 +447,7 @@ export default function Trip() {
           ) : null}
           {phase !== 'arrived' && phase !== 'onroute' ? (
             <>
-              {after.length && !review ? (
+              {after.length ? (
                 <View style={{ flexDirection: 'row', gap: space[3], paddingHorizontal: space[4] }}>
                   {/* While the next stop is up, the trip's line passes beside the heading. */}
                   {phase === 'next' ? <View style={{ width: 20, alignItems: 'center' }}><View style={[styles.line, { marginTop: 0 }]} /></View> : null}
@@ -538,24 +458,13 @@ export default function Trip() {
                   </View>
                 </View>
               ) : null}
-              <View accessibilityRole="list" style={{ paddingHorizontal: space[4], paddingTop: review ? space[2] : 0 }}>
-                {review ? (
-                  // Reviewing: drag stops by their grip; ones now earlier than the driver's order are in blue.
-                  // Locked stops have no grip and stay put while others are dragged past them.
-                  <ReorderList items={after} keyOf={(s) => s.id} hold={holding} fixed={(s) => locked.includes(s.id)}
-                    onReorder={(list) => setCustom(list.map((s) => s.id))}
-                    renderRow={(s, i, grip) => {
-                      const before = was.get(s.id);
-                      return <AheadRow stop={s} detail={s.address.split(',')[0]} last={i === after.length - 1}
-                        highlight={before != null && i < before} trailing={grip}
-                        lock={{ on: locked.includes(s.id), toggle: () => toggleLock(s.id) }} />;
-                    }} />
-                ) : after.map((s, i) => (
+              <View accessibilityRole="list" style={{ paddingHorizontal: space[4], paddingTop: 0 }}>
+                {after.map((s, i) => (
                   <AheadRow key={s.id} stop={s} detail={s.address.split(',')[0]} last={i === after.length - 1}
                     onPress={() => router.push(`/stop/${s.id}`)} />
                 ))}
               </View>
-              {done.length && !review ? (
+              {done.length ? (
                 <>
                   <Text style={[type.caption, { fontFamily: font.semibold, paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: space[3], borderTopWidth: after.length ? 1 : 0, borderTopColor: color.divider }]}>
                     Done · {done.length}
@@ -600,8 +509,6 @@ const styles = StyleSheet.create({
   // The trip's line, shared by the next stop, the list heading and the stops after it.
   line: { flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider },
   nextDot: { marginTop: 5, width: 20, height: 20, borderRadius: 10, backgroundColor: color.action, borderWidth: 4, borderColor: color.brandTint },
-  // Full width under the trip totals, like the step dividers.
-  totals: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: -space[4], paddingHorizontal: space[8], paddingTop: space[1], paddingBottom: space[4], borderBottomWidth: 1, borderBottomColor: color.divider, marginBottom: space[1] },
   choice: { flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: 14, paddingHorizontal: space[4], borderRadius: radius.md, borderWidth: 1, borderColor: color.divider },
   choiceOn: { borderWidth: 2, borderColor: color.action, paddingVertical: 13, paddingHorizontal: space[4] - 1 },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: color.controlBorder, alignItems: 'center', justifyContent: 'center' },
@@ -616,28 +523,6 @@ const styles = StyleSheet.create({
   floatStart: { position: 'absolute', left: space[4], top: 0, bottom: 0, justifyContent: 'center' },
 });
 
-/** The whole trip ahead, as the sheet's heading: travel time only (no time at the stops), miles, and stops left. */
-function TripTotals({ travelMin, meters, stops }: { travelMin: number; meters: number; stops: number }) {
-  const total = Math.max(1, travelMin);
-  const mi = miles(meters);
-  // When a total changes (an option, a dragged stop) its number counts quickly to the new one.
-  const t = Math.round(useCountTo(total));
-  const m = useCountTo(mi);
-  const n = Math.round(useCountTo(stops));
-  const items = [
-    t < 60 ? { value: String(t), label: 'Minutes' } : { value: `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`, label: 'Hours' },
-    { value: mi < 10 ? m.toFixed(1) : String(Math.round(m)), label: 'Miles' },
-    { value: String(n), label: n === 1 ? 'Stop' : 'Stops' },
-  ];
-  return (
-    <View style={styles.totals} accessible accessibilityLabel={`Trip: ${fmtDuration(total)}, ${mi.toFixed(1)} miles, ${stops} ${stops === 1 ? 'stop' : 'stops'}`}>
-      {items.map((it, i) => (
-        <Text key={i} style={[type.stat, { fontSize: 24, lineHeight: 30, fontVariant: ['tabular-nums'] }]}>{it.value}
-          <Text style={{ fontFamily: font.medium, fontSize: 16, color: color.inkMuted }}> {it.label}</Text></Text>
-      ))}
-    </View>
-  );
-}
 
 type Outcome = 'completed' | 'no_show' | 'skipped';
 const OUTCOMES: { key: Outcome; label: string; description: string }[] = [
@@ -700,44 +585,3 @@ function StopHeading({ eyebrow, stop, onCall, onMessage }: { eyebrow?: string; s
   );
 }
 
-function AheadRow({ stop, detail, last, onPress, highlight, trailing, lock }: {
-  stop: Stop; detail: string; last: boolean; onPress?: () => void;
-  /** Moved earlier in a new order: the name is blue. */
-  highlight?: boolean;
-  trailing?: ReactNode;
-  /** Reviewing: the circle locks the stop in place, and shows a lock while it is. */
-  lock?: { on: boolean; toggle: () => void };
-}) {
-  const marker = lock?.on
-    ? <View style={{ marginTop: 3, height: 20, alignItems: 'center', justifyContent: 'center' }}><Icon name="lock" size={20} color={color.action} strokeWidth={2} /></View>
-    : <View style={{ marginTop: 5, width: 16, height: 16, borderRadius: 8, backgroundColor: color.surface, borderWidth: 3, borderColor: color.action }} />;
-  const label = `${stop.customer_name}, ${detail}${highlight ? ', moved earlier' : ''}`;
-  const content = (
-    <>
-      <View style={{ width: 20, alignItems: 'center' }}>
-        {lock ? (
-          <Pressable onPress={lock.toggle} hitSlop={12} accessibilityRole="button"
-            accessibilityLabel={lock.on ? `Unlock ${stop.customer_name}` : `Lock ${stop.customer_name} in this place`}
-            accessibilityState={{ selected: lock.on }}>
-            {marker}
-          </Pressable>
-        ) : marker}
-        {last ? null : <View style={{ flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider }} />}
-      </View>
-      <View style={{ flex: 1, paddingBottom: 20 }}>
-        {/* Draggable rows (reviewing): no text selection, which a mouse drag on the web would start. */}
-        <Text selectable={!lock} style={{ fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: highlight ? color.actionInk : color.ink }}>{stop.customer_name}</Text>
-        <Text selectable={!lock} style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }}>{detail}</Text>
-      </View>
-      {trailing}
-    </>
-  );
-  // Without a press (reviewing) it's a plain row, so its lock button stays enabled.
-  if (!onPress) return <View accessibilityLabel={label} style={{ flexDirection: 'row', gap: space[3] }}>{content}</View>;
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label}
-      style={({ pressed }) => [{ flexDirection: 'row', gap: space[3] }, pressed && { opacity: 0.6 }]}>
-      {content}
-    </Pressable>
-  );
-}
