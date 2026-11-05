@@ -308,7 +308,8 @@ const TOOLBAR_H = 88;
 const ROW_H = 68;
 
 /** A day's page: its map, how many stops, then the stops. */
-// The day's map: tall at the top of the page, shrinking to MAP_MIN as the stops are scrolled up.
+// The day's map: tall at the top of the page; as the stops are scrolled up it shrinks to MAP_MIN
+// (half height), then scrolls away with them.
 const MAP_MAX = 300;
 const MAP_MIN = 150;
 const MAP_SHRINK = MAP_MAX - MAP_MIN;
@@ -344,7 +345,7 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad }: {
     state: isDone(s) ? 'done' : route?.status === 'active' && s.id === current?.id ? 'next' : 'upcoming',
   }));
 
-  // The map sits over the top of the list and shrinks as it scrolls, keeping its middle in view
+  // The map sits over the top of the list and shrinks as it scrolls (then goes with it), keeping its middle in view
   // (the map is drawn full height and cropped top and bottom alike). Once the scrolling settles,
   // the stops are framed again in the part that shows.
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -360,6 +361,8 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad }: {
   }, [scrollY]);
   const mapH = scrollY.interpolate({ inputRange: [0, MAP_SHRINK], outputRange: [MAP_MAX, MAP_MIN], extrapolate: 'clamp' });
   const mapShift = scrollY.interpolate({ inputRange: [0, MAP_SHRINK], outputRange: [0, -MAP_SHRINK / 2], extrapolate: 'clamp' });
+  // Once it's half height, the map scrolls away with the stops (its bottom stays on the list's top).
+  const mapLift = scrollY.interpolate({ inputRange: [0, MAP_SHRINK, MAP_SHRINK + 1000], outputRange: [0, 0, -1000], extrapolateLeft: 'clamp' });
   return (
     <View style={{ flex: 1 }}>
       <Animated.ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: MAP_MAX, paddingBottom: bottomPad }}
@@ -392,7 +395,7 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad }: {
         )}
       </Animated.ScrollView>
       {/* Over the list's top: the page's background (so rows pass under it), then the map. */}
-      <Animated.View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: mapH, paddingHorizontal: space[4], backgroundColor: color.surface }}>
+      <Animated.View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: mapH, paddingHorizontal: space[4], backgroundColor: color.surface, transform: [{ translateY: mapLift }] }}>
         <Animated.View style={{ flex: 1, borderRadius: radius.md, overflow: 'hidden' }}>
           <Animated.View style={{ height: MAP_MAX, transform: [{ translateY: mapShift }] }}>
             <RouteMap height={MAP_MAX} stops={mapStops} driver={isToday ? driver : null} inset={{ top: crop / 2, bottom: crop / 2 }} />
