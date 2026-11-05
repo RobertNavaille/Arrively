@@ -1,6 +1,5 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { GestureDetector, GestureHandlerRootView, useLongPressGesture } from 'react-native-gesture-handler';
 import { FloatingSurface } from './FloatingSurface';
 import { Icon, type IconName } from './Icon';
 import { color, font, shadow, space } from './theme';
@@ -38,8 +37,6 @@ export function RowMenuHost({ children }: { children: ReactNode }) {
   }
   return (
     <Ctx.Provider value={open}>
-      {/* Also the root for the rows' native press and hold (each sheet on iPhone needs its own). */}
-      <GestureHandlerRootView style={{ flex: 1 }}>
       <View ref={ref} style={{ flex: 1 }} collapsable={false}>
         {children}
         {menu && pos ? (
@@ -59,7 +56,6 @@ export function RowMenuHost({ children }: { children: ReactNode }) {
           </>
         ) : null}
       </View>
-      </GestureHandlerRootView>
     </Ctx.Provider>
   );
 }
@@ -74,25 +70,17 @@ export function RowMenu({ children, items, label, onPress }: { children: ReactNo
   const ref = useRef<View>(null);
   const open = useContext(Ctx);
   const show = () => ref.current?.measureInWindow((x, y, w, h) => open?.(items, { x, y, w, h }));
-  // The hold is iOS's own long-press recognizer (react-native-gesture-handler): React Native's
-  // onLongPress never fired in these scrolling lists on iPhone, and letting go counted as a tap.
-  const held = useRef(false);
-  const longPress = useLongPressGesture({
-    minDuration: 400, runOnJS: true,
-    onActivate: () => { held.current = true; show(); },
-  });
+  // React Native's own press and hold (iPhone has Apple's menu instead: RowMenu.ios.tsx). Not a
+  // gesture-handler long press: on the web that turns off touch scrolling over the rows.
   return (
-    <GestureDetector gesture={longPress}>
-      <Pressable ref={ref} onPress={() => { if (held.current) { held.current = false; return; } onPress?.(); }}
-        onPressIn={() => { held.current = false; }}
-        accessibilityRole={onPress ? 'button' : undefined} accessibilityHint="Press and hold for options"
-        accessibilityActions={items.map((it, i) => ({ name: `a${i}`, label: it.label }))}
-        onAccessibilityAction={(e) => items[Number(e.nativeEvent.actionName.slice(1))]?.onPress()}
-        accessibilityLabel={label}
-        style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
-        {children}
-      </Pressable>
-    </GestureDetector>
+    <Pressable ref={ref} onPress={onPress} onLongPress={show} delayLongPress={400}
+      accessibilityRole={onPress ? 'button' : undefined} accessibilityHint="Press and hold for options"
+      accessibilityActions={items.map((it, i) => ({ name: `a${i}`, label: it.label }))}
+      onAccessibilityAction={(e) => items[Number(e.nativeEvent.actionName.slice(1))]?.onPress()}
+      accessibilityLabel={label}
+      style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
+      {children}
+    </Pressable>
   );
 }
 
