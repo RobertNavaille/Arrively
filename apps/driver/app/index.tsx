@@ -1,5 +1,5 @@
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppState, FlatList, Modal, Platform, Pressable, ScrollView, Text, View, useWindowDimensions,
 } from 'react-native';
@@ -11,7 +11,6 @@ import { addDays, dayKey } from '../src/lib/geo';
 import { currentPosition, stopSharing, useLivePosition } from '../src/lib/location';
 import { currentStop, dayRange, useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
-import { fmtHours, loadWeekOptions, planWeek, takeWeekRun, type WeekOptions, type WeekPlan } from '../src/lib/weekPlan';
 import { isDone, type LatLng, type Route, type Stop } from '../src/lib/types';
 import { Avatar, Button, IconButton } from '../src/ui/components';
 import { FloatingSurface } from '../src/ui/FloatingSurface';
@@ -25,20 +24,7 @@ const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 export default function MyDay() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { profile, routes, routeFor, loading, error, refresh } = useDriverData();
-  // Optimize week: the proposed week, shown in place of the real one until it's confirmed or cancelled.
-  const [weekPlan, setWeekPlan] = useState<WeekPlan | null>(null);
-  const [weekOpts, setWeekOpts] = useState<WeekOptions | null>(null);
-  const [pins, setPins] = useState<Map<string, string>>(new Map());
-  const [applying, setApplying] = useState(false);
-  const planDay = (k: string) => weekPlan?.days.find((d) => d.day === k);
-  // A day as it's shown: the proposed stops while reviewing, else the real ones.
-  const shownRouteFor = useCallback((k: string): Route | undefined => {
-    const pd = weekPlan?.days.find((d) => d.day === k);
-    const real = routeFor(k);
-    if (!pd) return real;
-    return { ...(real ?? { id: `plan-${k}`, day: k, status: 'planned' as const }), stops: pd.stops } as Route;
-  }, [weekPlan, routeFor]);
+  const { profile, routeFor, loading, error, refresh } = useDriverData();
   const pos = useLivePosition();
   // "Today" follows the clock, so an app left open overnight moves to the new day.
   const [today, setToday] = useState(() => new Date());
@@ -133,7 +119,7 @@ export default function MyDay() {
   const day = days[index];
   const dayK = dayKey(day);
   const isToday = dayK === dayKey(today);
-  const route = shownRouteFor(dayK);
+  const route = routeFor(dayK);
   const [menu, setMenu] = useState(false);
   // Picking a day in the strip (or a week swipe) pages to it.
   function goTo(i: number) {
@@ -151,44 +137,8 @@ export default function MyDay() {
   }
   async function signOut() { await stopSharing(); await backend.signOut(); }
 
-  // Optimize week: plan it (with the saved options), then show it for review.
-  async function runWeek(nextPins: Map<string, string> = new Map(), opts?: WeekOptions) {
-    const o = opts ?? weekOpts ?? (await loadWeekOptions());
-    const plan = planWeek({ routes, today, from: o.startPlace ?? pos, options: o, pins: nextPins });
-    setWeekOpts(o); setPins(nextPins); setWeekPlan(plan);
-    // Show the first day of the planned week (or today, if that's later).
-    const first = plan.days.find((d) => d.day >= dayKey(today))?.day;
-    const i = first ? days.findIndex((d) => dayKey(d) === first) : -1;
-    if (i >= 0 && !weekPlan) setTimeout(() => goToRef.current(i), 0);
-  }
   const goToRef = useRef(goTo);
   goToRef.current = goTo;
-  // Back from the options sheet's "Optimize week": run with the new options.
-  useFocusEffect(useCallback(() => {
-    if (takeWeekRun()) loadWeekOptions().then((o) => runWeek(new Map(), o));
-  }, [routes, pos, today])); // eslint-disable-line react-hooks/exhaustive-deps
-  function togglePin(stop: Stop, day: string) {
-    const next = new Map(pins);
-    if (next.has(stop.id)) next.delete(stop.id); else next.set(stop.id, day);
-    runWeek(next);
-  }
-  async function confirmWeek() {
-    if (!weekPlan) return;
-    setApplying(true);
-    try {
-      const daysToSave = weekPlan.days
-        .map((d) => ({ day: d.day, stops: d.stops.filter((st) => st.status === 'scheduled' || st.status === 'queued').map((st) => st.id) }))
-        .filter((d) => d.stops.length);
-      await backend.applyWeek(daysToSave);
-      await refresh();
-      setWeekPlan(null); setPins(new Map());
-    } catch (e) {
-      showMessage('Could not update the week', e instanceof Error ? e.message : String(e));
-    }
-    setApplying(false);
-  }
-  const moved = weekPlan ? Object.keys(weekPlan.movedFrom).length : 0;
-  const saved = weekPlan ? { min: weekPlan.before.minutes - weekPlan.after.minutes, mi: (weekPlan.before.meters - weekPlan.after.meters) / 1609.34 } : null;
 
   const bottomInset = useBottomInset();
 
@@ -201,8 +151,8 @@ export default function MyDay() {
           <Avatar name={profile?.name ?? 'Driver'} size={36} />
         </Pressable>
         <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]} accessibilityRole="header">{weekPlan ? 'Optimized week' : day.toLocaleDateString('en-US', { weekday: 'long' })}</Text>
-          <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]}>{weekPlan ? day.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}{isToday && !weekPlan ? ' · Today' : ''}</Text>
+          <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]} accessibilityRole="header">{day.toLocaleDateString('en-US', { weekday: 'long' })}</Text>
+          <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]}>{day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}{isToday ? ' · Today' : ''}</Text>
         </View>
         <IconButton icon="more" label="More" variant="plain" onPress={() => {
           // iPhone: Apple's action sheet; elsewhere the drawn panel.
@@ -226,7 +176,7 @@ export default function MyDay() {
           getItemLayout={(_, w) => ({ length: width, offset: width * w, index: w })}
           showsHorizontalScrollIndicator={false}
           keyExtractor={(w) => dayKey(w[0])}
-          extraData={{ index, shownRouteFor, today }}
+          extraData={{ index, routeFor, today }}
           onScroll={Platform.OS === 'web' ? (e) => onStripScroll(e.nativeEvent.contentOffset.x) : undefined}
           onMomentumScrollEnd={(e) => goToWeek(Math.round(e.nativeEvent.contentOffset.x / width))}
           scrollEventThrottle={32}
@@ -235,7 +185,7 @@ export default function MyDay() {
               {wk.map((d, j) => {
                 const i = w * 7 + j;
                 const sel = i === index;
-                const has = (shownRouteFor(dayKey(d))?.stops.length ?? 0) > 0;
+                const has = (routeFor(dayKey(d))?.stops.length ?? 0) > 0;
                 const past = dayKey(d) < dayKey(today);
                 const isTodayCell = dayKey(d) === dayKey(today);
                 return (
@@ -268,7 +218,7 @@ export default function MyDay() {
           // a day. Only the day on screen and its neighbours draw their map and list.
           initialNumToRender={days.length}
           windowSize={days.length * 2}
-          extraData={{ index, shownRouteFor, pins, loading }}
+          extraData={{ index, routeFor, loading }}
           onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h && h !== pagerH) setPagerH(h); }}
           getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
           showsHorizontalScrollIndicator={false}
@@ -287,15 +237,11 @@ export default function MyDay() {
           renderItem={({ item, index: i }) => {
             if (Math.abs(i - index) > 1) return <View style={{ width, height: pagerH || undefined }} />;
             const k = dayKey(item);
-            const pd = planDay(k);
             return (
               <View style={{ width, height: pagerH || undefined }}>
-                <DayPanel route={shownRouteFor(k)} isToday={k === dayKey(today)} driver={k === dayKey(today) ? pos : null}
+                <DayPanel route={routeFor(k)} isToday={k === dayKey(today)} driver={k === dayKey(today) ? pos : null}
                   loading={loading} onOpenStop={(st) => router.push(`/stop/${st.id}`)} bottomPad={TOOLBAR_H + bottomInset}
-                  summary={weekPlan && saved ? <WeekSummary saved={saved} moved={moved} /> : null}
-                  planMeta={pd && pd.stops.length ? `${fmtHours(pd.minutes)}${pd.over ? ' · over hours' : ''}` : undefined}
-                  emptyText={pd ? 'Free day' : undefined}
-                  review={weekPlan && pd ? { movedFrom: weekPlan.movedFrom, pins, onPin: (st) => togglePin(st, k) } : undefined} />
+/>
               </View>
             );
           }}
@@ -304,18 +250,8 @@ export default function MyDay() {
 
       {/* Toolbar, floating over the bottom of the list: today's trip, and adding a stop. */}
       <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: space[4] + bottomInset }}>
-        {weekPlan ? (
-          <>
-            <Button variant="secondary" label="Cancel" onPress={() => { setWeekPlan(null); setPins(new Map()); }} />
-            <Button icon="check" label="Confirm week" onPress={confirmWeek} loading={applying} style={{ flex: 1 }} />
-          </>
-        ) : (
-          <>
-            {/* Optimize week: tap to run with the saved options; press and hold for the options. */}
-            <Pressable onPress={() => runWeek()} onLongPress={() => router.push('/week-options')} delayLongPress={350}
-              accessibilityRole="button" accessibilityLabel="Optimize week" accessibilityHint="Press and hold for options"
-              accessibilityActions={[{ name: 'longpress', label: 'Options' }]}
-              onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'longpress') router.push('/week-options'); }}
+            {/* Optimize week: opens its options; the sheet's Optimize week regroups and saves the week. */}
+            <Pressable onPress={() => router.push('/week-options')} accessibilityRole="button" accessibilityLabel="Optimize week"
               style={({ pressed }) => pressed && { opacity: 0.7, transform: [{ scale: 0.96 }] }}>
               <FloatingSurface style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name="route" size={24} color={color.action} />
@@ -323,8 +259,6 @@ export default function MyDay() {
             </Pressable>
             <Button label="View my day" onPress={() => router.push('/trip')} style={{ flex: 1 }} />
             <IconButton icon="plus" label="Add stop" onPress={() => router.push('/new-stop')} />
-          </>
-        )}
       </View>
 
       <Menu visible={menu} onClose={() => setMenu(false)} offline={backend.offline} onDemo={() => { setMenu(false); demoDay(); }}
@@ -362,17 +296,13 @@ function sideSwipe(node: HTMLElement, onInput: () => void, step: (dir: 1 | -1) =
 }
 
 const TOOLBAR_H = 88;
-// A stop row has a fixed height, so the pin button lines up.
+// Each stop row has the same height.
 const ROW_H = 68;
 
-interface WeekReview { movedFrom: Record<string, string>; pins: Map<string, string>; onPin: (s: Stop) => void }
-
 /** A day's page: its map, how many stops, then the stops. */
-function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad, summary, planMeta, emptyText, review }: {
+function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad }: {
   route: Route | undefined; isToday: boolean; driver: LatLng | null; onOpenStop: (s: Stop) => void; loading: boolean;
   bottomPad: number;
-  /** While reviewing an optimized week: the week's summary, the day's working time, and pins. */
-  summary: React.ReactNode; planMeta?: string; emptyText?: string; review?: WeekReview;
 }) {
   const stops = route?.stops ?? [];
   const current = currentStop(route);
@@ -381,7 +311,7 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad, summ
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const count = route?.status === 'completed' ? plural(stops.length, 'stop', 'stops')
     : done ? plural(remaining.length, 'stop left', 'stops left') : plural(stops.length, 'stop', 'stops');
-  const countMeta = planMeta ?? (route?.status === 'completed' ? `${stops.filter((s) => s.status === 'completed').length} completed`
+  const countMeta = (route?.status === 'completed' ? `${stops.filter((s) => s.status === 'completed').length} completed`
     : done ? `${done} done` : '');
   const mapStops: MapStop[] = stops.map((s, i) => ({
     id: s.id, lat: s.lat, lng: s.lng, n: i + 1,
@@ -395,12 +325,11 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad, summ
           <RouteMap height={190} stops={mapStops} driver={isToday ? driver : null} />
         </View>
       </View>
-      {summary}
       {!stops.length ? (
         <View style={{ alignItems: 'center', paddingVertical: space[8], paddingHorizontal: space[6], gap: space[2] }}>
           <Icon name="route" size={28} color={color.inkMuted} />
           <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted, textAlign: 'center' }]}>
-            {loading ? 'Loading…' : emptyText ?? 'No stops this day. Tap + to add one.'}
+            {loading ? 'Loading…' : 'No stops this day. Tap + to add one.'}
           </Text>
         </View>
       ) : (
@@ -411,7 +340,7 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad, summ
           </View>
           <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
             {stops.map((s) => (
-              <StopListRow key={s.id} stop={s} isCurrent={route?.status === 'active' && s.id === current?.id} onPress={() => onOpenStop(s)} review={review} />
+              <StopListRow key={s.id} stop={s} isCurrent={route?.status === 'active' && s.id === current?.id} onPress={() => onOpenStop(s)} />
             ))}
           </View>
         </>
@@ -420,59 +349,19 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad, summ
   );
 }
 
-/** Reviewing an optimized week: what it saves and how many stops change day. */
-function WeekSummary({ saved, moved }: { saved: { min: number; mi: number }; moved: number }) {
-  return (
-    <View accessibilityRole="summary" style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], marginHorizontal: space[4], marginTop: space[3], padding: space[3], borderRadius: radius.md, backgroundColor: color.brandTint }}>
-      <Icon name="route" size={24} color={color.onTint} />
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: font.bold, fontSize: 15, lineHeight: 20, color: color.onTint }}>
-          {saved.min >= 5 ? `Saves ${fmtHours(saved.min)}${saved.mi >= 1 ? ` and ${Math.round(saved.mi)} miles` : ''}` : 'Your week is already well grouped'}
-        </Text>
-        <Text style={{ fontFamily: font.regular, fontSize: 13, lineHeight: 18, color: color.onTint }}>
-          {moved ? `${moved} ${moved === 1 ? 'stop moves' : 'stops move'} to a new day · their customers get a text` : 'No stops need to change day'}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-/** A stop on the day, styled like/** A stop on the day, styled like the trip's stop list: name and address (gray once done). No markers or dividers. */
-function StopListRow({ stop, isCurrent, onPress, review }: { stop: Stop; isCurrent: boolean; onPress: () => void; review?: WeekReview }) {
+/** A stop on the day, styled like the trip's stop list: name and address (gray once done). No markers or dividers. */
+function StopListRow({ stop, isCurrent, onPress }: { stop: Stop; isCurrent: boolean; onPress: () => void }) {
   const done = isDone(stop);
-  const from = review?.movedFrom[stop.id];
-  const pinned = !!review?.pins.has(stop.id);
-  const canPin = !!review && (stop.status === 'scheduled' || stop.status === 'queued');
   return (
-    <View style={{ height: ROW_H, flexDirection: 'row', alignItems: 'flex-start' }}>
-      <Pressable onPress={review ? undefined : onPress} disabled={!!review} accessibilityRole="button"
-        accessibilityLabel={`${stop.customer_name}, ${stop.address}${done ? ', done' : isCurrent ? ', next' : ''}${from ? `, moves from ${weekday(from)}` : ''}`}
-        style={({ pressed }) => [{ flex: 1, minWidth: 0 }, pressed && { opacity: 0.6 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-          <Text style={{ flexShrink: 1, fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: done ? color.inkMuted : color.ink }} numberOfLines={1} maxFontSizeMultiplier={1}>{stop.customer_name}</Text>
-          {from ? (
-            <View style={{ paddingHorizontal: space[2], paddingVertical: 1, borderRadius: radius.full, backgroundColor: color.brandTint }}>
-              <Text style={{ fontFamily: font.semibold, fontSize: 12, lineHeight: 18, color: color.onTint }} maxFontSizeMultiplier={1}>From {weekday(from).slice(0, 3)}</Text>
-            </View>
-          ) : null}
-        </View>
-        <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }} numberOfLines={1} maxFontSizeMultiplier={1}>
-          {stop.address.split(',')[0]}{stop.notes ? ` · ${stop.notes}` : ''}
-        </Text>
-      </Pressable>
-      {/* Reviewing an optimized week: pin a stop to the day it's shown on. */}
-      {canPin ? (
-        <Pressable onPress={() => review!.onPin(stop)} accessibilityRole="button" accessibilityState={{ selected: pinned }}
-          accessibilityLabel={pinned ? `${stop.customer_name} is pinned to this day. Unpin` : `Pin ${stop.customer_name} to this day`}
-          hitSlop={4} style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && { opacity: 0.6 }]}>
-          <Icon name="lock" size={20} color={pinned ? color.action : color.controlBorder} />
-        </Pressable>
-      ) : null}
-    </View>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${stop.customer_name}, ${stop.address}${done ? ', done' : isCurrent ? ', next' : ''}`}
+      style={({ pressed }) => [{ height: ROW_H }, pressed && { opacity: 0.6 }]}>
+      <Text style={{ fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: done ? color.inkMuted : color.ink }} numberOfLines={1} maxFontSizeMultiplier={1}>{stop.customer_name}</Text>
+      <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }} numberOfLines={1} maxFontSizeMultiplier={1}>
+        {stop.address.split(',')[0]}{stop.notes ? ` · ${stop.notes}` : ''}
+      </Text>
+    </Pressable>
   );
 }
-
-const weekday = (k: string) => new Date(`${k}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long' });
 
 function Menu({ visible, onClose, onDemo, onSignOut, offline }: {
   visible: boolean; onClose: () => void; onDemo: () => void; onSignOut: () => void; offline: boolean;

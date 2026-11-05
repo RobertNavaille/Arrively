@@ -3,7 +3,11 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomInset } from '../src/lib/viewport';
-import { DEFAULT_WEEK_OPTIONS, fmtClock, loadWeekOptions, requestWeekRun, saveWeekOptions, type WeekOptions } from '../src/lib/weekPlan';
+import { backend } from '../src/lib/backend';
+import { showMessage } from '../src/lib/dialog';
+import { useLivePosition } from '../src/lib/location';
+import { useDriverData } from '../src/lib/store';
+import { DEFAULT_WEEK_OPTIONS, fmtClock, fmtHours, loadWeekOptions, planWeek, saveWeekOptions, type WeekOptions } from '../src/lib/weekPlan';
 import { searchAddress, type Place } from '../src/lib/mapbox';
 import { ToggleChip } from '../src/ui/Chips';
 import { Icon } from '../src/ui/Icon';
@@ -14,8 +18,8 @@ import { bareInput, color, font, radius, space, type } from '../src/ui/theme';
 const DOW = [['S', 'Sunday'], ['M', 'Monday'], ['T', 'Tuesday'], ['W', 'Wednesday'], ['T', 'Thursday'], ['F', 'Friday'], ['S', 'Saturday']] as const;
 
 /**
- * Optimize week's options (press and hold the optimize button). Kept on the
- * phone and used every time; "Optimize week" saves them and runs it.
+ * Optimize week (the optimize button on the Schedule): its options, kept on
+ * the phone for next time. "Optimize week" regroups the week and saves it.
  */
 export default function WeekOptionsScreen() {
   const router = useRouter();
@@ -26,11 +30,35 @@ export default function WeekOptionsScreen() {
   const tooShort = o.end - o.start < 60;
   const noDays = !o.days.some(Boolean);
 
+  const { routes, refresh } = useDriverData();
+  const pos = useLivePosition();
+  const [busy, setBusy] = useState(false);
+  // Optimize week: regroup the week's stops with these options and save it straight away
+  // (customers whose stop changes day get a text), then say what changed.
   async function run() {
-    if (tooShort || noDays) return;
-    await saveWeekOptions(o);
-    requestWeekRun();
-    router.back();
+    if (tooShort || noDays || busy) return;
+    setBusy(true);
+    try {
+      await saveWeekOptions(o);
+      const plan = planWeek({ routes, today: new Date(), from: o.startPlace ?? pos, options: o, pins: new Map() });
+      const moved = Object.keys(plan.movedFrom).length;
+      const days = plan.days
+        .map((d) => ({ day: d.day, stops: d.stops.filter((st) => st.status === 'scheduled' || st.status === 'queued').map((st) => st.id) }))
+        .filter((d) => d.stops.length);
+      if (days.length) await backend.applyWeek(days);
+      await refresh();
+      router.back();
+      const savedMin = plan.before.minutes - plan.after.minutes;
+      const savedMi = (plan.before.meters - plan.after.meters) / 1609.34;
+      if (!moved && savedMin < 5) showMessage('Week optimized', 'Your week was already well grouped, so no stops changed day.');
+      else showMessage('Week optimized', [
+        moved ? `${moved} ${moved === 1 ? 'stop moved' : 'stops moved'} to a new day, and ${moved === 1 ? 'its customer gets' : 'their customers get'} a text.` : 'No stops changed day.',
+        savedMin >= 5 ? `About ${fmtHours(savedMin)}${savedMi >= 1 ? ` and ${Math.round(savedMi)} miles` : ''} less driving.` : '',
+      ].filter(Boolean).join(' '));
+    } catch (e) {
+      showMessage('Could not optimize the week', e instanceof Error ? e.message : String(e));
+    }
+    setBusy(false);
   }
 
   return (
@@ -86,7 +114,7 @@ export default function WeekOptionsScreen() {
         </Section>
       </ScrollView>
       <View style={{ padding: space[4], paddingBottom: space[4] + (NATIVE_CHROME ? 0 : bottomInset), borderTopWidth: 1, borderTopColor: color.divider }}>
-        <Button icon="route" label="Optimize week" onPress={run} disabled={tooShort || noDays} />
+        <Button icon="route" label="Optimize week" onPress={run} loading={busy} disabled={tooShort || noDays} />
       </View>
     </SafeAreaView>
   );

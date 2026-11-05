@@ -326,8 +326,3 @@ function centroid(stops: LatLng[]): LatLng | null {
   if (!stops.length) return null;
   return { lat: stops.reduce((n, s) => n + s.lat, 0) / stops.length, lng: stops.reduce((n, s) => n + s.lng, 0) / stops.length };
 }
-
-// "Optimize week" on the options sheet asks the Schedule to run once it's back on screen.
-let runRequested = false;
-export function requestWeekRun() { runRequested = true; }
-export function takeWeekRun() { const r = runRequested; runRequested = false; return r; }
