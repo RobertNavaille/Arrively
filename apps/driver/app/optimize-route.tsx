@@ -17,6 +17,7 @@ import { Button } from '../src/ui/components';
 import { NATIVE_CHROME } from '../src/ui/nativeChrome';
 import { ReorderList } from '../src/ui/ReorderList';
 import { RouteMap } from '../src/ui/RouteMap';
+import { SwipeRow } from '../src/ui/SwipeRow';
 import type { MapStop } from '../src/ui/RouteMap.types';
 import { color, space, type } from '../src/ui/theme';
 import { AheadRow, TripTotals } from '../src/ui/TripParts';
@@ -24,7 +25,7 @@ import { AheadRow, TripTotals } from '../src/ui/TripParts';
 /**
  * Optimize route, in its own sheet (Apple's page sheet on iPhone): today's
  * stops left in the best order, on a map. Drag stops by their grip, lock one in
- * its place (its circle), or change how the trip is travelled; Confirm route
+ * its place (swipe its row left), or change how the trip is travelled; Confirm route
  * saves the order and the options.
  */
 export default function OptimizeRoute() {
@@ -37,6 +38,8 @@ export default function OptimizeRoute() {
   // The driver's own order (dragged or with locks); null = the suggested one.
   const [custom, setCustom] = useState<string[] | null>(null);
   const [locked, setLocked] = useState<string[]>([]);
+  // The row slid open on its Lock action (one at a time).
+  const [swiped, setSwiped] = useState<string | null>(null);
   const [options, setOptions] = useState<RouteOptions>(() => (route ? optionsOf(route) : {}));
   const [busy, setBusy] = useState<string | null>('plan');
   // While a stop is held by its grip the list doesn't scroll (and the sheet doesn't move).
@@ -152,9 +155,15 @@ export default function OptimizeRoute() {
                   onReorder={(list) => setCustom(list.map((s) => s.id))}
                   renderRow={(s, i, grip) => {
                     const before = was.get(s.id);
-                    return <AheadRow stop={s} detail={s.address.split(',')[0]} last={i === order.length - 1}
-                      highlight={before != null && i < before} trailing={grip}
-                      lock={{ on: locked.includes(s.id), toggle: () => toggleLock(s.id) }} />;
+                    const on = locked.includes(s.id);
+                    // Swipe the row left for Lock (or Unlock).
+                    return (
+                      <SwipeRow open={swiped === s.id} onOpenChange={(o) => setSwiped(o ? s.id : null)}
+                        action={{ label: on ? 'Unlock' : 'Lock', icon: 'lock', onPress: () => toggleLock(s.id) }}>
+                        <AheadRow stop={s} detail={s.address.split(',')[0]} last={i === order.length - 1}
+                          highlight={before != null && i < before} trailing={grip} lock={{ on }} />
+                      </SwipeRow>
+                    );
                   }} />
               </View>
             </>

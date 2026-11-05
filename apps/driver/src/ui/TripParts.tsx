@@ -41,23 +41,17 @@ export function AheadRow({ stop, detail, last, onPress, highlight, trailing, loc
   /** Moved earlier in a new order: the name is blue. */
   highlight?: boolean;
   trailing?: ReactNode;
-  /** Reviewing: the circle locks the stop in place, and shows a lock while it is. */
-  lock?: { on: boolean; toggle: () => void };
+  /** Optimize route: a lock in place of the circle while the stop is locked (swipe the row to lock or unlock). */
+  lock?: { on: boolean };
 }) {
   const marker = lock?.on
     ? <View style={{ marginTop: 3, height: 20, alignItems: 'center', justifyContent: 'center' }}><Icon name="lock" size={20} color={color.action} strokeWidth={2} /></View>
     : <View style={{ marginTop: 5, width: 16, height: 16, borderRadius: 8, backgroundColor: color.surface, borderWidth: 3, borderColor: color.action }} />;
-  const label = `${stop.customer_name}, ${detail}${highlight ? ', moved earlier' : ''}`;
+  const label = `${stop.customer_name}, ${detail}${lock?.on ? ', locked in place' : ''}${highlight ? ', moved earlier' : ''}`;
   const content = (
     <>
       <View style={{ width: 20, alignItems: 'center' }}>
-        {lock ? (
-          <Pressable onPress={lock.toggle} hitSlop={12} accessibilityRole="button"
-            accessibilityLabel={lock.on ? `Unlock ${stop.customer_name}` : `Lock ${stop.customer_name} in this place`}
-            accessibilityState={{ selected: lock.on }}>
-            {marker}
-          </Pressable>
-        ) : marker}
+        {marker}
         {last ? null : <View style={{ flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider }} />}
       </View>
       <View style={{ flex: 1, paddingBottom: 20 }}>
@@ -68,7 +62,7 @@ export function AheadRow({ stop, detail, last, onPress, highlight, trailing, loc
       {trailing}
     </>
   );
-  // Without a press (reviewing) it's a plain row, so its lock button stays enabled.
+  // Without a press (Optimize route) it's a plain row.
   if (!onPress) return <View accessibilityLabel={label} style={{ flexDirection: 'row', gap: space[3] }}>{content}</View>;
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label}
