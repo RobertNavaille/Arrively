@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
@@ -18,7 +17,7 @@ import { Button } from '../src/ui/components';
 import { NATIVE_CHROME } from '../src/ui/nativeChrome';
 import { ReorderList } from '../src/ui/ReorderList';
 import { RouteMap } from '../src/ui/RouteMap';
-import { SwipeRow } from '../src/ui/SwipeRow';
+import { RowMenu } from '../src/ui/RowMenu';
 import type { MapStop } from '../src/ui/RouteMap.types';
 import { color, space, type } from '../src/ui/theme';
 import { AheadRow, TripTotals } from '../src/ui/TripParts';
@@ -26,7 +25,7 @@ import { AheadRow, TripTotals } from '../src/ui/TripParts';
 /**
  * Optimize route, in its own sheet (Apple's page sheet on iPhone): today's
  * stops left in the best order, on a map. Drag stops by their grip, lock one in
- * its place (swipe its row left), or change how the trip is travelled; Confirm route
+ * its place or edit it (press and hold its row), or change how the trip is travelled; Confirm route
  * saves the order and the options.
  */
 export default function OptimizeRoute() {
@@ -39,8 +38,6 @@ export default function OptimizeRoute() {
   // The driver's own order (dragged or with locks); null = the suggested one.
   const [custom, setCustom] = useState<string[] | null>(null);
   const [locked, setLocked] = useState<string[]>([]);
-  // The row slid open on its Lock action (one at a time).
-  const [swiped, setSwiped] = useState<string | null>(null);
   const [options, setOptions] = useState<RouteOptions>(() => (route ? optionsOf(route) : {}));
   const [busy, setBusy] = useState<string | null>('plan');
   // While a stop is held by its grip the list doesn't scroll (and the sheet doesn't move).
@@ -113,8 +110,6 @@ export default function OptimizeRoute() {
   });
 
   return (
-    // Its own root for native gestures: iPhone presents the sheet apart from the rest of the app.
-    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaView edges={NATIVE_CHROME ? ['bottom'] : undefined} style={{ flex: 1, backgroundColor: color.surface }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[2], paddingTop: NATIVE_CHROME ? space[4] : space[2], paddingBottom: space[2] }}>
         <View style={{ flex: 1, alignItems: 'flex-start' }}><Button variant="text" label="Cancel" onPress={() => router.back()} /></View>
@@ -159,13 +154,15 @@ export default function OptimizeRoute() {
                   renderRow={(s, i, grip) => {
                     const before = was.get(s.id);
                     const on = locked.includes(s.id);
-                    // Swipe the row left for Lock (or Unlock).
+                    // Press and hold the row: Edit stop, and Lock in place (or Unlock).
                     return (
-                      <SwipeRow open={swiped === s.id} onOpenChange={(o) => setSwiped(o ? s.id : null)}
-                        action={{ label: on ? 'Unlock' : 'Lock', icon: 'lock', onPress: () => toggleLock(s.id) }}>
+                      <RowMenu label={`${s.customer_name}, ${s.address.split(',')[0]}${on ? ', locked in place' : ''}`} items={[
+                        { label: 'Edit stop', icon: 'edit', sfSymbol: 'pencil', onPress: () => router.push({ pathname: '/new-stop', params: { id: s.id, day: route!.day } }) },
+                        { label: on ? 'Unlock' : 'Lock in place', icon: 'lock', sfSymbol: on ? 'lock.open' : 'lock', onPress: () => toggleLock(s.id) },
+                      ]}>
                         <AheadRow stop={s} detail={s.address.split(',')[0]} last={i === order.length - 1}
                           highlight={before != null && i < before} trailing={grip} lock={{ on }} />
-                      </SwipeRow>
+                      </RowMenu>
                     );
                   }} />
               </View>
@@ -179,6 +176,5 @@ export default function OptimizeRoute() {
         <Button icon="check" label="Confirm route" onPress={confirm} loading={busy === 'apply'} disabled={!review || busy === 'options'} style={{ flex: 1 }} />
       </View>
     </SafeAreaView>
-    </GestureHandlerRootView>
   );
 }
