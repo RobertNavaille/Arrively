@@ -83,11 +83,16 @@ export function weekDays(today: Date, week: 0 | 1): string[] {
   return Array.from({ length: 7 }, (_, i) => dayKey(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + i, 12)));
 }
 
-/** A stop that may move: not started or done, on a day that hasn't started its trip, today or later, not pinned. */
+/**
+ * A stop that may move: not started or done, and not on a completed day. Today
+ * and later, only from days whose trip hasn't started; earlier this week, the
+ * jobs left undone (even on a day whose trip was started) move to a day ahead.
+ */
 function movable(s: Stop, r: Route, todayKey: string) {
-  return r.day >= todayKey && r.status !== 'active' && r.status !== 'completed'
-    && (s.status === 'scheduled' || s.status === 'queued');
+  if (r.status === 'completed' || (s.status !== 'scheduled' && s.status !== 'queued')) return false;
+  return r.day < todayKey || r.status !== 'active';
 }
+const dowOf = (k: string) => new Date(`${k}T12:00:00`).getDay();
 
 export function planWeek({ routes, today, from, options, pins }: {
   /** The driver's routes for the week (any day missing has no stops). */
@@ -101,8 +106,11 @@ export function planWeek({ routes, today, from, options, pins }: {
 }): WeekPlan {
   const todayKey = dayKey(today);
   // This week, or next week once this week has no work days left.
-  const left = weekDays(today, 0).some((k) => options.days[new Date(`${k}T12:00:00`).getDay()] && k >= todayKey);
-  const keys = weekDays(today, left ? 0 : 1);
+  const thisWeek = weekDays(today, 0);
+  const left = thisWeek.some((k) => options.days[dowOf(k)] && k >= todayKey);
+  const planKeys = weekDays(today, left ? 0 : 1);
+  // Plus the days already past this week, whose undone jobs move ahead (never earlier weeks).
+  const keys = [...thisWeek.filter((k) => k < todayKey && !planKeys.includes(k)), ...planKeys];
   // Even days, driving; no lunch break.
   const spread = 'even' as 'even' | 'fewer';
   const routeOn = new Map(routes.filter((r) => keys.includes(r.day)).map((r) => [r.day, r]));
@@ -136,7 +144,7 @@ export function planWeek({ routes, today, from, options, pins }: {
   }
 
   // Days that can take stops: work days, today or later, whose trip hasn't started.
-  const targets = keys.filter((k, i) => options.days[i] && k >= todayKey && routeOn.get(k)?.status !== 'active');
+  const targets = planKeys.filter((k) => options.days[dowOf(k)] && k >= todayKey && routeOn.get(k)?.status !== 'active');
   // Stops that stay where they are, and the ones to regroup.
   const fixed = new Map<string, Stop[]>(keys.map((k) => [k, []]));
   const moving: { stop: Stop; was: string }[] = [];
