@@ -2,12 +2,13 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { FloatingSurface } from './FloatingSurface';
 import { Icon, type IconName } from './Icon';
-import { color, font, radius, shadow, space } from './theme';
+import { color, font, shadow, space } from './theme';
 
 export interface RowMenuItem { label: string; icon: IconName; onPress: () => void; destructive?: boolean }
 
-const MENU_W = 240;
-const ITEM_H = 48;
+const MENU_W = 250;
+const ITEM_H = 52;
+const PAD = 8;
 
 type Rect = { x: number; y: number; w: number; h: number };
 const Ctx = createContext<((items: RowMenuItem[], at: Rect) => void) | null>(null);
@@ -27,7 +28,7 @@ export function RowMenuHost({ children }: { children: ReactNode }) {
   let pos = null;
   if (menu) {
     const top = menu.at.y - menu.origin.y, left = menu.at.x - menu.origin.x;
-    const menuH = menu.items.length * ITEM_H;
+    const menuH = menu.items.length * ITEM_H + PAD * 2;
     const below = top + menu.at.h + space[1] + menuH < menu.h - space[4];
     pos = { left: Math.max(space[4], Math.min(menu.w - MENU_W - space[4], left + menu.at.w - MENU_W)), top: below ? top + menu.at.h + space[1] : Math.max(space[4], top - menuH - space[1]) };
   }
@@ -43,9 +44,9 @@ export function RowMenuHost({ children }: { children: ReactNode }) {
               <FloatingSurface style={StyleSheet.absoluteFill} />
               {menu.items.map((it, i) => (
                 <Pressable key={it.label} accessibilityRole="menuitem" onPress={() => { setMenu(null); it.onPress(); }}
-                  style={({ pressed }) => [styles.item, i < menu.items.length - 1 && styles.divider, pressed && { backgroundColor: color.surfaceMuted }]}>
+                  style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}>
+                  <Icon name={it.icon} size={20} color={it.destructive ? color.danger : color.ink} />
                   <Text style={[styles.label, it.destructive && { color: color.danger }]}>{it.label}</Text>
-                  <Icon name={it.icon} size={18} color={it.destructive ? color.danger : color.ink} />
                 </Pressable>
               ))}
             </View>
@@ -76,9 +77,10 @@ export function RowMenu({ children, items, label }: { children: ReactNode; items
   );
 }
 
+// As Apple's menus on iOS 26: a frosted card with round corners, icon then label, no dividers.
 const styles = StyleSheet.create({
-  menu: { position: 'absolute', width: MENU_W, borderRadius: radius.lg, overflow: 'hidden' },
-  item: { height: ITEM_H, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space[4] },
-  divider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.divider },
-  label: { fontFamily: font.regular, fontSize: 16, color: color.ink },
+  menu: { position: 'absolute', width: MENU_W, paddingVertical: PAD, borderRadius: 26, overflow: 'hidden' },
+  item: { height: ITEM_H, flexDirection: 'row', alignItems: 'center', gap: space[3], marginHorizontal: PAD, paddingHorizontal: space[3], borderRadius: 18 },
+  itemPressed: { backgroundColor: 'rgba(120,120,128,0.2)' },
+  label: { fontFamily: font.regular, fontSize: 17, color: color.ink },
 });
