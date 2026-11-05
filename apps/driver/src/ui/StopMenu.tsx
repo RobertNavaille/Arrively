@@ -15,8 +15,8 @@ export function StopMenu({ stop, day, locked, onPress, children }: {
   const router = useRouter();
   const canLock = stop.status === 'scheduled' || stop.status === 'queued';
   const items: RowMenuItem[] = [
-    { label: 'Edit stop', icon: 'edit', onPress: () => router.push({ pathname: '/new-stop', params: { id: stop.id, day } }) },
-    ...(canLock || locked ? [{ label: locked ? 'Unlock' : 'Lock in place', icon: 'lock' as const, onPress: () => setLocked(stop.id, !locked) }] : []),
+    { label: 'Edit stop', icon: 'edit', sfSymbol: 'pencil', onPress: () => router.push({ pathname: '/new-stop', params: { id: stop.id, day } }) },
+    ...(canLock || locked ? [{ label: locked ? 'Unlock' : 'Lock in place', icon: 'lock' as const, sfSymbol: locked ? 'lock.open' : 'lock', onPress: () => setLocked(stop.id, !locked) }] : []),
   ];
   return (
     <RowMenu items={items} onPress={onPress} label={`${stop.customer_name}, ${stop.address.split(',')[0]}${locked ? ', locked' : ''}`}>

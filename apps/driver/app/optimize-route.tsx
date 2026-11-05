@@ -175,8 +175,8 @@ export default function OptimizeRoute() {
                     // Press and hold the row: Edit stop, and Lock in place (or Unlock).
                     return (
                       <RowMenu label={`${s.customer_name}, ${s.address.split(',')[0]}${on ? ', locked in place' : ''}`} items={[
-                        { label: 'Edit stop', icon: 'edit', onPress: () => router.push({ pathname: '/new-stop', params: { id: s.id, day: route!.day } }) },
-                        { label: on ? 'Unlock' : 'Lock in place', icon: 'lock', onPress: () => toggleLock(s.id) },
+                        { label: 'Edit stop', icon: 'edit', sfSymbol: 'pencil', onPress: () => router.push({ pathname: '/new-stop', params: { id: s.id, day: route!.day } }) },
+                        { label: on ? 'Unlock' : 'Lock in place', icon: 'lock', sfSymbol: on ? 'lock.open' : 'lock', onPress: () => toggleLock(s.id) },
                       ]}>
                         <AheadRow stop={s} detail={s.address.split(',')[0]} last={i === order.length - 1}
                           highlight={before != null && i < before} trailing={grip} lock={{ on }} />

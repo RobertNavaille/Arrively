@@ -5,7 +5,8 @@ import { FloatingSurface } from './FloatingSurface';
 import { Icon, type IconName } from './Icon';
 import { color, font, shadow, space } from './theme';
 
-export interface RowMenuItem { label: string; icon: IconName; onPress: () => void; destructive?: boolean }
+/** `sfSymbol`: the SF Symbol in Apple's menu on iPhone (menus use outline symbols, e.g. 'lock'). */
+export interface RowMenuItem { label: string; icon: IconName; sfSymbol?: string; onPress: () => void; destructive?: boolean }
 
 const MENU_W = 250;
 const ITEM_H = 52;
@@ -15,6 +16,8 @@ type Rect = { x: number; y: number; w: number; h: number };
 const Ctx = createContext<((items: RowMenuItem[], at: Rect) => void) | null>(null);
 
 /**
+ * Web and Android. (iPhone uses Apple's own context menu: RowMenu.ios.tsx.)
+ *
  * Where row menus are drawn: wrap the screen in it. The menu is drawn inside
  * the screen, not in a pop-up window (React Native's Modal), because iPhone
  * won't show a pop-up over a screen that's itself a sheet.
