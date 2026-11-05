@@ -1,13 +1,15 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AppState, FlatList, Modal, Platform, Pressable, ScrollView, Text, View, useWindowDimensions,
+  Animated, AppState, FlatList, Modal, Platform, Pressable, Text, View, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { showIOSActionSheet } from '../src/lib/actionSheet';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
-import { addDays, dayKey } from '../src/lib/geo';
+import { addDays, dayKey, distanceM, fmtDuration, miles, routeTotals } from '../src/lib/geo';
+import { useRoadPath } from '../src/lib/directions';
+import { optionsOf, SPEED } from '../src/lib/routing';
 import { currentPosition, stopSharing, useLivePosition } from '../src/lib/location';
 import { currentStop, dayRange, useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
@@ -306,6 +308,11 @@ const TOOLBAR_H = 88;
 const ROW_H = 68;
 
 /** A day's page: its map, how many stops, then the stops. */
+// The day's map: tall at the top of the page, shrinking to MAP_MIN as the stops are scrolled up.
+const MAP_MAX = 300;
+const MAP_MIN = 150;
+const MAP_SHRINK = MAP_MAX - MAP_MIN;
+
 function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad }: {
   route: Route | undefined; isToday: boolean; driver: LatLng | null; onOpenStop: (s: Stop) => void; loading: boolean;
   bottomPad: number;
@@ -320,41 +327,79 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad }: {
     : done ? plural(remaining.length, 'stop left', 'stops left') : plural(stops.length, 'stop', 'stops');
   const countMeta = (route?.status === 'completed' ? `${stops.filter((s) => s.status === 'completed').length} completed`
     : done ? `${done} done` : '');
+  // Drive time and distance for the stops left: by road when the map service answers, else
+  // straight lines at driving speed. Today it starts from the driver; other days from the first stop.
+  const options = route ? optionsOf(route) : {};
+  const start = isToday ? driver : null;
+  const road = useRoadPath(start, remaining, options);
+  const backHome = !!options.roundTrip && !!start && remaining.length > 0;
+  const straightM = routeTotals(remaining, start).meters + (backHome ? distanceM(remaining[remaining.length - 1], start!) : 0);
+  const driveMin = road ? Math.round(road.durationS / 60) : Math.round((straightM * 1.3) / SPEED[options.mode ?? 'drive'] / 60);
+  const driveM = road ? road.distanceM : straightM;
+  const drive = remaining.length && (driveM > 0 || driveMin > 0)
+    ? `${fmtDuration(Math.max(1, driveMin))} · ${miles(driveM) < 10 ? miles(driveM).toFixed(1) : Math.round(miles(driveM))} mi` : '';
   const mapStops: MapStop[] = stops.map((s, i) => ({
     id: s.id, lat: s.lat, lng: s.lng, n: i + 1,
     // The next stop stands out only once the trip is under way.
     state: isDone(s) ? 'done' : route?.status === 'active' && s.id === current?.id ? 'next' : 'upcoming',
   }));
+
+  // The map sits over the top of the list and shrinks as it scrolls, keeping its middle in view
+  // (the map is drawn full height and cropped top and bottom alike). Once the scrolling settles,
+  // the stops are framed again in the part that shows.
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [crop, setCrop] = useState(0);
+  // Settled: a moment after the last scroll movement (the scroll-end events don't come on the web).
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const id = scrollY.addListener(({ value }) => {
+      clearTimeout(t);
+      t = setTimeout(() => setCrop(Math.round(Math.min(MAP_SHRINK, Math.max(0, value)) / 10) * 10), 180);
+    });
+    return () => { clearTimeout(t); scrollY.removeListener(id); };
+  }, [scrollY]);
+  const mapH = scrollY.interpolate({ inputRange: [0, MAP_SHRINK], outputRange: [MAP_MAX, MAP_MIN], extrapolate: 'clamp' });
+  const mapShift = scrollY.interpolate({ inputRange: [0, MAP_SHRINK], outputRange: [0, -MAP_SHRINK / 2], extrapolate: 'clamp' });
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: bottomPad }}>
-      <View style={{ paddingHorizontal: space[4] }}>
-        <View style={{ borderRadius: radius.md, overflow: 'hidden' }}>
-          <RouteMap height={190} stops={mapStops} driver={isToday ? driver : null} />
-        </View>
-      </View>
-      {!stops.length ? (
-        <View style={{ alignItems: 'center', paddingVertical: space[8], paddingHorizontal: space[6], gap: space[2] }}>
-          <Icon name="route" size={28} color={color.inkMuted} />
-          <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted, textAlign: 'center' }]}>
-            {loading ? 'Loading…' : 'No stops this day. Tap + to add one.'}
-          </Text>
-        </View>
-      ) : (
-        <>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space[3], paddingHorizontal: space[4], paddingTop: space[6], paddingBottom: space[4] }}>
-            <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]}>{count}</Text>
-            {countMeta ? <Text style={[type.body, { color: color.inkMuted, flexShrink: 1, textAlign: 'right' }]}>{countMeta}</Text> : null}
+    <View style={{ flex: 1 }}>
+      <Animated.ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: MAP_MAX, paddingBottom: bottomPad }}
+        scrollEventThrottle={16}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}>
+        {!stops.length ? (
+          <View style={{ alignItems: 'center', paddingVertical: space[8], paddingHorizontal: space[6], gap: space[2] }}>
+            <Icon name="route" size={28} color={color.inkMuted} />
+            <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted, textAlign: 'center' }]}>
+              {loading ? 'Loading…' : 'No stops this day. Tap + to add one.'}
+            </Text>
           </View>
-          <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
-            {stops.map((s) => (
-              <StopMenu key={s.id} stop={s} day={route!.day} locked={locks.has(s.id)} onPress={() => onOpenStop(s)}>
-                <StopListRow stop={s} isCurrent={route?.status === 'active' && s.id === current?.id} locked={locks.has(s.id)} />
-              </StopMenu>
-            ))}
-          </View>
-        </>
-      )}
-    </ScrollView>
+        ) : (
+          <>
+            {/* The day's count, then (smaller, gray) the drive time and distance for what's left. */}
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space[3], paddingHorizontal: space[4], paddingTop: 20, paddingBottom: space[3] }}>
+              <Text style={{ flexShrink: 1, fontFamily: font.semibold, fontSize: 17, lineHeight: 24, color: color.ink }} numberOfLines={1}>
+                {count}{drive ? <Text style={{ fontFamily: font.regular, color: color.inkMuted }}>{`  ·  ${drive}`}</Text> : null}
+              </Text>
+              {countMeta ? <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }}>{countMeta}</Text> : null}
+            </View>
+            <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
+              {stops.map((s) => (
+                <StopMenu key={s.id} stop={s} day={route!.day} locked={locks.has(s.id)} onPress={() => onOpenStop(s)}>
+                  <StopListRow stop={s} isCurrent={route?.status === 'active' && s.id === current?.id} locked={locks.has(s.id)} />
+                </StopMenu>
+              ))}
+            </View>
+          </>
+        )}
+      </Animated.ScrollView>
+      {/* Over the list's top: the page's background (so rows pass under it), then the map. */}
+      <Animated.View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: mapH, paddingHorizontal: space[4], backgroundColor: color.surface }}>
+        <Animated.View style={{ flex: 1, borderRadius: radius.md, overflow: 'hidden' }}>
+          <Animated.View style={{ height: MAP_MAX, transform: [{ translateY: mapShift }] }}>
+            <RouteMap height={MAP_MAX} stops={mapStops} driver={isToday ? driver : null} inset={{ top: crop / 2, bottom: crop / 2 }} />
+          </Animated.View>
+        </Animated.View>
+      </Animated.View>
+    </View>
   );
 }
 
