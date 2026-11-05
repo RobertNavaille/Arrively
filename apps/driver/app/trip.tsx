@@ -16,6 +16,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
 import { AheadRow, TripTotals } from '../src/ui/TripParts';
 import { Cascade } from '../src/ui/Cascade';
+import { RowMenuHost } from '../src/ui/RowMenu';
+import { StopMenu } from '../src/ui/StopMenu';
+import { useLocks } from '../src/lib/locks';
 import { onOptimizeSignal } from '../src/lib/optimizeSignal';
 import { TRIP_SCREENS_TO_LEAVE, TripSheetHost } from '../src/ui/TripSheetHost';
 import { NATIVE_CHROME } from '../src/ui/nativeChrome';
@@ -84,6 +87,7 @@ export default function Trip() {
     // After the sheet has slid away.
     else setTimeout(() => setSwap((sw) => (sw ? { ...sw, phase: 'out' } : sw)), 450);
   }), []);
+  const locks = useLocks();
   const stops = route?.stops ?? [];
   const byId = new Map(stops.map((s) => [s.id, s]));
   const done = stops.filter(isDone);
@@ -295,6 +299,8 @@ export default function Trip() {
   );
 
   return (
+    // Row menus (press and hold a stop) draw here on the web; in iPhone's sheet, in app/trip-sheet.tsx.
+    <RowMenuHost>
     <View style={{ flex: 1, backgroundColor: color.mapGround }}>
       <RouteMap height={height} stops={mapStops} driver={pos} line={line}
         pin={focus ? current : null} pinLabel={phase === 'arrived' ? current?.address.split(',')[0] : undefined}
@@ -481,9 +487,11 @@ export default function Trip() {
                 </View>
               ) : null}
               <View accessibilityRole="list" style={{ paddingHorizontal: space[4], paddingTop: 0 }}>
+                {/* Tap a stop for its details; press and hold for Edit stop and Lock. */}
                 {slide(shownAfter.map((s, i) => (
-                  <AheadRow key={s.id} stop={s} detail={s.address.split(',')[0]} last={i === shownAfter.length - 1}
-                    onPress={() => router.push(`/stop/${s.id}`)} />
+                  <StopMenu key={s.id} stop={s} day={route.day} onPress={() => router.push(`/stop/${s.id}`)} locked={locks.has(s.id)}>
+                    <AheadRow stop={s} detail={s.address.split(',')[0]} last={i === shownAfter.length - 1} lock={{ on: locks.has(s.id) }} />
+                  </StopMenu>
                 )), slideDone)}
               </View>
               {done.length ? (
@@ -520,6 +528,7 @@ export default function Trip() {
         ) : null}
       </Modal>
     </View>
+    </RowMenuHost>
   );
 }
 

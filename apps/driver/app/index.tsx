@@ -16,6 +16,9 @@ import { Avatar, Button, IconButton } from '../src/ui/components';
 import { FloatingSurface } from '../src/ui/FloatingSurface';
 import { Icon } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
+import { RowMenuHost } from '../src/ui/RowMenu';
+import { StopMenu } from '../src/ui/StopMenu';
+import { useLocks } from '../src/lib/locks';
 import type { MapStop } from '../src/ui/RouteMap.types';
 import { color, font, radius, space, type } from '../src/ui/theme';
 
@@ -143,6 +146,8 @@ export default function MyDay() {
   const bottomInset = useBottomInset();
 
   return (
+    // Row menus (press and hold a stop) draw over the whole screen.
+    <RowMenuHost>
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: color.surface }}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[2] }}>
@@ -264,6 +269,7 @@ export default function MyDay() {
       <Menu visible={menu} onClose={() => setMenu(false)} offline={backend.offline} onDemo={() => { setMenu(false); demoDay(); }}
         onSignOut={() => { setMenu(false); signOut(); }} />
     </SafeAreaView>
+    </RowMenuHost>
   );
 }
 
@@ -304,6 +310,7 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad }: {
   route: Route | undefined; isToday: boolean; driver: LatLng | null; onOpenStop: (s: Stop) => void; loading: boolean;
   bottomPad: number;
 }) {
+  const locks = useLocks();
   const stops = route?.stops ?? [];
   const current = currentStop(route);
   const remaining = stops.filter((s) => !isDone(s));
@@ -340,7 +347,9 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad }: {
           </View>
           <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
             {stops.map((s) => (
-              <StopListRow key={s.id} stop={s} isCurrent={route?.status === 'active' && s.id === current?.id} onPress={() => onOpenStop(s)} />
+              <StopMenu key={s.id} stop={s} day={route!.day} locked={locks.has(s.id)} onPress={() => onOpenStop(s)}>
+                <StopListRow stop={s} isCurrent={route?.status === 'active' && s.id === current?.id} locked={locks.has(s.id)} />
+              </StopMenu>
             ))}
           </View>
         </>
@@ -350,16 +359,20 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad }: {
 }
 
 /** A stop on the day, styled like the trip's stop list: name and address (gray once done). No markers or dividers. */
-function StopListRow({ stop, isCurrent, onPress }: { stop: Stop; isCurrent: boolean; onPress: () => void }) {
+// Tapping and press and hold are StopMenu's (around it).
+function StopListRow({ stop, isCurrent, locked }: { stop: Stop; isCurrent: boolean; locked: boolean }) {
   const done = isDone(stop);
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${stop.customer_name}, ${stop.address}${done ? ', done' : isCurrent ? ', next' : ''}`}
-      style={({ pressed }) => [{ height: ROW_H }, pressed && { opacity: 0.6 }]}>
-      <Text style={{ fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: done ? color.inkMuted : color.ink }} numberOfLines={1} maxFontSizeMultiplier={1}>{stop.customer_name}</Text>
+    <View accessibilityLabel={`${stop.customer_name}, ${stop.address}${done ? ', done' : isCurrent ? ', next' : ''}${locked ? ', locked to this day' : ''}`}
+      style={{ height: ROW_H }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+        <Text style={{ flexShrink: 1, fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: done ? color.inkMuted : color.ink }} numberOfLines={1} maxFontSizeMultiplier={1}>{stop.customer_name}</Text>
+        {locked ? <Icon name="lock" size={14} color={color.inkMuted} /> : null}
+      </View>
       <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }} numberOfLines={1} maxFontSizeMultiplier={1}>
         {stop.address.split(',')[0]}{stop.notes ? ` · ${stop.notes}` : ''}
       </Text>
-    </Pressable>
+    </View>
   );
 }
 

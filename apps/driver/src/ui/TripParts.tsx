@@ -41,7 +41,7 @@ export function AheadRow({ stop, detail, last, onPress, highlight, trailing, loc
   /** Moved earlier in a new order: the name is blue. */
   highlight?: boolean;
   trailing?: ReactNode;
-  /** Optimize route: a lock in place of the circle while the stop is locked (swipe the row to lock or unlock). */
+  /** A lock in place of the circle while the stop is locked (press and hold the row to lock or unlock). */
   lock?: { on: boolean };
 }) {
   const marker = lock?.on
@@ -55,9 +55,9 @@ export function AheadRow({ stop, detail, last, onPress, highlight, trailing, loc
         {last ? null : <View style={{ flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider }} />}
       </View>
       <View style={{ flex: 1, paddingBottom: 20 }}>
-        {/* Draggable rows (reviewing): no text selection, which a mouse drag on the web would start. */}
-        <Text selectable={!lock} style={{ fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: highlight ? color.actionInk : color.ink }}>{stop.customer_name}</Text>
-        <Text selectable={!lock} style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }}>{detail}</Text>
+        {/* Not selectable: press and hold opens the row's menu (and a drag mustn't select text). */}
+        <Text selectable={false} style={{ fontFamily: font.semibold, fontSize: 18, lineHeight: 26, color: highlight ? color.actionInk : color.ink }}>{stop.customer_name}</Text>
+        <Text selectable={false} style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }}>{detail}</Text>
       </View>
       {trailing}
     </>

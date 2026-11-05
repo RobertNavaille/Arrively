@@ -60,14 +60,15 @@ export function RowMenuHost({ children }: { children: ReactNode }) {
 /**
  * Press and hold a row for a small menu of actions beside it, in the style of
  * Apple's context menus: a frosted card just under the row (or above it, near
- * the bottom). Needs a RowMenuHost around the screen.
+ * the bottom). A tap does `onPress` (the row's own action). Needs a RowMenuHost
+ * around the screen.
  */
-export function RowMenu({ children, items, label }: { children: ReactNode; items: RowMenuItem[]; label: string }) {
+export function RowMenu({ children, items, label, onPress }: { children: ReactNode; items: RowMenuItem[]; label: string; onPress?: () => void }) {
   const ref = useRef<View>(null);
   const open = useContext(Ctx);
   const show = () => ref.current?.measureInWindow((x, y, w, h) => open?.(items, { x, y, w, h }));
   return (
-    <Pressable ref={ref} onLongPress={show} delayLongPress={400} accessibilityHint="Press and hold for options"
+    <Pressable ref={ref} onPress={onPress} onLongPress={show} delayLongPress={400} accessibilityRole={onPress ? 'button' : undefined} accessibilityHint="Press and hold for options"
       accessibilityActions={items.map((it, i) => ({ name: `a${i}`, label: it.label }))}
       onAccessibilityAction={(e) => items[Number(e.nativeEvent.actionName.slice(1))]?.onPress()}
       accessibilityLabel={label}

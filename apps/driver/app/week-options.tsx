@@ -6,6 +6,7 @@ import { useBottomInset } from '../src/lib/viewport';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
 import { useLivePosition } from '../src/lib/location';
+import { isLocked, locksReady } from '../src/lib/locks';
 import { useDriverData } from '../src/lib/store';
 import { DEFAULT_WEEK_OPTIONS, fmtClock, fmtHours, loadWeekOptions, planWeek, saveWeekOptions, type WeekOptions } from '../src/lib/weekPlan';
 import { searchAddress, type Place } from '../src/lib/mapbox';
@@ -40,7 +41,10 @@ export default function WeekOptionsScreen() {
     setBusy(true);
     try {
       await saveWeekOptions(o);
-      const plan = planWeek({ routes, today: new Date(), from: o.startPlace ?? pos, options: o, pins: new Map() });
+      // Locked stops keep their day.
+      await locksReady();
+      const pins = new Map(routes.flatMap((r) => r.stops.filter((st) => isLocked(st.id)).map((st) => [st.id, r.day] as [string, string])));
+      const plan = planWeek({ routes, today: new Date(), from: o.startPlace ?? pos, options: o, pins });
       const moved = Object.keys(plan.movedFrom).length;
       const days = plan.days
         .map((d) => ({ day: d.day, stops: d.stops.filter((st) => st.status === 'scheduled' || st.status === 'queued').map((st) => st.id) }))

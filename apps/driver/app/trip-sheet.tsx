@@ -2,6 +2,7 @@ import { useNavigation } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSheetContent } from '../src/lib/sheetPortal';
+import { RowMenuHost } from '../src/ui/RowMenu';
 import { color, space } from '../src/ui/theme';
 
 // iPhone (trial): Apple's sheet over the trip map, showing what the trip
@@ -70,6 +71,8 @@ export default function TripSheet() {
 
   if (!sheet) return <View style={{ flex: 1, backgroundColor: color.surface }} />;
   return (
+    // Row menus (press and hold a stop) are drawn inside the sheet.
+    <RowMenuHost>
     <View style={{ flex: 1, backgroundColor: color.surface }} onLayout={(e) => onLayout(e.nativeEvent.layout.height)}>
       {/* First inside the sheet, before the list: with the list first, Apple's sheet leaves it blank.
           The totals float over the list's top (absolute); without totals, an empty marker takes their place. */}
@@ -91,6 +94,7 @@ export default function TripSheet() {
       </View>
       {sheet.overlay}
     </View>
+    </RowMenuHost>
   );
 }
 

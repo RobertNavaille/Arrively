@@ -8,6 +8,7 @@ import { useRoadPath } from '../src/lib/directions';
 import { dayKey, distanceM, routeTotals } from '../src/lib/geo';
 import { currentPosition, useLivePosition } from '../src/lib/location';
 import { lockedOrder, optionsOf, SPEED, type RouteOptions, type RoutePlan, type TravelMode } from '../src/lib/routing';
+import { isLocked, locksReady, setLocked as setStopLocked, useLocks } from '../src/lib/locks';
 import { sendOptimizeSignal } from '../src/lib/optimizeSignal';
 import { useDriverData } from '../src/lib/store';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
@@ -38,7 +39,9 @@ export default function OptimizeRoute() {
   const [review, setReview] = useState<{ plan: RoutePlan; from: LatLng | null } | null>(null);
   // The driver's own order (dragged or with locks); null = the suggested one.
   const [custom, setCustom] = useState<string[] | null>(null);
-  const [locked, setLocked] = useState<string[]>([]);
+  // Locked stops (shared with the trip and Schedule's menus, kept on the phone).
+  const lockSet = useLocks();
+  const locked = (route?.stops ?? []).filter((s) => lockSet.has(s.id)).map((s) => s.id);
   const [options, setOptions] = useState<RouteOptions>(() => (route ? optionsOf(route) : {}));
   const [busy, setBusy] = useState<string | null>('plan');
   // While a stop is held by its grip the list doesn't scroll (and the sheet doesn't move).
@@ -61,7 +64,15 @@ export default function OptimizeRoute() {
     planned.current = true;
     run('plan', async () => {
       const here = pos ?? (await currentPosition());
-      setReview({ plan: await backend.planRoute(route.id, here, optionsOf(route)), from: here });
+      await locksReady();
+      const plan = await backend.planRoute(route.id, here, optionsOf(route));
+      setReview({ plan, from: here });
+      // Stops locked earlier keep the place they have now; the rest are optimized around them.
+      const pins = Object.fromEntries(plan.current.order.map((id, i) => [id, i]).filter(([id]) => isLocked(id as string)));
+      if (Object.keys(pins).length) {
+        const keep = lockedOrder(plan, route, here, pins);
+        setCustom(keep.join() === plan.order.join() ? null : keep);
+      }
     });
   }, [route]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -89,9 +100,9 @@ export default function OptimizeRoute() {
   const showOrder = (next: string[]) => setCustom(review && next.join() === review.plan.order.join() ? null : next);
   const toggleLock = (id: string) => {
     if (!review) return;
-    if (locked.includes(id)) { setLocked(locked.filter((x) => x !== id)); return; }
+    if (locked.includes(id)) { setStopLocked(id, false); return; }
     const next = [...locked, id];
-    setLocked(next);
+    setStopLocked(id, true);
     showOrder(lockedOrder(review.plan, route!, review.from, Object.fromEntries(next.map((x) => [x, shown.indexOf(x)]))));
   };
   // A changed option plans the route again with it; locked stops stay where they are.
