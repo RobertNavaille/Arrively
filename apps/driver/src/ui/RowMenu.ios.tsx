@@ -31,8 +31,9 @@ export function RowMenu({ children, items, label, onPress }: { children: ReactNo
           ...(it.destructive ? { menuAttributes: ['destructive' as const] } : {}),
         })),
       }}
-      // The lifted row: a white (dark: system background) rounded card, like the Phone app's.
-      previewConfig={{ previewType: 'DEFAULT', borderRadius: 16, backgroundColor: { dynamic: { light: '#FFFFFF', dark: '#1C1C1E' } } }}
+      // The lifted row is the row itself (it has its own background: styles.card), with round corners.
+      // No preview background colour: the library leaves it on the row for a while after the menu closes.
+      previewConfig={{ previewType: 'DEFAULT', borderRadius: 16 }}
       onPressMenuItem={({ nativeEvent }) => items[Number(nativeEvent.actionKey)]?.onPress()}>
       <Pressable onPress={onPress} disabled={!onPress} accessibilityRole={onPress ? 'button' : undefined}
         accessibilityLabel={label} accessibilityHint="Press and hold for options"
