@@ -1,18 +1,19 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Icon, type IconName } from './Icon';
+import { FloatingSurface } from './FloatingSurface';
 import { color, font, radius, shadow, space } from './theme';
 
-/** `sfSymbol`: the SF Symbol in Apple's menu on iPhone (menus use the outline symbols). */
-export interface RowMenuItem { label: string; icon: IconName; sfSymbol?: string; onPress: () => void; destructive?: boolean }
+export interface RowMenuItem { label: string; icon: IconName; onPress: () => void; destructive?: boolean }
 
 const MENU_W = 240;
 const ITEM_H = 48;
 
 /**
- * Press and hold a row for a small menu of actions beside it. On iPhone this is
- * Apple's own context menu (RowMenu.ios.tsx); here (web, Android) it's drawn:
- * a card just under the row (or above it, near the bottom of the screen).
+ * Press and hold a row for a small menu of actions beside it, in the style of
+ * Apple's context menus: a frosted card just under the row (or above it, near
+ * the bottom of the screen). Drawn here on every platform: Apple's own context
+ * menu can't open from a React Native row (the row takes the touch first).
  */
 export function RowMenu({ children, items, label }: { children: ReactNode; items: RowMenuItem[]; label: string }) {
   const ref = useRef<View>(null);
@@ -37,6 +38,8 @@ export function RowMenu({ children, items, label }: { children: ReactNode; items
             left: Math.max(space[4], at.x + at.w - MENU_W),
             top: below ? at.y + at.h + space[1] : at.y - menuH - space[1],
           }]}>
+            {/* Frosted (Liquid Glass on iPhone), like Apple's menus. */}
+            <FloatingSurface style={StyleSheet.absoluteFill} />
             {items.map((it, i) => (
               <Pressable key={it.label} accessibilityRole="menuitem" onPress={() => { setAt(null); it.onPress(); }}
                 style={({ pressed }) => [styles.item, i < items.length - 1 && styles.divider, pressed && { backgroundColor: color.surfaceMuted }]}>
@@ -52,7 +55,7 @@ export function RowMenu({ children, items, label }: { children: ReactNode; items
 }
 
 const styles = StyleSheet.create({
-  menu: { position: 'absolute', width: MENU_W, borderRadius: radius.md, backgroundColor: color.surface, overflow: 'hidden' },
+  menu: { position: 'absolute', width: MENU_W, borderRadius: radius.lg, overflow: 'hidden' },
   item: { height: ITEM_H, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space[4] },
   divider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.divider },
   label: { fontFamily: font.regular, fontSize: 16, color: color.ink },

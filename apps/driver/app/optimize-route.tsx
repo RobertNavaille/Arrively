@@ -8,6 +8,7 @@ import { useRoadPath } from '../src/lib/directions';
 import { dayKey, distanceM, routeTotals } from '../src/lib/geo';
 import { currentPosition, useLivePosition } from '../src/lib/location';
 import { lockedOrder, optionsOf, SPEED, type RouteOptions, type RoutePlan, type TravelMode } from '../src/lib/routing';
+import { sendOptimizeSignal } from '../src/lib/optimizeSignal';
 import { useDriverData } from '../src/lib/store';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
 import { useBottomInset } from '../src/lib/viewport';
@@ -102,11 +103,16 @@ export default function OptimizeRoute() {
     const keep = lockedOrder(plan, route, review.from, Object.fromEntries(locked.map((id) => [id, shown.indexOf(id)])));
     setCustom(keep.join() === plan.order.join() ? null : keep);
   });
+  // The trip underneath keeps the old order on screen while this saves, then slides the new one in.
   const confirm = () => run('apply', async () => {
     if (!review || !route) return;
-    await backend.applyPlan(route.id, custom ?? review.plan.order, review.from, options);
-    await refresh();
+    sendOptimizeSignal('hold');
+    try {
+      await backend.applyPlan(route.id, custom ?? review.plan.order, review.from, options);
+      await refresh();
+    } catch (e) { sendOptimizeSignal('cancel'); throw e; }
     router.back();
+    sendOptimizeSignal('go');
   });
 
   return (
@@ -157,8 +163,8 @@ export default function OptimizeRoute() {
                     // Press and hold the row: Edit stop, and Lock in place (or Unlock).
                     return (
                       <RowMenu label={`${s.customer_name}, ${s.address.split(',')[0]}${on ? ', locked in place' : ''}`} items={[
-                        { label: 'Edit stop', icon: 'edit', sfSymbol: 'pencil', onPress: () => router.push({ pathname: '/new-stop', params: { id: s.id, day: route!.day } }) },
-                        { label: on ? 'Unlock' : 'Lock in place', icon: 'lock', sfSymbol: on ? 'lock.open' : 'lock', onPress: () => toggleLock(s.id) },
+                        { label: 'Edit stop', icon: 'edit', onPress: () => router.push({ pathname: '/new-stop', params: { id: s.id, day: route!.day } }) },
+                        { label: on ? 'Unlock' : 'Lock in place', icon: 'lock', onPress: () => toggleLock(s.id) },
                       ]}>
                         <AheadRow stop={s} detail={s.address.split(',')[0]} last={i === order.length - 1}
                           highlight={before != null && i < before} trailing={grip} lock={{ on }} />

@@ -15,6 +15,8 @@ import { useBottomInset, useScreenHeight } from '../src/lib/viewport';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
 import { AheadRow, TripTotals } from '../src/ui/TripParts';
+import { Cascade } from '../src/ui/Cascade';
+import { onOptimizeSignal } from '../src/lib/optimizeSignal';
 import { TRIP_SCREENS_TO_LEAVE, TripSheetHost } from '../src/ui/TripSheetHost';
 import { NATIVE_CHROME } from '../src/ui/nativeChrome';
 import { FadeIn } from '../src/ui/FadeIn';
@@ -72,6 +74,16 @@ export default function Trip() {
   // On the way, pulled up: the More menu beside Get directions.
   const [barMenu, setBarMenu] = useState(false);
 
+  // Just optimized: the old order stays on screen until the Optimize route sheet has closed,
+  // then slides down and away, and the new order slides down into its place.
+  const [swap, setSwap] = useState<{ current: Stop | null; after: Stop[]; phase: 'hold' | 'out' | 'in' } | null>(null);
+  const shownRef = useRef<{ current: Stop | null; after: Stop[] }>({ current: null, after: [] });
+  useEffect(() => onOptimizeSignal((sig) => {
+    if (sig === 'hold') setSwap({ ...shownRef.current, phase: 'hold' });
+    else if (sig === 'cancel') setSwap(null);
+    // After the sheet has slid away.
+    else setTimeout(() => setSwap((sw) => (sw ? { ...sw, phase: 'out' } : sw)), 450);
+  }), []);
   const stops = route?.stops ?? [];
   const byId = new Map(stops.map((s) => [s.id, s]));
   const done = stops.filter(isDone);
@@ -81,6 +93,15 @@ export default function Trip() {
   // The stops after the current one.
   const ahead = remaining;
   const after = remaining.filter((s) => s.id !== current?.id);
+  if (!swap) shownRef.current = { current: current ?? null, after };
+  // While the old order is held or sliding away, it's what's shown.
+  const old = swap && swap.phase !== 'in' ? swap : null;
+  const shownCurrent = old?.current ?? current;
+  const shownAfter = old ? old.after : after;
+  const slide = (rows: ReactNode, onDone?: () => void) => !swap ? rows : swap.phase === 'in'
+    ? <Cascade key="in" dir="in" onDone={onDone}>{rows}</Cascade>
+    : <Cascade key="out" dir="out" run={swap.phase === 'out'} onDone={onDone}>{rows}</Cascade>;
+  const slideDone = () => setSwap((sw) => (!sw ? sw : sw.phase === 'out' ? { ...sw, phase: 'in' } : null));
 
   // How the trip is travelled (round trip, avoid highways / tolls, travel mode).
   const options: RouteOptions = route ? optionsOf(route) : {};
@@ -333,23 +354,24 @@ export default function Trip() {
             <>
               {NATIVE_CHROME ? null : <TripTotals travelMin={tripMin} meters={tripMeters} stops={ahead.length} />}
               {/* The next stop sits on the trip's line: its circle and line run on into the stops after it. */}
-              <View style={{ flexDirection: 'row', gap: space[3] }}>
+              {slide(
+              <View key="next" style={{ flexDirection: 'row', gap: space[3] }}>
                 <View style={{ width: 20, alignItems: 'center' }} importantForAccessibility="no-hide-descendants">
                   <View style={styles.nextDot} />
                   {after.length ? <View style={[styles.line, { marginBottom: -space[4] }]} /> : null}
                 </View>
                 <View style={{ flex: 1, gap: space[3] }}>
-                  <StopHeading stop={current} onCall={call} onMessage={message} />
+                  <StopHeading stop={shownCurrent ?? current} onCall={call} onMessage={message} />
                   <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[3] }}>
                     {legMin != null ? (
                       <Text style={type.body}><Text style={type.bodyStrong}>{legMin} min</Text>
                         <Text style={{ color: color.inkMuted }}> · {miles(legMeters!).toFixed(1)} mi</Text></Text>
                     ) : null}
-                    {current.notes ? <Text style={[type.body, { flex: 1, color: color.inkMuted }]} numberOfLines={1}>{current.notes}</Text> : null}
+                    {(shownCurrent ?? current).notes ? <Text style={[type.body, { flex: 1, color: color.inkMuted }]} numberOfLines={1}>{(shownCurrent ?? current).notes}</Text> : null}
                   </View>
-                  <Button label="Start driving" onPress={startDriving} loading={busy === 'start'} />
+                  <Button label="Start driving" onPress={startDriving} loading={busy === 'start'} disabled={!!swap} />
                 </View>
-              </View>
+              </View>, shownAfter.length ? undefined : slideDone)}
             </>
           ) : null}
 
@@ -459,10 +481,10 @@ export default function Trip() {
                 </View>
               ) : null}
               <View accessibilityRole="list" style={{ paddingHorizontal: space[4], paddingTop: 0 }}>
-                {after.map((s, i) => (
-                  <AheadRow key={s.id} stop={s} detail={s.address.split(',')[0]} last={i === after.length - 1}
+                {slide(shownAfter.map((s, i) => (
+                  <AheadRow key={s.id} stop={s} detail={s.address.split(',')[0]} last={i === shownAfter.length - 1}
                     onPress={() => router.push(`/stop/${s.id}`)} />
-                ))}
+                )), slideDone)}
               </View>
               {done.length ? (
                 <>
