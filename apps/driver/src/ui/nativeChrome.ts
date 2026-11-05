@@ -20,9 +20,11 @@ export const nativeHeader = {
 
 /**
  * Apple's page sheet: the full-height card that slides up over the screen,
- * which shrinks back behind it. Swipe down (or Cancel) to close.
+ * which shrinks back behind it. Swipe down (or Cancel) to close. Behind the
+ * shrunk screen is the app's root background, black on iPhone (app.json
+ * ios.backgroundColor), as in Apple's apps; on white the effect can't be seen.
  */
-export const nativePageSheet = { presentation: 'modal' as const };
+export const nativePageSheet = { presentation: 'pageSheet' as const };
 
 /** An iPhone sheet: grabber, rounded corners, swipe down to close. */
 export const nativeSheet = (detents: number[]) => ({
