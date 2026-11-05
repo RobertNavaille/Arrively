@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
@@ -112,6 +113,8 @@ export default function OptimizeRoute() {
   });
 
   return (
+    // Its own root for native gestures: iPhone presents the sheet apart from the rest of the app.
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaView edges={NATIVE_CHROME ? ['bottom'] : undefined} style={{ flex: 1, backgroundColor: color.surface }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[2], paddingTop: NATIVE_CHROME ? space[4] : space[2], paddingBottom: space[2] }}>
         <View style={{ flex: 1, alignItems: 'flex-start' }}><Button variant="text" label="Cancel" onPress={() => router.back()} /></View>
@@ -176,5 +179,6 @@ export default function OptimizeRoute() {
         <Button icon="check" label="Confirm route" onPress={confirm} loading={busy === 'apply'} disabled={!review || busy === 'options'} style={{ flex: 1 }} />
       </View>
     </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }

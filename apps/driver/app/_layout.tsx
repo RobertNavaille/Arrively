@@ -3,6 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { loadAppearance } from '../src/lib/appearance';
 import { backend } from '../src/lib/backend';
@@ -73,9 +74,12 @@ export default function RootLayout() {
   );
 
   return (
-    <SafeAreaProvider>
-      <StatusBar style="auto" />
-      <DriverDataProvider enabled={signedIn}>{stack}</DriverDataProvider>
-    </SafeAreaProvider>
+    // Native gestures (the swipe on Optimize route's rows) need this at the root.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <StatusBar style="auto" />
+        <DriverDataProvider enabled={signedIn}>{stack}</DriverDataProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
