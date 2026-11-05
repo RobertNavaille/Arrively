@@ -48,7 +48,8 @@
         }
       ],
       "./plugins/withSceneLifecycle",
-      "expo-system-ui"
+      "expo-system-ui",
+      "./plugins/withContextMenuDeploymentTarget"
     ],
     "experiments": {
       "typedRoutes": false
