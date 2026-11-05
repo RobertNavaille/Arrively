@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import { ContextMenuView } from 'react-native-ios-context-menu';
 import type { RowMenuItem } from './RowMenu';
 import { SF_SYMBOLS } from './sfSymbols';
+import { color } from './theme';
 
 export type { RowMenuItem } from './RowMenu';
 
@@ -37,9 +38,16 @@ export function RowMenu({ children, items, label, onPress }: { children: ReactNo
         accessibilityLabel={label} accessibilityHint="Press and hold for options"
         accessibilityActions={items.map((it, i) => ({ name: `a${i}`, label: it.label }))}
         onAccessibilityAction={(e) => items[Number(e.nativeEvent.actionName.slice(1))]?.onPress()}
-        style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
+        style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}>
         {children}
       </Pressable>
     </ContextMenuView>
   );
 }
+
+// The row carries its own background (the screen's color), with rounded corners and a little room
+// around the text: in the list it looks the same, and it's what iOS lifts as the card when held
+// (the library's preview background setting isn't applied, so without it the row lifted see-through).
+const styles = StyleSheet.create({
+  card: { backgroundColor: color.surface, borderRadius: 16, marginHorizontal: -12, paddingHorizontal: 12, marginTop: -6, paddingTop: 6 },
+});
