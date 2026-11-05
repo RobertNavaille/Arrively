@@ -18,7 +18,7 @@ import { Button } from '../src/ui/components';
 import { NATIVE_CHROME } from '../src/ui/nativeChrome';
 import { ReorderList } from '../src/ui/ReorderList';
 import { RouteMap } from '../src/ui/RouteMap';
-import { RowMenu } from '../src/ui/RowMenu';
+import { RowMenu, RowMenuHost } from '../src/ui/RowMenu';
 import type { MapStop } from '../src/ui/RouteMap.types';
 import { color, space, type } from '../src/ui/theme';
 import { AheadRow, TripTotals } from '../src/ui/TripParts';
@@ -116,6 +116,7 @@ export default function OptimizeRoute() {
   });
 
   return (
+    <RowMenuHost>
     <SafeAreaView edges={NATIVE_CHROME ? ['bottom'] : undefined} style={{ flex: 1, backgroundColor: color.surface }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[2], paddingTop: NATIVE_CHROME ? space[4] : space[2], paddingBottom: space[2] }}>
         <View style={{ flex: 1, alignItems: 'flex-start' }}><Button variant="text" label="Cancel" onPress={() => router.back()} /></View>
@@ -182,5 +183,6 @@ export default function OptimizeRoute() {
         <Button icon="check" label="Confirm route" onPress={confirm} loading={busy === 'apply'} disabled={!review || busy === 'options'} style={{ flex: 1 }} />
       </View>
     </SafeAreaView>
+    </RowMenuHost>
   );
 }
