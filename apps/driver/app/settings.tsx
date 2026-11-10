@@ -7,7 +7,7 @@ import { setAppearance, useAppearanceMode, type AppearanceMode } from '../src/li
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { fmtPhone } from '../src/lib/geo';
-import { stopSharing } from '../src/lib/location';
+import { currentPosition, stopSharing } from '../src/lib/location';
 import { useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
 import { SelectChip } from '../src/ui/Chips';
@@ -56,6 +56,11 @@ export default function Settings() {
     setBusy(false);
   }
 
+  async function demoDay() {
+    const here = (await currentPosition()) ?? { lat: 41.824, lng: -71.4128 };
+    try { await backend.createDemoDay(here, null); await refresh(); router.back(); }
+    catch (e) { showMessage('Could not create demo day', e instanceof Error ? e.message : String(e)); }
+  }
   async function signOut() {
     if (!(await confirmAction('Sign out?', 'Location sharing stops until you sign in again.', 'Sign out'))) return;
     await stopSharing();
@@ -126,6 +131,8 @@ export default function Settings() {
           {changed ? <Button label="Save changes" onPress={save} loading={busy} /> : null}
 
           <View style={{ gap: space[2], borderTopWidth: 1, borderTopColor: color.divider, paddingTop: space[6] }}>
+            {/* For trying the app: a day of sample stops around where you are. */}
+            <Button variant="text" label="Create a demo day around me" onPress={demoDay} />
             <Button variant="secondary" label="Sign out" onPress={signOut} />
             <Text style={[type.caption, { textAlign: 'center' }]}>
               Arrively Driver {Constants.expoConfig?.version ?? ''}{backend.offline ? ' · Offline demo' : ''}

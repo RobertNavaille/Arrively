@@ -1,16 +1,13 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  Animated, AppState, FlatList, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ViewStyle,
+  Animated, AppState, FlatList, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { showIOSActionSheet } from '../src/lib/actionSheet';
-import { backend } from '../src/lib/backend';
-import { showMessage } from '../src/lib/dialog';
 import { addDays, dayKey, distanceM, fmtDuration, miles, routeTotals } from '../src/lib/geo';
 import { useRoadPath } from '../src/lib/directions';
 import { optionsOf, SPEED } from '../src/lib/routing';
-import { currentPosition, stopSharing, useLivePosition } from '../src/lib/location';
+import { useLivePosition } from '../src/lib/location';
 import { currentStop, dayRange, useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
 import { isDone, type LatLng, type Route, type Stop } from '../src/lib/types';
@@ -118,7 +115,6 @@ export default function MyDay() {
   const dayK = dayKey(day);
   const isToday = dayK === dayKey(today);
   const route = routeFor(dayK);
-  const [menu, setMenu] = useState(false);
   // Picking a day in the strip (or a week swipe) pages to it.
   function goTo(i: number) {
     touched.current = true;
@@ -128,12 +124,6 @@ export default function MyDay() {
     listRef.current?.scrollToIndex({ index: i, animated: near });
   }
 
-  async function demoDay() {
-    const here = pos ?? (await currentPosition()) ?? { lat: 41.824, lng: -71.4128 };
-    try { await backend.createDemoDay(here, null); goTo(range.todayIndex); await refresh(); }
-    catch (e) { showMessage('Could not create demo day', e instanceof Error ? e.message : String(e)); }
-  }
-  async function signOut() { await stopSharing(); await backend.signOut(); }
 
   const goToRef = useRef(goTo);
   goToRef.current = goTo;
@@ -153,8 +143,9 @@ export default function MyDay() {
     return sideSwipe(node, () => { touched.current = true; },
       (dir) => goToRef.current(Math.min(Math.max(indexRef.current + dir, 0), daysRef.current.length - 1)));
   }, [pagerShown]);
-  // Resting, the sheet is about a third of the screen (never under 260), so most of the map shows.
-  const restTop = screenH - Math.max(260, Math.round(screenH * 0.34));
+  // Resting, the sheet is a low strip (about a quarter of the screen, never under 210): the day's count
+  // and first stop above the toolbar, and most of the screen for the map.
+  const restTop = screenH - Math.max(210, Math.round(screenH * 0.25));
   const [sheetOpen, setSheetOpen] = useState(false);
   // How far the sheet is below the top (0: fully up). Near the top, the sheet's corners, its grabber and
   // the shadows between it and the bar fade out with it, so up there they read as one surface.
@@ -232,21 +223,20 @@ export default function MyDay() {
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: color.surface, opacity: nearTop }, shadow.float]} />
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[2] }}>
-        <Pressable onPress={() => router.push('/settings')} accessibilityRole="button" accessibilityLabel="Settings and account" hitSlop={6}
-          style={({ pressed }) => pressed && { opacity: 0.7 }}>
-          <Avatar name={profile?.name ?? 'Driver'} size={36} />
-        </Pressable>
+        <View style={{ width: 76, alignItems: 'flex-start' }}>
+          <Pressable onPress={() => router.push('/settings')} accessibilityRole="button" accessibilityLabel="Settings and account" hitSlop={6}
+            style={({ pressed }) => pressed && { opacity: 0.7 }}>
+            <Avatar name={profile?.name ?? 'Driver'} size={36} />
+          </Pressable>
+        </View>
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={[type.title, { fontSize: 22, lineHeight: 30 }]} accessibilityRole="header">{day.toLocaleDateString('en-US', { weekday: 'long' })}</Text>
           <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]}>{day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}{isToday ? ' · Today' : ''}</Text>
         </View>
-        <IconButton icon="more" label="More" variant="plain" onPress={() => {
-          // iPhone: Apple's action sheet; elsewhere the drawn panel.
-          if (!showIOSActionSheet([
-            { label: 'Create a demo day around me', onPress: demoDay },
-            { label: 'End shift and sign out', destructive: true, onPress: signOut },
-          ], { title: backend.offline ? 'Offline demo mode' : 'Signed in' })) setMenu(true);
-        }} />
+        {/* Today: back to the current day (as in Apple's Calendar). Sign out and the demo day are in Settings. */}
+        <View style={{ width: 76, alignItems: 'flex-end' }}>
+          <Button variant="text" size="compact" label="Today" onPress={() => goTo(range.todayIndex)} />
+        </View>
       </View>
 
       {/* Date strip */}
@@ -306,8 +296,6 @@ export default function MyDay() {
             <IconButton icon="plus" label="Add stop" onPress={() => router.push('/new-stop')} />
       </View>
 
-      <Menu visible={menu} onClose={() => setMenu(false)} offline={backend.offline} onDemo={() => { setMenu(false); demoDay(); }}
-        onSignOut={() => { setMenu(false); signOut(); }} />
     </View>
     </RowMenuHost>
   );
@@ -439,9 +427,8 @@ function DaySheet({ openTop, restTop, screenH, open, onOpenChange, atTop, offset
   const change = useRef(onOpenChange);
   change.current = onOpenChange;
   const sheetRef = useRef<View>(null);
-  // Starts where it should be, without sliding there.
-  const placed = useRef(false);
-  if (!placed.current) { placed.current = true; offset.setValue(open ? 0 : travel); }
+  // Starts where it should be, without sliding there (set before the first paint, not while drawing).
+  useLayoutEffect(() => { offset.setValue(openRef.current ? 0 : travelRef.current); }, [offset]);
   // Driven from JavaScript (not the native driver): the corners and grabber's height follow it too.
   const snap = useCallback((toOpen: boolean) => {
     if (toOpen !== openRef.current) change.current(toOpen);
@@ -521,22 +508,6 @@ function StopListRow({ stop, isCurrent, locked }: { stop: Stop; isCurrent: boole
         {stop.address.split(',')[0]}{stop.notes ? ` · ${stop.notes}` : ''}
       </Text>
     </View>
-  );
-}
-
-function Menu({ visible, onClose, onDemo, onSignOut, offline }: {
-  visible: boolean; onClose: () => void; onDemo: () => void; onSignOut: () => void; offline: boolean;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: color.scrim, justifyContent: 'flex-end' }} onPress={onClose}>
-        <View style={{ backgroundColor: color.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, padding: space[4], paddingBottom: space[8], gap: space[2] }}>
-          <Text style={[type.caption, { textAlign: 'center' }]}>{offline ? 'Offline demo mode' : 'Signed in'}</Text>
-          <Button variant="secondary" icon="route" label="Create a demo day around me" onPress={onDemo} />
-          <Button variant="text" label="End shift and sign out" onPress={onSignOut} />
-        </View>
-      </Pressable>
-    </Modal>
   );
 }
 
