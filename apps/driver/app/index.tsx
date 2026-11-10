@@ -1,9 +1,9 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  Animated, AppState, FlatList, Modal, Platform, Pressable, Text, View, useWindowDimensions,
+  Animated, AppState, FlatList, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ViewStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showIOSActionSheet } from '../src/lib/actionSheet';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
@@ -22,7 +22,7 @@ import { RowMenuHost } from '../src/ui/RowMenu';
 import { StopMenu } from '../src/ui/StopMenu';
 import { useLocks } from '../src/lib/locks';
 import type { MapStop } from '../src/ui/RouteMap.types';
-import { color, font, radius, space, type } from '../src/ui/theme';
+import { color, font, radius, shadow, space, type } from '../src/ui/theme';
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -53,13 +53,6 @@ export default function MyDay() {
   }, [width]);
   const daysRef = useRef(days);
   daysRef.current = days;
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const node = (listRef.current as unknown as { getScrollableNode?: () => HTMLElement | null })?.getScrollableNode?.();
-    if (!node) return;
-    return sideSwipe(node, () => { touched.current = true; },
-      (dir) => goToRef.current(Math.min(Math.max(indexRef.current + dir, 0), daysRef.current.length - 1)));
-  }, []);
 
   // The week strip pages too: swiping it moves to the same weekday in the next
   // or previous week, and the day pages follow.
@@ -146,11 +139,90 @@ export default function MyDay() {
   goToRef.current = goTo;
 
   const bottomInset = useBottomInset();
+  // The map behind, the bar on top (measured), and the sheet: open under the bar, or resting about halfway.
+  const screenH = useWindowDimensions().height;
+  const safeTop = useSafeAreaInsets().top;
+  const [barH, setBarH] = useState(0);
+  // Web: the driver's own swipes on the day pager (so its scroll isn't undone), and one trackpad swipe = one day.
+  // Set up once the pager is there (it's drawn once the bar has been measured).
+  const pagerShown = barH > 0;
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !pagerShown) return;
+    const node = (listRef.current as unknown as { getScrollableNode?: () => HTMLElement | null })?.getScrollableNode?.();
+    if (!node) return;
+    return sideSwipe(node, () => { touched.current = true; },
+      (dir) => goToRef.current(Math.min(Math.max(indexRef.current + dir, 0), daysRef.current.length - 1)));
+  }, [pagerShown]);
+  const restTop = Math.round(screenH * 0.52);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  // Whether the day on screen is scrolled to its top (a pull down there lowers the sheet).
+  const pageAtTop = useRef(true);
+  useEffect(() => { pageAtTop.current = true; }, [index]);
+  const selCurrent = currentStop(route);
+  const selStops: MapStop[] = (route?.stops ?? []).map((st, i) => ({
+    id: st.id, lat: st.lat, lng: st.lng, n: i + 1,
+    state: isDone(st) ? 'done' : route?.status === 'active' && st.id === selCurrent?.id ? 'next' : 'upcoming',
+  }));
 
   return (
     // Row menus (press and hold a stop) draw over the whole screen.
     <RowMenuHost>
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: color.surface }}>
+    <View style={{ flex: 1, backgroundColor: color.mapGround }}>
+      {/* The selected day's stops on a map that fills the screen, framed in the part the bar and the resting sheet leave. */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        <RouteMap height={screenH} stops={selStops} driver={isToday ? pos : null} inset={{ top: barH, bottom: screenH - restTop }} />
+      </View>
+
+      {/* The day's stops in a sheet over the map: it rests halfway down and slides up under the bar. */}
+      {barH ? (
+      <DaySheet openTop={barH} restTop={restTop} screenH={screenH} open={sheetOpen} onOpenChange={setSheetOpen} atTop={pageAtTop}>
+      {/* Day pages: the day's count and its stops; swipe sideways for the next or previous day. */}
+      <View style={{ flex: 1 }}>
+        <FlatList
+          ref={listRef}
+          data={days}
+          horizontal
+          pagingEnabled
+          initialScrollIndex={range.todayIndex}
+          // Every day is a real page, so the browser's snapping only ever lands on
+          // a day. Only the day on screen and its neighbours draw their list.
+          initialNumToRender={days.length}
+          windowSize={days.length * 2}
+          extraData={{ index, routeFor, loading, sheetOpen }}
+          onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h && h !== pagerH) setPagerH(h); }}
+          getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(d) => dayKey(d)}
+          onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
+          onScroll={Platform.OS === 'web' ? (e) => {
+            const i = Math.round(e.nativeEvent.contentOffset.x / width);
+            if (!touched.current) {
+              // Not the driver: put the pager back on the selected day.
+              if (i !== index) listRef.current?.scrollToOffset({ offset: width * index, animated: false });
+              return;
+            }
+            if (i !== index) setIndex(i);
+          } : undefined}
+          scrollEventThrottle={64}
+          renderItem={({ item, index: i }) => {
+            if (Math.abs(i - index) > 1) return <View style={{ width, height: pagerH || undefined }} />;
+            const k = dayKey(item);
+            return (
+              <View style={{ width, height: pagerH || undefined }}>
+                <DayPanel route={routeFor(k)} isToday={k === dayKey(today)} driver={k === dayKey(today) ? pos : null}
+                  loading={loading} onOpenStop={(st) => router.push(`/stop/${st.id}`)} bottomPad={TOOLBAR_H + bottomInset}
+                  open={sheetOpen} onAtTop={i === index ? (v) => { pageAtTop.current = v; } : undefined} />
+              </View>
+            );
+          }}
+        />
+      </View>
+      </DaySheet>
+      ) : null}
+
+      {/* Over the map and the sheet: the header and week strip, fixed at the top. */}
+      <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== barH) setBarH(h); }}
+        style={[{ position: 'absolute', top: 0, left: 0, right: 0, paddingTop: safeTop, backgroundColor: color.surface }, shadow.float]}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[2] }}>
         <Pressable onPress={() => router.push('/settings')} accessibilityRole="button" accessibilityLabel="Settings and account" hitSlop={6}
@@ -212,47 +284,6 @@ export default function MyDay() {
       </View>
 
       {error ? <Text style={[type.caption, { color: color.danger, paddingHorizontal: space[4], paddingBottom: space[2] }]}>{error}</Text> : null}
-
-      {/* Day pages: map, the day's count and its stops scroll together. */}
-      <View style={{ flex: 1 }}>
-        <FlatList
-          ref={listRef}
-          data={days}
-          horizontal
-          pagingEnabled
-          initialScrollIndex={range.todayIndex}
-          // Every day is a real page, so the browser's snapping only ever lands on
-          // a day. Only the day on screen and its neighbours draw their map and list.
-          initialNumToRender={days.length}
-          windowSize={days.length * 2}
-          extraData={{ index, routeFor, loading }}
-          onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h && h !== pagerH) setPagerH(h); }}
-          getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(d) => dayKey(d)}
-          onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
-          onScroll={Platform.OS === 'web' ? (e) => {
-            const i = Math.round(e.nativeEvent.contentOffset.x / width);
-            if (!touched.current) {
-              // Not the driver: put the pager back on the selected day.
-              if (i !== index) listRef.current?.scrollToOffset({ offset: width * index, animated: false });
-              return;
-            }
-            if (i !== index) setIndex(i);
-          } : undefined}
-          scrollEventThrottle={64}
-          renderItem={({ item, index: i }) => {
-            if (Math.abs(i - index) > 1) return <View style={{ width, height: pagerH || undefined }} />;
-            const k = dayKey(item);
-            return (
-              <View style={{ width, height: pagerH || undefined }}>
-                <DayPanel route={routeFor(k)} isToday={k === dayKey(today)} driver={k === dayKey(today) ? pos : null}
-                  loading={loading} onOpenStop={(st) => router.push(`/stop/${st.id}`)} bottomPad={TOOLBAR_H + bottomInset}
-/>
-              </View>
-            );
-          }}
-        />
       </View>
 
       {/* Toolbar, floating over the bottom of the list: today's trip, and adding a stop. */}
@@ -270,7 +301,7 @@ export default function MyDay() {
 
       <Menu visible={menu} onClose={() => setMenu(false)} offline={backend.offline} onDemo={() => { setMenu(false); demoDay(); }}
         onSignOut={() => { setMenu(false); signOut(); }} />
-    </SafeAreaView>
+    </View>
     </RowMenuHost>
   );
 }
@@ -308,15 +339,13 @@ const TOOLBAR_H = 88;
 const ROW_H = 68;
 
 /** A day's page: its map, how many stops, then the stops. */
-// The day's map: tall at the top of the page; as the stops are scrolled up it shrinks to MAP_MIN
-// (half height), then scrolls away with them.
-const MAP_MAX = 300;
-const MAP_MIN = 150;
-const MAP_SHRINK = MAP_MAX - MAP_MIN;
-
-function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad }: {
+function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad, open, onAtTop }: {
   route: Route | undefined; isToday: boolean; driver: LatLng | null; onOpenStop: (s: Stop) => void; loading: boolean;
   bottomPad: number;
+  /** The sheet is raised: the list scrolls (resting, a drag moves the sheet instead). */
+  open: boolean;
+  /** The day on screen: told whether its list is at the top. */
+  onAtTop?: (atTop: boolean) => void;
 }) {
   const locks = useLocks();
   const stops = route?.stops ?? [];
@@ -339,72 +368,117 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad }: {
   const driveM = road ? road.distanceM : straightM;
   const drive = remaining.length && (driveM > 0 || driveMin > 0)
     ? `${fmtDuration(Math.max(1, driveMin))} · ${miles(driveM) < 10 ? miles(driveM).toFixed(1) : Math.round(miles(driveM))} mi` : '';
-  const mapStops: MapStop[] = stops.map((s, i) => ({
-    id: s.id, lat: s.lat, lng: s.lng, n: i + 1,
-    // The next stop stands out only once the trip is under way.
-    state: isDone(s) ? 'done' : route?.status === 'active' && s.id === current?.id ? 'next' : 'upcoming',
-  }));
-
-  // The map sits over the top of the list and shrinks as it scrolls (then goes with it), keeping its middle in view
-  // (the map is drawn full height and cropped top and bottom alike). Once the scrolling settles,
-  // the stops are framed again in the part that shows.
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const [crop, setCrop] = useState(0);
-  // Settled: a moment after the last scroll movement (the scroll-end events don't come on the web).
-  useEffect(() => {
-    let t: ReturnType<typeof setTimeout> | undefined;
-    const id = scrollY.addListener(({ value }) => {
-      clearTimeout(t);
-      t = setTimeout(() => setCrop(Math.round(Math.min(MAP_SHRINK, Math.max(0, value)) / 10) * 10), 180);
-    });
-    return () => { clearTimeout(t); scrollY.removeListener(id); };
-  }, [scrollY]);
-  const mapH = scrollY.interpolate({ inputRange: [0, MAP_SHRINK], outputRange: [MAP_MAX, MAP_MIN], extrapolate: 'clamp' });
-  const mapShift = scrollY.interpolate({ inputRange: [0, MAP_SHRINK], outputRange: [0, -MAP_SHRINK / 2], extrapolate: 'clamp' });
-  // Once it's half height, the map scrolls away with the stops (its bottom stays on the list's top).
-  const mapLift = scrollY.interpolate({ inputRange: [0, MAP_SHRINK, MAP_SHRINK + 1000], outputRange: [0, 0, -1000], extrapolateLeft: 'clamp' });
+  // Lowered, the list goes back to its top.
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => { if (!open) { scrollRef.current?.scrollTo({ y: 0, animated: false }); onAtTop?.(true); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <View style={{ flex: 1 }}>
-      <Animated.ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: MAP_MAX, paddingBottom: bottomPad }}
-        scrollEventThrottle={16}
-        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}>
-        {!stops.length ? (
-          <View style={{ alignItems: 'center', paddingVertical: space[8], paddingHorizontal: space[6], gap: space[2] }}>
-            <Icon name="route" size={28} color={color.inkMuted} />
-            <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted, textAlign: 'center' }]}>
-              {loading ? 'Loading…' : 'No stops this day. Tap + to add one.'}
+    // Resting, the list doesn't scroll (an up-or-down drag moves the sheet). On the web that's done with
+    // its overflow hidden: turning scrolling off there blocks sideways swipes (to the next day) too.
+    <ScrollView ref={scrollRef} style={[{ flex: 1 }, open ? sheetTouch.listOpen : sheetTouch.listShut]} scrollEnabled={open || Platform.OS === 'web'}
+      contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}
+      scrollEventThrottle={16} onScroll={(e) => onAtTop?.(e.nativeEvent.contentOffset.y <= 0)}>
+      {!stops.length ? (
+        <View style={{ alignItems: 'center', paddingVertical: space[6], paddingHorizontal: space[6], gap: space[2] }}>
+          <Icon name="route" size={28} color={color.inkMuted} />
+          <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted, textAlign: 'center' }]}>
+            {loading ? 'Loading…' : 'No stops this day. Tap + to add one.'}
+          </Text>
+        </View>
+      ) : (
+        <>
+          {/* The day's count, then (gray) the drive time and distance for what's left. */}
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space[3], paddingHorizontal: space[4], paddingTop: space[1], paddingBottom: space[3] }}>
+            <Text style={{ flexShrink: 1, fontFamily: font.semibold, fontSize: 17, lineHeight: 24, color: color.ink }} numberOfLines={1}>
+              {count}{drive ? <Text style={{ fontFamily: font.regular, color: color.inkMuted }}>{`  ·  ${drive}`}</Text> : null}
             </Text>
+            {countMeta ? <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }}>{countMeta}</Text> : null}
           </View>
-        ) : (
-          <>
-            {/* The day's count, then (smaller, gray) the drive time and distance for what's left. */}
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space[3], paddingHorizontal: space[4], paddingTop: 20, paddingBottom: space[3] }}>
-              <Text style={{ flexShrink: 1, fontFamily: font.semibold, fontSize: 17, lineHeight: 24, color: color.ink }} numberOfLines={1}>
-                {count}{drive ? <Text style={{ fontFamily: font.regular, color: color.inkMuted }}>{`  ·  ${drive}`}</Text> : null}
-              </Text>
-              {countMeta ? <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: color.inkMuted }}>{countMeta}</Text> : null}
-            </View>
-            <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
-              {stops.map((s) => (
-                <StopMenu key={s.id} stop={s} day={route!.day} locked={locks.has(s.id)} onPress={() => onOpenStop(s)}>
-                  <StopListRow stop={s} isCurrent={route?.status === 'active' && s.id === current?.id} locked={locks.has(s.id)} />
-                </StopMenu>
-              ))}
-            </View>
-          </>
-        )}
-      </Animated.ScrollView>
-      {/* Over the list's top: the page's background (so rows pass under it), then the map. */}
-      <Animated.View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: mapH, paddingHorizontal: space[4], backgroundColor: color.surface, transform: [{ translateY: mapLift }] }}>
-        <Animated.View style={{ flex: 1, borderRadius: radius.md, overflow: 'hidden' }}>
-          <Animated.View style={{ height: MAP_MAX, transform: [{ translateY: mapShift }] }}>
-            <RouteMap height={MAP_MAX} stops={mapStops} driver={isToday ? driver : null} inset={{ top: crop / 2, bottom: crop / 2 }} />
-          </Animated.View>
-        </Animated.View>
-      </Animated.View>
-    </View>
+          <View accessibilityRole="list" style={{ paddingHorizontal: space[4] }}>
+            {stops.map((s) => (
+              <StopMenu key={s.id} stop={s} day={route!.day} locked={locks.has(s.id)} onPress={() => onOpenStop(s)}>
+                <StopListRow stop={s} isCurrent={route?.status === 'active' && s.id === current?.id} locked={locks.has(s.id)} />
+              </StopMenu>
+            ))}
+          </View>
+        </>
+      )}
+    </ScrollView>
   );
 }
+
+/**
+ * The Schedule's sheet over the map. It rests at `restTop` and opens to
+ * `openTop` (just under the bar) when dragged up, flicked, or scrolled with a
+ * wheel; dragging down when the day's list is at its top lowers it again.
+ * Sideways drags are left to the day pager inside.
+ */
+function DaySheet({ openTop, restTop, screenH, open, onOpenChange, atTop, children }: {
+  openTop: number; restTop: number; screenH: number; open: boolean; onOpenChange: (open: boolean) => void;
+  atTop: { current: boolean }; children: ReactNode;
+}) {
+  const travel = Math.max(0, restTop - openTop);
+  const offset = useRef(new Animated.Value(open ? 0 : travel)).current;
+  const travelRef = useRef(travel);
+  travelRef.current = travel;
+  const openRef = useRef(open);
+  openRef.current = open;
+  const change = useRef(onOpenChange);
+  change.current = onOpenChange;
+  const sheetRef = useRef<View>(null);
+  const snap = useCallback((toOpen: boolean) => {
+    if (toOpen !== openRef.current) change.current(toOpen);
+    openRef.current = toOpen;
+    Animated.spring(offset, { toValue: toOpen ? 0 : travelRef.current, useNativeDriver: Platform.OS !== 'web', bounciness: 0, speed: 18 }).start();
+  }, [offset]);
+  useEffect(() => { snap(open); }, [open, travel, snap]);
+  const snapRef = useRef(snap);
+  snapRef.current = snap;
+  const start = useRef(0);
+  const pan = useRef(PanResponder.create({
+    // Up-and-down drags move the sheet: any, while it rests; once open, a pull down with the list at its top.
+    onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx) * 1.2
+      && (!openRef.current || (g.dy > 0 && atTop.current)),
+    onPanResponderGrant: () => { offset.stopAnimation((v) => { start.current = v; }); },
+    onPanResponderMove: (_, g) => offset.setValue(Math.min(Math.max(start.current + g.dy, 0), travelRef.current)),
+    onPanResponderRelease: (_, g) => {
+      const at = start.current + g.dy;
+      snapRef.current(g.vy < -0.3 || (g.vy <= 0.3 && at < travelRef.current / 2));
+    },
+    onPanResponderTerminate: (_, g) => snapRef.current(start.current + g.dy < travelRef.current / 2),
+    onPanResponderTerminationRequest: () => false,
+  })).current;
+  // Web: a wheel or trackpad scroll over the sheet raises and lowers it too.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const node = sheetRef.current as unknown as HTMLElement | null;
+    if (!node?.addEventListener) return;
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      if (!openRef.current && e.deltaY > 0) { e.preventDefault(); snapRef.current(true); }
+      else if (openRef.current && e.deltaY < 0 && atTop.current) { e.preventDefault(); snapRef.current(false); }
+    };
+    node.addEventListener('wheel', onWheel, { passive: false });
+    return () => node.removeEventListener('wheel', onWheel);
+  }, [atTop]);
+  return (
+    <Animated.View ref={sheetRef} {...pan.panHandlers}
+      style={[sheetTouch.sheet, shadow.sheet, { top: openTop, height: screenH - openTop, transform: [{ translateY: offset }] }]}>
+      <Pressable onPress={() => snap(!openRef.current)} accessibilityRole="button" accessibilityLabel={open ? 'Lower the list' : 'Raise the list'}
+        style={{ height: 22, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ width: 36, height: 5, borderRadius: 3, backgroundColor: color.divider }} />
+      </Pressable>
+      {children}
+    </Animated.View>
+  );
+}
+
+// Touch handling for the browser (web-only styles): the resting sheet takes its own drags; an open list scrolls natively.
+const touchAction = (action: 'pan-x' | 'pan-x pan-y', overflowY?: 'hidden') => ({ touchAction: action, ...(overflowY ? { overflowY } : {}) }) as ViewStyle;
+const sheetTouch = StyleSheet.create({
+  sheet: { position: 'absolute', left: 0, right: 0, backgroundColor: color.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, overflow: 'hidden' },
+  listOpen: touchAction('pan-x pan-y'),
+  listShut: touchAction('pan-x', 'hidden'),
+});
 
 /** A stop on the day, styled like the trip's stop list: name and address (gray once done). No markers or dividers. */
 // Tapping and press and hold are StopMenu's (around it).
