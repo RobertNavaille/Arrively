@@ -153,8 +153,11 @@ export default function MyDay() {
     return sideSwipe(node, () => { touched.current = true; },
       (dir) => goToRef.current(Math.min(Math.max(indexRef.current + dir, 0), daysRef.current.length - 1)));
   }, [pagerShown]);
-  const restTop = Math.round(screenH * 0.52);
+  // Resting, the sheet is about a third of the screen (never under 260), so most of the map shows.
+  const restTop = screenH - Math.max(260, Math.round(screenH * 0.34));
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Fully up: the sheet and the bar read as one surface (no corners, no shadows between them).
+  const [docked, setDocked] = useState(false);
   // Whether the day on screen is scrolled to its top (a pull down there lowers the sheet).
   const pageAtTop = useRef(true);
   useEffect(() => { pageAtTop.current = true; }, [index]);
@@ -175,7 +178,7 @@ export default function MyDay() {
 
       {/* The day's stops in a sheet over the map: it rests halfway down and slides up under the bar. */}
       {barH ? (
-      <DaySheet openTop={barH} restTop={restTop} screenH={screenH} open={sheetOpen} onOpenChange={setSheetOpen} atTop={pageAtTop}>
+      <DaySheet openTop={barH} restTop={restTop} screenH={screenH} open={sheetOpen} onOpenChange={setSheetOpen} atTop={pageAtTop} docked={docked} onDockedChange={setDocked}>
       {/* Day pages: the day's count and its stops; swipe sideways for the next or previous day. */}
       <View style={{ flex: 1 }}>
         <FlatList
@@ -222,7 +225,7 @@ export default function MyDay() {
 
       {/* Over the map and the sheet: the header and week strip, fixed at the top. */}
       <View onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h !== barH) setBarH(h); }}
-        style={[{ position: 'absolute', top: 0, left: 0, right: 0, paddingTop: safeTop, backgroundColor: color.surface }, shadow.float]}>
+        style={[{ position: 'absolute', top: 0, left: 0, right: 0, paddingTop: safeTop, backgroundColor: color.surface }, !docked && shadow.float]}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[2] }}>
         <Pressable onPress={() => router.push('/settings')} accessibilityRole="button" accessibilityLabel="Settings and account" hitSlop={6}
@@ -412,9 +415,12 @@ function DayPanel({ route, isToday, driver, onOpenStop, loading, bottomPad, open
  * wheel; dragging down when the day's list is at its top lowers it again.
  * Sideways drags are left to the day pager inside.
  */
-function DaySheet({ openTop, restTop, screenH, open, onOpenChange, atTop, children }: {
+function DaySheet({ openTop, restTop, screenH, open, onOpenChange, atTop, docked, onDockedChange, children }: {
   openTop: number; restTop: number; screenH: number; open: boolean; onOpenChange: (open: boolean) => void;
-  atTop: { current: boolean }; children: ReactNode;
+  atTop: { current: boolean };
+  /** Fully up (once it gets there): square corners and no shadow, flush with the bar above. */
+  docked: boolean; onDockedChange: (docked: boolean) => void;
+  children: ReactNode;
 }) {
   const travel = Math.max(0, restTop - openTop);
   const offset = useRef(new Animated.Value(open ? 0 : travel)).current;
@@ -425,10 +431,15 @@ function DaySheet({ openTop, restTop, screenH, open, onOpenChange, atTop, childr
   const change = useRef(onOpenChange);
   change.current = onOpenChange;
   const sheetRef = useRef<View>(null);
+  const dock = useRef(onDockedChange);
+  dock.current = onDockedChange;
   const snap = useCallback((toOpen: boolean) => {
     if (toOpen !== openRef.current) change.current(toOpen);
     openRef.current = toOpen;
-    Animated.spring(offset, { toValue: toOpen ? 0 : travelRef.current, useNativeDriver: Platform.OS !== 'web', bounciness: 0, speed: 18 }).start();
+    // Corners and shadow come back as soon as it starts down; they go once it has arrived at the top.
+    if (!toOpen) dock.current(false);
+    Animated.spring(offset, { toValue: toOpen ? 0 : travelRef.current, useNativeDriver: Platform.OS !== 'web', bounciness: 0, speed: 18 })
+      .start(({ finished }) => { if (finished && toOpen && openRef.current) dock.current(true); });
   }, [offset]);
   useEffect(() => { snap(open); }, [open, travel, snap]);
   const snapRef = useRef(snap);
@@ -438,7 +449,7 @@ function DaySheet({ openTop, restTop, screenH, open, onOpenChange, atTop, childr
     // Up-and-down drags move the sheet: any, while it rests; once open, a pull down with the list at its top.
     onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx) * 1.2
       && (!openRef.current || (g.dy > 0 && atTop.current)),
-    onPanResponderGrant: () => { offset.stopAnimation((v) => { start.current = v; }); },
+    onPanResponderGrant: () => { dock.current(false); offset.stopAnimation((v) => { start.current = v; }); },
     onPanResponderMove: (_, g) => offset.setValue(Math.min(Math.max(start.current + g.dy, 0), travelRef.current)),
     onPanResponderRelease: (_, g) => {
       const at = start.current + g.dy;
@@ -462,7 +473,8 @@ function DaySheet({ openTop, restTop, screenH, open, onOpenChange, atTop, childr
   }, [atTop]);
   return (
     <Animated.View ref={sheetRef} {...pan.panHandlers}
-      style={[sheetTouch.sheet, shadow.sheet, { top: openTop, height: screenH - openTop, transform: [{ translateY: offset }] }]}>
+      style={[sheetTouch.sheet, !docked && shadow.sheet, docked && { borderTopLeftRadius: 0, borderTopRightRadius: 0 },
+        { top: openTop, height: screenH - openTop, transform: [{ translateY: offset }] }]}>
       <Pressable onPress={() => snap(!openRef.current)} accessibilityRole="button" accessibilityLabel={open ? 'Lower the list' : 'Raise the list'}
         style={{ height: 22, alignItems: 'center', justifyContent: 'center' }}>
         <View style={{ width: 36, height: 5, borderRadius: 3, backgroundColor: color.divider }} />
