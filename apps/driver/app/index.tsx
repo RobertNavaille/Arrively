@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Animated, AppState, FlatList, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ViewStyle,
@@ -17,6 +17,7 @@ import { RouteMap } from '../src/ui/RouteMap';
 import { RowMenuHost } from '../src/ui/RowMenu';
 import { StopMenu } from '../src/ui/StopMenu';
 import { useLocks } from '../src/lib/locks';
+import { takeWeekOptimized } from '../src/lib/weekPlan';
 import type { MapStop } from '../src/ui/RouteMap.types';
 import { color, font, radius, shadow, space, type } from '../src/ui/theme';
 
@@ -126,6 +127,21 @@ export default function MyDay() {
 
   const goToRef = useRef(goTo);
   goToRef.current = goTo;
+  // Back on the Schedule: the pages line up with the selected day again (a screen shown over this one
+  // can leave the pager or the strip scrolled somewhere else, which read as a jump to a past date).
+  // After Optimize week, it's today that shows.
+  const todayIndexRef = useRef(range.todayIndex);
+  todayIndexRef.current = range.todayIndex;
+  useFocusEffect(useCallback(() => {
+    const i = takeWeekOptimized() ? todayIndexRef.current : indexRef.current;
+    touched.current = false;
+    setIndex(i);
+    const t = setTimeout(() => {
+      listRef.current?.scrollToOffset({ offset: width * i, animated: false });
+      stripRef.current?.scrollToOffset({ offset: width * Math.floor(i / 7), animated: false });
+    }, 0);
+    return () => clearTimeout(t);
+  }, [width]));
 
   const bottomInset = useBottomInset();
   // The map behind, the bar on top (measured), and the sheet: open under the bar, or resting about halfway.

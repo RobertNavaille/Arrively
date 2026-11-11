@@ -334,3 +334,8 @@ function centroid(stops: LatLng[]): LatLng | null {
   if (!stops.length) return null;
   return { lat: stops.reduce((n, s) => n + s.lat, 0) / stops.length, lng: stops.reduce((n, s) => n + s.lng, 0) / stops.length };
 }
+
+// Optimize week just saved a new week: the Schedule shows today when it comes back on screen.
+let justOptimized = false;
+export function markWeekOptimized() { justOptimized = true; }
+export function takeWeekOptimized() { const v = justOptimized; justOptimized = false; return v; }

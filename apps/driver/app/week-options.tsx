@@ -8,7 +8,7 @@ import { showMessage } from '../src/lib/dialog';
 import { useLivePosition } from '../src/lib/location';
 import { isLocked, locksReady } from '../src/lib/locks';
 import { useDriverData } from '../src/lib/store';
-import { DEFAULT_WEEK_OPTIONS, fmtClock, fmtHours, loadWeekOptions, planWeek, saveWeekOptions, type WeekOptions } from '../src/lib/weekPlan';
+import { DEFAULT_WEEK_OPTIONS, fmtClock, fmtHours, loadWeekOptions, markWeekOptimized, planWeek, saveWeekOptions, type WeekOptions } from '../src/lib/weekPlan';
 import { searchAddress, type Place } from '../src/lib/mapbox';
 import { ToggleChip } from '../src/ui/Chips';
 import { Icon } from '../src/ui/Icon';
@@ -51,6 +51,7 @@ export default function WeekOptionsScreen() {
         .filter((d) => d.stops.length);
       if (days.length) await backend.applyWeek(days);
       await refresh();
+      markWeekOptimized();
       router.back();
       const savedMin = plan.before.minutes - plan.after.minutes;
       const savedMi = (plan.before.meters - plan.after.meters) / 1609.34;
