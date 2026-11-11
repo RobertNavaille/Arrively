@@ -7,18 +7,19 @@ import { BASEMAP_CONFIG, BASEMAP_CONFIG_DARK, BASEMAP_STYLE } from './basemap';
 import Svg from 'react-native-svg';
 import { PUCK_SIZE, PuckShapes } from './DriverPuck';
 import { color, colorHex, font, shadow } from './theme';
-import { FOLLOW_ZOOM, MARKER, ROUTE_GRADIENT, byDrawOrder, framePoints, type RouteMapProps } from './RouteMap.types';
+import { FOLLOW_ZOOM, MARKER, ROUTE_DONE, ROUTE_GRADIENT, byDrawOrder, framePoints, type RouteMapProps } from './RouteMap.types';
 
 if (MAPBOX_TOKEN) Mapbox.setAccessToken(MAPBOX_TOKEN);
 
 // Mapbox map in the Arrively style: muted base map (see basemap.ts), blue route and driver,
 // numbered stops, a dark pin for a single destination.
-export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, driverHeading, onUserMove, hold }: RouteMapProps) {
+export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, doneLine, frame, inset, follow, bearing = 0, driverHeading, onUserMove, hold }: RouteMapProps) {
   const dark = useColorScheme() === 'dark';
+  const frameKey = (frame ?? []).map((p) => `${p.lng.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
   const points = useMemo(() => {
-    const all = framePoints({ stops, pin, driver });
+    const all = framePoints({ stops, pin, driver, frame });
     return all.length ? all : [{ lat: 41.824, lng: -71.4128 }];
-  }, [stops, pin, driver]);
+  }, [stops, pin, driver, frameKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const bounds = useMemo(() => {
     const lats = points.map((p) => p.lat);
@@ -39,6 +40,14 @@ export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inse
     type: 'Feature' as const, properties: {},
     geometry: { type: 'LineString' as const, coordinates: path.map((p) => [p.lng, p.lat]) },
   } : null, [lineKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The part already driven, in gray under the blue.
+  const donePath = doneLine ?? [];
+  const doneKey = donePath.map((p) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
+  const doneShape = useMemo(() => donePath.length > 1 ? {
+    type: 'Feature' as const, properties: {},
+    geometry: { type: 'LineString' as const, coordinates: donePath.map((p) => [p.lng, p.lat]) },
+  } : null, [doneKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <View style={{ height, backgroundColor: color.mapGround, overflow: 'hidden' }}>
@@ -61,6 +70,12 @@ export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, inse
             animationDuration={600}
           />
         )}
+        {doneShape ? (
+          <Mapbox.ShapeSource id="route-done" shape={doneShape}>
+            <Mapbox.LineLayer id="route-done-casing" slot="middle" style={{ lineColor: colorHex.surface, lineWidth: 7, lineCap: 'round', lineJoin: 'round' }} />
+            <Mapbox.LineLayer id="route-done-line" slot="middle" aboveLayerID="route-done-casing" style={{ lineColor: ROUTE_DONE, lineWidth: 4, lineCap: 'round', lineJoin: 'round' }} />
+          </Mapbox.ShapeSource>
+        ) : null}
         {lineShape ? (
           // Deep blue where the trip starts to pale blue where it ends, so the line shows which way it runs.
           <Mapbox.ShapeSource id="route" shape={lineShape} lineMetrics>

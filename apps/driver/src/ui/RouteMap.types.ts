@@ -1,5 +1,5 @@
 import type { LatLng } from '../lib/types';
-import { color } from './theme';
+import { color, colorHex } from './theme';
 
 export type MapStopState = 'next' | 'upcoming' | 'done';
 
@@ -19,6 +19,10 @@ export interface RouteMapProps {
   driver?: LatLng | null;
   /** Draws a line through these points in order. */
   line?: LatLng[];
+  /** The part already driven: a gray line under the blue one. */
+  doneLine?: LatLng[];
+  /** More places to keep in view (where a drive started), with the stops and pin. */
+  frame?: LatLng[];
   /** Bands covered by other UI (a sheet over the map): the points are framed in what's left. */
   inset?: { top?: number; bottom?: number };
   /**
@@ -44,8 +48,8 @@ export const FOLLOW_ZOOM = 17.5;
 const NEAR_KM = 25;
 
 /** The points a map should frame: every stop, plus the pin and driver when they're near. */
-export function framePoints({ stops = [], pin, driver }: Pick<RouteMapProps, 'stops' | 'pin' | 'driver'>): LatLng[] {
-  const must: LatLng[] = [...stops, ...(pin ? [pin] : [])];
+export function framePoints({ stops = [], pin, driver, frame = [] }: Pick<RouteMapProps, 'stops' | 'pin' | 'driver' | 'frame'>): LatLng[] {
+  const must: LatLng[] = [...stops, ...(pin ? [pin] : []), ...frame];
   if (!driver) return must;
   if (!must.length) return [driver];
   const lat = must.reduce((a, p) => a + p.lat, 0) / must.length;
@@ -72,6 +76,9 @@ export function routeColorAt(t: number): string {
   return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * k).toString(16).padStart(2, '0')).join('');
 }
 const hex = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+
+/** The driven part of a route: gray. */
+export const ROUTE_DONE = colorHex.controlBorder;
 
 /** Mapbox paint for the gradient (the source needs lineMetrics). */
 export const ROUTE_GRADIENT = ['interpolate', ['linear'], ['line-progress'], 0, color.routeStart, 1, color.routeEnd];

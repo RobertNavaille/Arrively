@@ -6,7 +6,7 @@ import { MAPBOX_TOKEN } from '../lib/config';
 import { BASEMAP_CONFIG, BASEMAP_STYLE } from './basemap';
 import { PUCK_SIZE, PuckShapes, puckSvg } from './DriverPuck';
 import { color, colorHex, font } from './theme';
-import { FOLLOW_ZOOM, MARKER, ROUTE_GRADIENT, byDrawOrder, framePoints, routeColorAt, type MapStop, type RouteMapProps } from './RouteMap.types';
+import { FOLLOW_ZOOM, MARKER, ROUTE_DONE, ROUTE_GRADIENT, byDrawOrder, framePoints, routeColorAt, type MapStop, type RouteMapProps } from './RouteMap.types';
 
 // Browser map: real Mapbox GL when a token is set, otherwise a drawn stand-in
 // (offline demo, screenshots).
@@ -70,7 +70,7 @@ function keepPaddingInside(m: import('mapbox-gl').Map) {
   if ((p.top ?? 0) + (p.bottom ?? 0) >= h - 1 || (p.left ?? 0) + (p.right ?? 0) >= w - 1) m.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
 }
 
-function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, driverHeading, onUserMove, hold }: RouteMapProps) {
+function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, doneLine, frame, inset, follow, bearing = 0, driverHeading, onUserMove, hold }: RouteMapProps) {
   const host = useRef<View>(null);
   const map = useRef<import('mapbox-gl').Map | null>(null);
   const [ready, setReady] = useState(false);
@@ -80,7 +80,7 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
   const sized = size.w > 0 && size.h > 0;
   const userMove = useRef(onUserMove);
   userMove.current = onUserMove;
-  const framed = framePoints({ stops, pin, driver });
+  const framed = framePoints({ stops, pin, driver, frame });
   const following = !!follow && !!driver;
   const followingRef = useRef(following);
   followingRef.current = following;
@@ -111,6 +111,10 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
       m.on('resize', () => keepPaddingInside(m));
       m.on('load', () => {
         // lineMetrics: the line is drawn as a gradient along its length (deep blue at the start, pale at the end).
+        // The part already driven: gray, under the blue.
+        m.addSource('route-done', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        m.addLayer({ id: 'route-done-casing', type: 'line', slot: 'middle', source: 'route-done', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 7 } });
+        m.addLayer({ id: 'route-done-line', type: 'line', slot: 'middle', source: 'route-done', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ROUTE_DONE, 'line-width': 4 } });
         m.addSource('route', { type: 'geojson', lineMetrics: true, data: { type: 'FeatureCollection', features: [] } });
         m.addLayer({ id: 'route-casing', type: 'line', slot: 'middle', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 7 } });
         m.addLayer({ id: 'route-line', type: 'line', slot: 'middle', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-gradient': ROUTE_GRADIENT as never, 'line-width': 4 } });
@@ -172,6 +176,15 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, inset, fol
       geometry: { type: 'LineString', coordinates: path.length > 1 ? path.map((p) => [p.lng, p.lat]) : [] },
     });
   }, [ready, lineKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const donePath = doneLine ?? [];
+  const doneKey = donePath.map((p) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
+  useEffect(() => {
+    if (!ready || !map.current) return;
+    (map.current.getSource('route-done') as import('mapbox-gl').GeoJSONSource | undefined)?.setData({
+      type: 'Feature', properties: {},
+      geometry: { type: 'LineString', coordinates: donePath.length > 1 ? donePath.map((p) => [p.lng, p.lat]) : [] },
+    });
+  }, [ready, doneKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Following: glide along with the driver, centred in the uncovered part.
   useEffect(() => {
@@ -229,10 +242,10 @@ const BASE_W = 400;
 const FOLLOW_SPAN = 0.0014;
 const BASE_H = 300;
 
-function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset, follow, bearing = 0, driverHeading }: RouteMapProps) {
+function Drawn({ height, stops = [], pin, pinLabel, driver, line, doneLine, frame, inset, follow, bearing = 0, driverHeading }: RouteMapProps) {
   const [width, setWidth] = useState(BASE_W);
   const W = width, H = height;
-  const pts = framePoints({ stops, pin, driver });
+  const pts = framePoints({ stops, pin, driver, frame });
   // Following: a street-level window around the driver instead of every point.
   const following = !!follow && !!driver;
   const box = following ? [
@@ -293,6 +306,13 @@ function Drawn({ height, stops = [], pin, pinLabel, driver, line, inset, follow,
             {minor.map((p, i) => <Path key={`m${i}`} d={p} stroke={color.mapRoad} strokeWidth={4} fill="none" />)}
             {roads.map((p, i) => <Path key={`r${i}`} d={p} stroke={color.mapRoad} strokeWidth={9} fill="none" />)}
           </G>
+          {/* The part already driven: gray, under the blue. */}
+          {doneLine && doneLine.length > 1 ? (
+            <>
+              <Path d={doneLine.map((p, i) => `${i ? 'L' : 'M'}${X(p.lng)} ${Y(p.lat)}`).join(' ')} stroke={color.surface} strokeWidth={7} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d={doneLine.map((p, i) => `${i ? 'L' : 'M'}${X(p.lng)} ${Y(p.lat)}`).join(' ')} stroke={ROUTE_DONE} strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </>
+          ) : null}
           {d ? <Path d={d} stroke={color.surface} strokeWidth={7} fill="none" strokeLinecap="round" strokeLinejoin="round" /> : null}
           {/* Deep blue at the start to pale blue at the end: each leg shades on from where the last one left off. */}
           {legs.length ? (

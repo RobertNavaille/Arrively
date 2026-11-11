@@ -5,7 +5,7 @@ import { showIOSActionSheet } from '../src/lib/actionSheet';
 import { backend } from '../src/lib/backend';
 import { confirmAction, showMessage } from '../src/lib/dialog';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
-import { bearingDeg, dayKey, distanceM, pathAhead, pathLengthM, estimateDriveMin, fmtDuration, fmtPhone, fmtTime, fmtWindow, miles, routeTotals } from '../src/lib/geo';
+import { dayKey, distanceM, pathAhead, pathLengthM, estimateDriveMin, fmtDuration, fmtPhone, fmtTime, fmtWindow, miles, routeTotals } from '../src/lib/geo';
 import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
 import { optionsOf, SPEED, type RouteOptions } from '../src/lib/routing';
 import { currentStop, useDriverData } from '../src/lib/store';
@@ -240,6 +240,18 @@ export default function Trip() {
   // The route line starts at the driver: the road route is fetched only every
   // so often, so what's already behind them is trimmed off on every fix.
   const trimmed = (path: LatLng[]) => (pos ? [pos, ...pathAhead(path, pos)] : path);
+  // On the way: where this drive started and the way driven since (the driver's own trail), per stop.
+  // The map frames the start and the stop; the trail is drawn gray, what's left blue.
+  const trail = useRef<{ stop: string; points: LatLng[] } | null>(null);
+  if (phase === 'onroute' && current && pos) {
+    if (trail.current?.stop !== current.id) trail.current = { stop: current.id, points: [{ lat: pos.lat, lng: pos.lng }] };
+    else {
+      const last = trail.current.points[trail.current.points.length - 1];
+      if (distanceM(last, pos) > 15) trail.current.points.push({ lat: pos.lat, lng: pos.lng });
+    }
+  } else if (phase !== 'onroute') trail.current = null;
+  const driven = phase === 'onroute' && trail.current && pos ? [...trail.current.points, pos] : undefined;
+  const driveStart = phase === 'onroute' && trail.current ? [trail.current.points[0]] : undefined;
   const line = phase === 'arrived' ? undefined
     : phase === 'onroute' && current ? trimmed([...(leg ? leg.path : []), current])
     : road ? trimmed(road.path) : [...(pos ? [pos] : []), ...ahead, ...(back ? [pos!] : [])];
@@ -302,21 +314,18 @@ export default function Trip() {
     // Row menus (press and hold a stop) draw here on the web; in iPhone's sheet, in app/trip-sheet.tsx.
     <RowMenuHost>
     <View style={{ flex: 1, backgroundColor: color.mapGround }}>
-      <RouteMap height={height} stops={mapStops} driver={pos} line={line}
+      <RouteMap height={height} stops={mapStops} driver={pos} line={line} doneLine={driven} frame={driveStart}
         pin={focus ? current : null} pinLabel={phase === 'arrived' ? current?.address.split(',')[0] : undefined}
         inset={{ top: NAV_TOP + NAV_H + 30 + safeTop, bottom: height - peek - sheetTop }}
-        // On the way it's a navigation view: the map follows the driver, who stays centred.
-        follow={phase === 'onroute' && !freeMap}
+        // On the way the map shows the whole drive, from where it started to the stop (north up); it doesn't follow the driver.
         // The way the driver faces: the compass when there is one, else their direction of travel.
         driverHeading={compass ?? travel}
         onUserMove={() => { if (phase === 'onroute') setFreeMap(true); }}
-        // After they take over, the map stays where they put it (no jump to the overview).
-        hold={phase === 'onroute' && freeMap}
-        // Direction of travel is up; before the driver moves, the stop is.
-        bearing={travel ?? (pos && current ? bearingDeg(pos, current) : 0)} />
+        // After they move the map, it stays where they put it until Re-center.
+        hold={phase === 'onroute' && freeMap} />
 
       {phase === 'onroute' && freeMap ? (
-        <Pressable onPress={() => setFreeMap(false)} accessibilityRole="button" accessibilityLabel="Re-center on your location"
+        <Pressable onPress={() => setFreeMap(false)} accessibilityRole="button" accessibilityLabel="Show the whole drive again"
           style={{ position: 'absolute', top: 72 + safeTop, right: space[4], zIndex: 2 }}>
           <FloatingSurface style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: space[3], borderRadius: radius.full }}>
             <Icon name="navigate" size={16} color={color.actionInk} />
