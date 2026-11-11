@@ -12,7 +12,6 @@ import { currentStop, dayRange, useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
 import { isDone, type LatLng, type Route, type Stop } from '../src/lib/types';
 import { Avatar, Button, IconButton } from '../src/ui/components';
-import { FloatingSurface } from '../src/ui/FloatingSurface';
 import { Icon } from '../src/ui/Icon';
 import { RouteMap } from '../src/ui/RouteMap';
 import { RowMenuHost } from '../src/ui/RowMenu';
@@ -285,13 +284,8 @@ export default function MyDay() {
 
       {/* Toolbar, floating over the bottom of the list: today's trip, and adding a stop. */}
       <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: space[4] + bottomInset }}>
-            {/* Optimize week: opens its options; the sheet's Optimize week regroups and saves the week. */}
-            <Pressable onPress={() => router.push('/week-options')} accessibilityRole="button" accessibilityLabel="Optimize week"
-              style={({ pressed }) => pressed && { opacity: 0.7, transform: [{ scale: 0.96 }] }}>
-              <FloatingSurface style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name="route" size={24} color={color.action} />
-              </FloatingSurface>
-            </Pressable>
+            {/* Optimize week opens its options. Both round buttons are the standard icon button: glass on iPhone, light-blue tint on web. */}
+            <IconButton icon="route" label="Optimize week" onPress={() => router.push('/week-options')} />
             <Button label="View my day" onPress={() => router.push('/trip')} style={{ flex: 1 }} />
             <IconButton icon="plus" label="Add stop" onPress={() => router.push('/new-stop')} />
       </View>
