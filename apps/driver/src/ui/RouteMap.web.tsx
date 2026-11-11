@@ -70,7 +70,7 @@ function keepPaddingInside(m: import('mapbox-gl').Map) {
   if ((p.top ?? 0) + (p.bottom ?? 0) >= h - 1 || (p.left ?? 0) + (p.right ?? 0) >= w - 1) m.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
 }
 
-function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, doneLine, frame, inset, follow, bearing = 0, driverHeading, onUserMove, hold }: RouteMapProps) {
+function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, doneLine, frame, margin = 0, inset, follow, bearing = 0, driverHeading, onUserMove, hold }: RouteMapProps) {
   const host = useRef<View>(null);
   const map = useRef<import('mapbox-gl').Map | null>(null);
   const [ready, setReady] = useState(false);
@@ -206,13 +206,13 @@ function MapboxWeb({ height, stops = [], pin, pinLabel, driver, line, doneLine, 
       // clear it, or the two together can outgrow the map.
       m.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
       const cam = m.cameraForBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-        { padding: fitPadding(m, (pinLabel ? 56 : 36) + (inset?.top ?? 0), 28 + (inset?.bottom ?? 0), 28), maxZoom: 15, bearing: 0 });
+        { padding: fitPadding(m, (pinLabel ? 56 : 36) + margin + (inset?.top ?? 0), 28 + margin + (inset?.bottom ?? 0), 28 + margin), maxZoom: 15, bearing: 0 });
       const cc = cam?.center as unknown as { lng: number; lat: number } | [number, number] | undefined;
       const center: [number, number] | null = !cc ? null : Array.isArray(cc) ? cc : [cc.lng, cc.lat];
       if (!cam || !center || !center.every(Number.isFinite) || !Number.isFinite(cam.zoom ?? NaN)) return;
       m.jumpTo({ center, zoom: Math.min(cam.zoom!, 15), bearing: 0 });
     });
-  }, [ready, sized, size.h, frameKey, inset?.top, inset?.bottom, following, hold]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, sized, size.h, frameKey, margin, inset?.top, inset?.bottom, following, hold]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Following: pinch and wheel zoom about the driver (the map's centre), not the finger,
   // so they stay put; a fresh follow (Re-center) starts back at street level.
@@ -242,7 +242,7 @@ const BASE_W = 400;
 const FOLLOW_SPAN = 0.0014;
 const BASE_H = 300;
 
-function Drawn({ height, stops = [], pin, pinLabel, driver, line, doneLine, frame, inset, follow, bearing = 0, driverHeading }: RouteMapProps) {
+function Drawn({ height, stops = [], pin, pinLabel, driver, line, doneLine, frame, margin = 0, inset, follow, bearing = 0, driverHeading }: RouteMapProps) {
   const [width, setWidth] = useState(BASE_W);
   const W = width, H = height;
   const pts = framePoints({ stops, pin, driver, frame });
@@ -259,7 +259,7 @@ function Drawn({ height, stops = [], pin, pinLabel, driver, line, doneLine, fram
   const minLat = Math.min(...lats, cLat - 0.005), maxLat = Math.max(...lats, cLat + 0.005);
   const minLng = Math.min(...lngs, cLng - 0.006), maxLng = Math.max(...lngs, cLng + 0.006);
   // Room for markers at the edges, and above a labelled pin.
-  const padX = 30, padTop = (pinLabel ? 64 : 30) + (inset?.top ?? 0), padBottom = 26 + (inset?.bottom ?? 0);
+  const padX = 30 + margin, padTop = (pinLabel ? 64 : 30) + margin + (inset?.top ?? 0), padBottom = 26 + margin + (inset?.bottom ?? 0);
   // Longitude degrees are shorter than latitude degrees away from the equator.
   const k = Math.cos((cLat * Math.PI) / 180);
   const s = Math.min(

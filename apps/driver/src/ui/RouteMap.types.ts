@@ -21,6 +21,8 @@ export interface RouteMapProps {
   line?: LatLng[];
   /** The part already driven: a gray line under the blue one. */
   doneLine?: LatLng[];
+  /** Extra room, on every side, between the framed places and the map's edges. */
+  margin?: number;
   /** More places to keep in view (where a drive started), with the stops and pin. */
   frame?: LatLng[];
   /** Bands covered by other UI (a sheet over the map): the points are framed in what's left. */

@@ -13,7 +13,7 @@ if (MAPBOX_TOKEN) Mapbox.setAccessToken(MAPBOX_TOKEN);
 
 // Mapbox map in the Arrively style: muted base map (see basemap.ts), blue route and driver,
 // numbered stops, a dark pin for a single destination.
-export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, doneLine, frame, inset, follow, bearing = 0, driverHeading, onUserMove, hold }: RouteMapProps) {
+export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, doneLine, frame, margin = 0, inset, follow, bearing = 0, driverHeading, onUserMove, hold }: RouteMapProps) {
   const dark = useColorScheme() === 'dark';
   const frameKey = (frame ?? []).map((p) => `${p.lng.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
   const points = useMemo(() => {
@@ -64,7 +64,7 @@ export function RouteMap({ height, stops = [], pin, pinLabel, driver, line, done
             padding={{ paddingTop: inset?.top ?? 0, paddingBottom: inset?.bottom ?? 0, paddingLeft: 0, paddingRight: 0 }} />
         ) : (
           <Mapbox.Camera
-            bounds={{ ...bounds, paddingTop: 48 + (inset?.top ?? 0), paddingBottom: 32 + (inset?.bottom ?? 0), paddingLeft: 32, paddingRight: 32 }}
+            bounds={{ ...bounds, paddingTop: 48 + margin + (inset?.top ?? 0), paddingBottom: 32 + margin + (inset?.bottom ?? 0), paddingLeft: 32 + margin, paddingRight: 32 + margin }}
             maxZoomLevel={16}
             heading={0}
             animationDuration={600}

@@ -315,6 +315,8 @@ export default function Trip() {
     <RowMenuHost>
     <View style={{ flex: 1, backgroundColor: color.mapGround }}>
       <RouteMap height={height} stops={mapStops} driver={pos} line={line} doneLine={driven} frame={driveStart}
+        // On the way: a cushion around the drive, so it doesn't run to the screen's edges.
+        margin={phase === 'onroute' ? 44 : 0}
         pin={focus ? current : null} pinLabel={phase === 'arrived' ? current?.address.split(',')[0] : undefined}
         inset={{ top: NAV_TOP + NAV_H + 30 + safeTop, bottom: height - peek - sheetTop }}
         // On the way the map shows the whole drive, from where it started to the stop (north up); it doesn't follow the driver.
