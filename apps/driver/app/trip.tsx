@@ -9,8 +9,7 @@ import { dayKey, distanceM, pathAhead, pathLengthM, estimateDriveMin, fmtDuratio
 import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
 import { optionsOf, SPEED, type RouteOptions } from '../src/lib/routing';
 import { currentStop, useDriverData } from '../src/lib/store';
-import { avoidList, avoidNotPassed, contactCustomer, openDirections, shareTripMessage } from '../src/lib/navigation';
-import { TRACKING_BASE_URL } from '../src/lib/config';
+import { avoidList, avoidNotPassed, contactCustomer, openDirections } from '../src/lib/navigation';
 import { useBottomInset, useScreenHeight } from '../src/lib/viewport';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
@@ -53,7 +52,7 @@ export default function Trip() {
   // Below the status bar on a phone (0 on the web).
   const safeTop = useSafeAreaInsets().top;
   const sheetTop = SHEET_TOP + safeTop;
-  const { routeFor, refresh, profile } = useDriverData();
+  const { routeFor, refresh } = useDriverData();
   const pos = useLivePosition();
   const travel = useTravelBearing(pos);
   const compass = useCompassHeading();
@@ -159,16 +158,8 @@ export default function Trip() {
 
   // Optimize route opens in its own sheet (Apple's page sheet on iPhone).
   const optimize = () => router.push('/optimize-route');
-  // Share trip (on unless the stop has it off): Start driving also opens Messages with a text
-  // to the customer and their live tracking link. Opened first, straight from the tap,
-  // since phones only open another app from one.
-  const startDriving = () => {
-    if (current && current.share_trip !== false && current.tracking_token) {
-      const link = `${TRACKING_BASE_URL}${encodeURIComponent(current.tracking_token)}`;
-      contactCustomer('sms', current.customer_phone, shareTripMessage(current.customer_name, link, profile?.name, profile?.org_name));
-    }
-    return startTrip();
-  };
+  // Start driving only starts the drive. (It used to open Messages with the customer's tracking link too.)
+  const startDriving = () => startTrip();
   const startTrip = () => run('start', async () => {
     if (!current) return;
     // Asked from this tap: iPhone browsers share the compass only once allowed.
