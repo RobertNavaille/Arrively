@@ -9,7 +9,7 @@ import { dayKey, distanceM, pathAhead, pathLengthM, estimateDriveMin, fmtDuratio
 import { currentPosition, enableCompass, startSharing, stopSharing, useCompassHeading, useLivePosition, useTravelBearing } from '../src/lib/location';
 import { optionsOf, SPEED, type RouteOptions } from '../src/lib/routing';
 import { currentStop, useDriverData } from '../src/lib/store';
-import { avoidList, avoidNotPassed, contactCustomer, openDirections } from '../src/lib/navigation';
+import { avoidList, avoidNotPassed, contactCustomer, etaMessage, openDirections } from '../src/lib/navigation';
 import { useBottomInset, useScreenHeight } from '../src/lib/viewport';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isDone, type LatLng, type Stop } from '../src/lib/types';
@@ -52,7 +52,7 @@ export default function Trip() {
   // Below the status bar on a phone (0 on the web).
   const safeTop = useSafeAreaInsets().top;
   const sheetTop = SHEET_TOP + safeTop;
-  const { routeFor, refresh } = useDriverData();
+  const { routeFor, refresh, profile } = useDriverData();
   const pos = useLivePosition();
   const travel = useTravelBearing(pos);
   const compass = useCompassHeading();
@@ -188,7 +188,8 @@ export default function Trip() {
   }
   const call = current?.customer_phone ? () => contactCustomer('tel', current.customer_phone!) : undefined;
   // Calls and texts go through the phone's own apps.
-  const message = current?.customer_phone ? () => contactCustomer('sms', current.customer_phone!)
+  // The text starts with the customer's live tracking link (the driver's ETA).
+  const message = current?.customer_phone ? () => contactCustomer('sms', current.customer_phone!, etaMessage(current, profile?.name, profile?.org_name))
     : () => showMessage('No phone number', `There's no phone number for ${current?.customer_name ?? 'this customer'}.`);
   // The job in full, one gray line icon and its text per row (on the way, and arrived).
   // `contact`: buttons at the right of the phone number's row.

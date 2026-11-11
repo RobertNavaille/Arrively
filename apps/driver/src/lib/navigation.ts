@@ -10,7 +10,8 @@
 // - Google Maps by web link (other phones and browsers): travel mode only.
 import { Linking, Platform } from 'react-native';
 import type { RouteOptions } from './routing';
-import type { LatLng } from './types';
+import { TRACKING_BASE_URL } from './config';
+import type { LatLng, Stop } from './types';
 
 const ua = () => (typeof navigator !== 'undefined' ? navigator.userAgent : '');
 const isApple = () => Platform.OS === 'ios' || (Platform.OS === 'web' && /iPhone|iPad|iPod|Macintosh/.test(ua()) && 'ontouchend' in (globalThis as object));
@@ -61,8 +62,17 @@ export function contactCustomer(how: 'tel' | 'sms', phone: string | null, body?:
 }
 
 /** Share trip: the text the customer gets when the driver starts the trip to them. */
-export function shareTripMessage(customer: string, link: string, driver?: string | null, business?: string | null): string {
-  const first = customer.trim().split(/\s+/)[0];
+/**
+ * The text the Message button starts with: who it's from and the customer's
+ * live tracking link (the driver's ETA). On the way it says so; before the
+ * drive it invites them to follow along. None once the driver has arrived or
+ * the stop is done (no link, or no token: an empty message).
+ */
+export function etaMessage(stop: Stop, driver?: string | null, business?: string | null): string | undefined {
+  if (!stop.tracking_token || !['scheduled', 'queued', 'en_route'].includes(stop.status)) return undefined;
+  const link = `${TRACKING_BASE_URL}${encodeURIComponent(stop.tracking_token)}`;
+  const first = stop.customer_name.trim().split(/\s+/)[0];
   const who = [driver?.trim().split(/\s+/)[0], business?.trim() ? `from ${business.trim()}` : ''].filter(Boolean).join(' ');
-  return `Hi ${first}, ${who ? `${who} here. ` : ''}I'm on my way. Follow along live: ${link}`;
+  const hello = `Hi ${first}, ${who ? `${who} here. ` : ''}`;
+  return stop.status === 'en_route' ? `${hello}I'm on my way. Follow along live: ${link}` : `${hello}You can see when I'll arrive here: ${link}`;
 }

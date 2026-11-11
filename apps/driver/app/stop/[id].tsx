@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { backend } from '../../src/lib/backend';
 import { confirmAction, showMessage } from '../../src/lib/dialog';
 import { useRoadRoute } from '../../src/lib/directions';
-import { contactCustomer } from '../../src/lib/navigation';
+import { contactCustomer, etaMessage } from '../../src/lib/navigation';
 import { fmtTime, fmtWindow, parseDay } from '../../src/lib/geo';
 import { useLivePosition } from '../../src/lib/location';
 import { useDriverData } from '../../src/lib/store';
@@ -23,7 +23,7 @@ import { color, font, radius, shadow, space, type } from '../../src/ui/theme';
 export default function StopScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { stopById } = useDriverData();
+  const { stopById, profile } = useDriverData();
   const found = stopById(String(id));
   const [busy, setBusy] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
@@ -65,7 +65,7 @@ export default function StopScreen() {
   const outcome = stop.status === 'completed' ? 'Done' : stop.status === 'no_show' ? 'No-show' : 'Skipped';
   const call = stop.customer_phone ? () => contactCustomer('tel', stop.customer_phone!) : undefined;
   // Calls and texts go through the phone's own apps.
-  const message = stop.customer_phone ? () => contactCustomer('sms', stop.customer_phone!)
+  const message = stop.customer_phone ? () => contactCustomer('sms', stop.customer_phone!, etaMessage(stop, profile?.name, profile?.org_name))
     : () => showMessage('No phone number', `There's no phone number for ${stop.customer_name}.`);
   const line = !done && pos ? [pos, ...(leg ? leg.path : []), stop] : undefined;
   const dayTitle = (
