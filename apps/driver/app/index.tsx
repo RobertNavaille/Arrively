@@ -321,10 +321,14 @@ export default function MyDay() {
         </View>
       </DaySheet>
 
-      {/* Optimize schedule, floating at the bottom of the sheet: the week's optimize options. */}
-      <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', paddingTop: space[3], paddingBottom: space[4] + bottomInset }}>
-        <Button variant="neutral" icon="route" label="Optimize schedule" style={shadow.float} onPress={() => router.push('/week-options')} />
-      </View>
+      {/* Optimize schedule, floating at the bottom of the pulled-up sheet (hidden while it rests): the week's optimize options. */}
+      {sheetOpen ? (
+        <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', paddingTop: space[3], paddingBottom: space[4] + bottomInset }}>
+          <FadeIn from={16}>
+            <Button variant="neutral" icon="route" label="Optimize schedule" style={shadow.float} onPress={() => router.push('/week-options')} />
+          </FadeIn>
+        </View>
+      ) : null}
     </View>
     </RowMenuHost>
   );
