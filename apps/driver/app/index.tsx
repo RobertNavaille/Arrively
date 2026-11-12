@@ -221,12 +221,13 @@ export default function MyDay() {
 
       {/* The day in a sheet over the map: its date, the week strip, and its stops. */}
       <DaySheet openTop={openTop} travel={travel} screenH={screenH} open={sheetOpen} onOpenChange={setSheetOpen} atTop={pageAtTop} offset={sheetY}>
-        {/* Today (as in Apple's Calendar) goes back to the current day; + adds a stop. The selected day shows in the strip. */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space[3], paddingTop: space[1] }}>
-          <Pressable onPress={() => goTo(range.todayIndex)} accessibilityRole="button" accessibilityLabel="Go to today"
-            style={({ pressed }) => [{ height: 36, paddingHorizontal: 14, borderRadius: 18, backgroundColor: color.brandTint, justifyContent: 'center' }, pressed && { opacity: 0.7 }]}>
-            <Text style={{ fontFamily: font.semibold, fontSize: 15, color: color.onTint }}>Today</Text>
-          </Pressable>
+        {/* Today (as in Apple's Calendar) goes back to the current day; the day and date in the middle; + adds a stop. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], paddingTop: space[1] }}>
+          <IconButton icon="calendar" size="compact" label="Go to today" onPress={() => goTo(range.todayIndex)} />
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={[type.title, { fontSize: 17, lineHeight: 22 }]} accessibilityRole="header" numberOfLines={1}>{day.toLocaleDateString('en-US', { weekday: 'long' })}</Text>
+            <Text style={[type.body, { fontSize: 13, lineHeight: 18, color: color.inkMuted }]} numberOfLines={1}>{day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}{isToday ? ' · Today' : ''}</Text>
+          </View>
           <IconButton icon="plus" size="compact" label="Add stop" onPress={() => router.push('/new-stop')} />
         </View>
 
@@ -460,7 +461,7 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
       {/* The trip info ribbon (first, so it can stick over the stops as they scroll). */}
       <View>
         {stats ? (
-          <FadeIn from={-6} style={{ marginHorizontal: space[4], marginTop: space[3], marginBottom: space[2] }}>
+          <FadeIn from={-6} style={{ marginHorizontal: space[4], marginTop: space[3] * 2, marginBottom: space[2] }}>
             <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${miles(stats.meters).toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}
               style={[{ height: 44, borderRadius: 22, overflow: floated ? 'visible' : 'hidden' }, floated ? shadow.float : { backgroundColor: color.surfaceMuted }]}>
               {floated ? <FloatingSurface style={[StyleSheet.absoluteFill, { borderRadius: 22 }]} /> : null}
