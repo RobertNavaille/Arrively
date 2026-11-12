@@ -248,7 +248,7 @@ export default function MyDay() {
             onMomentumScrollEnd={(e) => goToWeek(Math.round(e.nativeEvent.contentOffset.x / width))}
             scrollEventThrottle={32}
             renderItem={({ item: wk, index: w }) => (
-              <View style={{ width, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: space[3], paddingTop: space[2], paddingBottom: 14 }}>
+              <View style={{ width, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: space[3], paddingTop: space[4], paddingBottom: 14 }}>
                 {wk.map((d, j) => {
                   const i = w * 7 + j;
                   const sel = i === index;
@@ -461,7 +461,7 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
       {/* The trip info ribbon (first, so it can stick over the stops as they scroll). */}
       <View>
         {stats ? (
-          <FadeIn from={-6} style={{ marginHorizontal: space[4], marginTop: space[3] * 2, marginBottom: space[2] }}>
+          <FadeIn from={-6} style={{ marginHorizontal: space[4], marginVertical: space[4] }}>
             <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${miles(stats.meters).toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}
               style={[{ height: 44, borderRadius: 22, overflow: floated ? 'visible' : 'hidden' }, floated ? shadow.float : { backgroundColor: color.surfaceMuted }]}>
               {floated ? <FloatingSurface style={[StyleSheet.absoluteFill, { borderRadius: 22 }]} /> : null}
