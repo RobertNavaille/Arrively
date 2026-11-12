@@ -176,8 +176,7 @@ export default function MyDay() {
     id: st.id, lat: st.lat, lng: st.lng, n: i + 1,
     state: isDone(st) ? 'done' : route?.status === 'active' && st.id === selCurrent?.id ? 'next' : 'upcoming',
   }));
-  // The selected day's trip info (what's left of it): drive time, miles, stops. Over the map at rest,
-  // in a ribbon under the week strip once the sheet is up.
+  // The selected day's trip info (what's left of it): drive time, miles, stops, in a ribbon under the week strip.
   const stats = useDayStats(route, isToday ? pos : null);
 
   // Today's trip, started from here: the first drive starts the route (location sharing, customers' texts),
@@ -200,10 +199,6 @@ export default function MyDay() {
       refresh();
     } finally { setBusy(false); }
   }
-  const remainingToday = isToday ? (route?.stops ?? []).filter((s) => !isDone(s) && (s.status === 'scheduled' || s.status === 'queued')).length : 0;
-  const optimizeRoute = isToday && !!route && route.status !== 'completed' && remainingToday >= 2;
-  // The trip info capsule rides just above the sheet and fades as the sheet comes up.
-  const capsuleFade = sheetY.interpolate({ inputRange: [travel * 0.55, travel], outputRange: [0, 1], extrapolate: 'clamp' });
 
   return (
     // Row menus (press and hold a stop) draw over the whole screen.
@@ -211,7 +206,7 @@ export default function MyDay() {
     <View style={{ flex: 1, backgroundColor: color.mapGround }}>
       {/* The selected day's stops on a map that fills the screen, framed in the part above the resting sheet. */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-        <RouteMap height={screenH} stops={selStops} driver={isToday ? pos : null} inset={{ top: openTop, bottom: screenH - restTop + CAPSULE_SPACE }} />
+        <RouteMap height={screenH} stops={selStops} driver={isToday ? pos : null} inset={{ top: openTop, bottom: screenH - restTop }} />
       </View>
 
       {/* Over the map: the avatar (settings and account). */}
@@ -224,27 +219,15 @@ export default function MyDay() {
         </Pressable>
       </View>
 
-      {/* The trip info, floating over the map just above the resting sheet. */}
-      {stats ? (
-        <Animated.View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: openTop - CAPSULE_SPACE, alignItems: 'center', opacity: capsuleFade, transform: [{ translateY: sheetY }] }}>
-          <FloatingSurface style={{ height: 40, borderRadius: 20, paddingHorizontal: space[4], flexDirection: 'row', alignItems: 'center', gap: space[4] }}>
-            <TripInfo stats={stats} size={15} />
-          </FloatingSurface>
-        </Animated.View>
-      ) : null}
-
       {/* The day in a sheet over the map: its date, the week strip, and its stops. */}
       <DaySheet openTop={openTop} travel={travel} screenH={screenH} open={sheetOpen} onOpenChange={setSheetOpen} atTop={pageAtTop} offset={sheetY}>
-        {/* The day and its date; Today (as in Apple's Calendar) goes back to the current day. */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingLeft: space[4], paddingRight: space[3], paddingTop: space[1], paddingBottom: 2 }}>
-          <View style={{ flex: 1 }}>
-            <Text style={[type.title, { fontSize: 22, lineHeight: 28 }]} accessibilityRole="header">{day.toLocaleDateString('en-US', { weekday: 'long' })}</Text>
-            <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]}>{day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}{isToday ? ' · Today' : ''}</Text>
-          </View>
+        {/* Today (as in Apple's Calendar) goes back to the current day; + adds a stop. The selected day shows in the strip. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space[3], paddingTop: space[1] }}>
           <Pressable onPress={() => goTo(range.todayIndex)} accessibilityRole="button" accessibilityLabel="Go to today"
             style={({ pressed }) => [{ height: 36, paddingHorizontal: 14, borderRadius: 18, backgroundColor: color.brandTint, justifyContent: 'center' }, pressed && { opacity: 0.7 }]}>
             <Text style={{ fontFamily: font.semibold, fontSize: 15, color: color.onTint }}>Today</Text>
           </Pressable>
+          <IconButton icon="plus" size="compact" label="Add stop" onPress={() => router.push('/new-stop')} />
         </View>
 
         {/* Week strip, Sunday to Saturday; swipe for the next or previous week. */}
@@ -337,11 +320,9 @@ export default function MyDay() {
         </View>
       </DaySheet>
 
-      {/* Toolbar, floating over the bottom of the sheet: optimize (today's route, or the week), and adding a stop. */}
-      <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: space[4] + bottomInset }}>
-        <Button variant="neutral" icon="route" label={optimizeRoute ? 'Optimize route' : 'Optimize week'} style={shadow.float}
-          onPress={() => router.push(optimizeRoute ? '/optimize-route' : '/week-options')} />
-        <IconButton icon="plus" label="Add stop" onPress={() => router.push('/new-stop')} />
+      {/* Optimize schedule, floating at the bottom of the sheet: the week's optimize options. */}
+      <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', paddingTop: space[3], paddingBottom: space[4] + bottomInset }}>
+        <Button variant="neutral" icon="route" label="Optimize schedule" style={shadow.float} onPress={() => router.push('/week-options')} />
       </View>
     </View>
     </RowMenuHost>
@@ -380,8 +361,6 @@ const TOOLBAR_H = 88;
 // The avatar's bar over the map; pulled all the way up, the sheet stops just under it.
 const NAV_TOP = 10;
 const NAV_H = 44;
-// The trip info capsule's height above the resting sheet, with its gap.
-const CAPSULE_SPACE = 52;
 
 /** A day's trip info: drive time and miles for the stops left, and how many. */
 interface DayStats { min: number; meters: number; stops: number; left: boolean }
@@ -429,8 +408,8 @@ function TripInfo({ stats, size }: { stats: DayStats; size: number }) {
 
 /**
  * A day's page. Today, with the trip still to drive, the next stop leads (Start driving), then the
- * stops after it and the ones done; other days, the stops in order. Pulled up, the trip info is a
- * ribbon at the top: in line at first, then it stays put and floats over the stops as they scroll.
+ * stops after it and the ones done; other days, the stops in order. The trip info is a ribbon at the
+ * top: in line at first, then (pulled up) it stays put and floats over the stops as they scroll.
  */
 function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPad, open, onAtTop, starting, onStart, onOpenTrip, profile }: {
   route: Route | undefined; isToday: boolean; driver: LatLng | null; stats: DayStats | null; onOpenStop: (s: Stop) => void; loading: boolean;
@@ -478,9 +457,9 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
         onAtTop?.(y <= 0);
         if ((y > 4) !== floated) setFloated(y > 4);
       }}>
-      {/* The trip info ribbon (first, so it can stick): only with the sheet pulled up. */}
+      {/* The trip info ribbon (first, so it can stick over the stops as they scroll). */}
       <View>
-        {open && stats ? (
+        {stats ? (
           <FadeIn from={-6} style={{ marginHorizontal: space[4], marginTop: space[3], marginBottom: space[2] }}>
             <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${miles(stats.meters).toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}
               style={[{ height: 44, borderRadius: 22, overflow: floated ? 'visible' : 'hidden' }, floated ? shadow.float : { backgroundColor: color.surfaceMuted }]}>
@@ -582,7 +561,7 @@ function DaySheet({ openTop, travel, screenH, open, onOpenChange, atTop, offset,
   const sheetRef = useRef<View>(null);
   // Starts where it should be, without sliding there (set before the first paint, not while drawing).
   useLayoutEffect(() => { offset.setValue(openRef.current ? 0 : travelRef.current); }, [offset]);
-  // Driven from JavaScript (not the native driver): the trip info capsule follows it too.
+  // Driven from JavaScript (not the native driver), so a drag follows the finger on every platform.
   const snap = useCallback((toOpen: boolean) => {
     if (toOpen !== openRef.current) change.current(toOpen);
     openRef.current = toOpen;
