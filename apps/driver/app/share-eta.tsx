@@ -113,11 +113,11 @@ function Item({ icon, text }: { icon: 'clock' | 'navigate'; text: string }) {
 
 /** iPhone: the content of Apple's sheet. Elsewhere: a card at the bottom over the dimmed screen (tap outside to close). */
 function Frame({ children, onClose, bottomInset }: { children: ReactNode; onClose: () => void; bottomInset: number }) {
-  // Close, at the top right, as in Apple's own sheets: our standard round icon button. iPhone: Liquid Glass
-  // with a dark ✕ (as Messages' New Message); elsewhere the light-blue tint. Back to the Schedule without starting.
+  // Close, at the top right: the same round icon button as Today, + and call/text (Liquid Glass on iPhone,
+  // the light-blue tint elsewhere), full size. Back to the Schedule without starting.
   const closeButton = (
     <View style={styles.close}>
-      <IconButton icon="close" label="Close" onPress={onClose} variant={NATIVE_CHROME ? 'plain' : 'tint'} size="compact" />
+      <IconButton icon="close" label="Close" onPress={onClose} />
     </View>
   );
   if (NATIVE_CHROME) return <View style={{ paddingHorizontal: 20, paddingBottom: space[4], backgroundColor: color.surface }}>{children}{closeButton}</View>;
@@ -134,7 +134,7 @@ function Frame({ children, onClose, bottomInset }: { children: ReactNode; onClos
 }
 
 const styles = StyleSheet.create({
-  close: { position: 'absolute', top: space[4], right: space[4] },
+  close: { position: 'absolute', top: space[3], right: space[3] },
   card: { paddingHorizontal: 20, paddingBottom: space[6], borderRadius: 36, backgroundColor: color.surface, width: '100%', maxWidth: 480, alignSelf: 'center' },
   drive: { flexDirection: 'row', justifyContent: 'center', gap: 28, marginTop: 20, paddingVertical: space[3], borderTopWidth: 1, borderBottomWidth: 1, borderColor: color.divider },
   sent: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: space[2], marginTop: 20, height: 36, paddingHorizontal: 14, borderRadius: radius.full, backgroundColor: 'rgba(46,160,90,0.12)' },
