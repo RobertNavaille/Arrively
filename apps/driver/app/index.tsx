@@ -4,7 +4,7 @@ import {
   Animated, AppState, FlatList, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { addDays, dayKey, distanceM, estimateDriveMin, miles, routeTotals } from '../src/lib/geo';
+import { addDays, dayKey, distanceM, estimateDriveMin, miles, pathAhead, routeTotals } from '../src/lib/geo';
 import { useRoadPath, useRoadRoute } from '../src/lib/directions';
 import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
@@ -188,7 +188,7 @@ export default function MyDay() {
     state: isDone(st) ? 'done' : route?.status === 'active' && st.id === selCurrent?.id ? 'next' : 'upcoming',
   }));
   // The selected day's trip info (what's left of it): drive time, miles, stops, in a ribbon under the week strip.
-  const stats = useDayStats(route, isToday ? pos : null);
+  const { stats, line: dayLine } = useDayStats(route, isToday ? pos : null);
 
   // Today's trip, started from here: the first drive starts the route (location sharing, customers' texts),
   // then the trip screen takes over (on the way, arrived, marking the stop).
@@ -339,7 +339,7 @@ export default function MyDay() {
     <View style={{ flex: 1, backgroundColor: color.mapGround }}>
       {/* The selected day's stops on a map that fills the screen, framed in the part above the resting sheet. */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-        <RouteMap height={screenH} stops={selStops} driver={isToday ? pos : null} inset={{ top: openTop, bottom: screenH - restTop }} />
+        <RouteMap height={screenH} stops={selStops} driver={isToday ? pos : null} line={dayLine} inset={{ top: openTop, bottom: screenH - restTop }} />
       </View>
 
       {/* Over the map: the avatar (settings and account). */}
@@ -419,10 +419,15 @@ function straightStats(route: Route | undefined, start: LatLng | null, road?: { 
 }
 
 /** The day's trip info by road when the map service answers. Today it starts from the driver; other days from the first stop. */
-function useDayStats(route: Route | undefined, start: LatLng | null): DayStats | null {
+function useDayStats(route: Route | undefined, start: LatLng | null): { stats: DayStats | null; line: LatLng[] | undefined } {
   const remaining = (route?.stops ?? []).filter((s) => !isDone(s));
-  const road = useRoadPath(start, remaining, route ? optionsOf(route) : {});
-  return straightStats(route, start, road);
+  const options = route ? optionsOf(route) : {};
+  const road = useRoadPath(start, remaining, options);
+  // The route's line on the map: by road when known, else straight between the stops (back to the start on a round trip).
+  const pts = [...(start ? [start] : []), ...remaining, ...(start && options.roundTrip && remaining.length ? [start] : [])];
+  // (The road route is asked for again only every so often: what's already behind the driver is trimmed off.)
+  const line = road ? (start ? [start, ...pathAhead(road.path, start)] : road.path) : pts.length >= 2 ? pts : undefined;
+  return { stats: straightStats(route, start, road), line };
 }
 
 const fmtTripTime = (min: number) => (min < 60 ? `${min} min` : `${Math.floor(min / 60)} hr${min % 60 ? ` ${min % 60} min` : ''}`);
