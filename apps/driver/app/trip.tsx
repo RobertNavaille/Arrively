@@ -22,6 +22,7 @@ import { onOptimizeSignal } from '../src/lib/optimizeSignal';
 import { TRIP_SCREENS_TO_LEAVE, TripSheetHost } from '../src/ui/TripSheetHost';
 import { NATIVE_CHROME } from '../src/ui/nativeChrome';
 import { FadeIn } from '../src/ui/FadeIn';
+import { EtaSharingPanel, EtaSharingPill } from '../src/ui/EtaSharing';
 import { FloatingSurface } from '../src/ui/FloatingSurface';
 import { Button, IconButton, StatusPill } from '../src/ui/components';
 import { Icon, type IconName } from '../src/ui/Icon';
@@ -32,7 +33,7 @@ import { color, font, radius, shadow, space, type } from '../src/ui/theme';
 export { ScreenError as ErrorBoundary } from '../src/ui/ScreenError';
 
 const RADIUS_M = 75;
-// The bar across the top of the map: a back button (and, on the way, where to).
+// The bar across the top of the map: a back button (and, on the way, whether the ETA is shared).
 const NAV_TOP = 10;
 const NAV_H = 44;
 // Pulled all the way up, the sheet stops just under that bar, so going back is always in reach.
@@ -75,6 +76,8 @@ export default function Trip() {
   const [sheetOpen, setSheetOpen] = useState(false);
   // On the way, pulled up: the More menu beside Get directions.
   const [barMenu, setBarMenu] = useState(false);
+  // On the way: the ETA sharing panel (from the pill in the top bar).
+  const [etaPanel, setEtaPanel] = useState(false);
 
   // Just optimized: the old order stays on screen until the Optimize route sheet has closed,
   // then slides down and away, and the new order slides down into its place.
@@ -131,7 +134,7 @@ export default function Trip() {
   const floatOptimize = phase === 'next' && canOptimize;
   // Each step starts with the sheet at its resting height.
   // Each step follows the driver again (the sheet itself goes back to rest on its own).
-  useEffect(() => { setFreeMap(false); setChoosing(false); setOutcome(null); setComments(''); }, [phase]);
+  useEffect(() => { setFreeMap(false); setChoosing(false); setOutcome(null); setComments(''); setEtaPanel(false); }, [phase]);
 
   if (!route || !stops.length) {
     return (
@@ -343,16 +346,11 @@ export default function Trip() {
             <Icon name="back" size={20} color={color.ink} />
           </FloatingSurface>
         </Pressable>
-        {phase === 'onroute' && current && !sheetOpen ? (
-          <Pressable onPress={() => openDirections(current, options)} accessibilityRole="button" accessibilityLabel={`Directions to ${current.address}`}
-            style={{ flex: 1 }}>
-            <FloatingSurface style={{ height: NAV_H, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], borderRadius: NAV_H / 2 }}>
-              <Icon name="navigate" size={18} color={color.ink} />
-              <Text style={[type.body, { flex: 1 }]} numberOfLines={1}>{current.address}</Text>
-            </FloatingSurface>
-          </Pressable>
-        ) : null}
       </View>
+      {/* On the way: whether the customer can follow along (centred in the top bar); tap for who and to stop. */}
+      {phase === 'onroute' && current ? (
+        <EtaSharingPill stop={current} top={NAV_TOP + safeTop} height={NAV_H} onPress={() => setEtaPanel(true)} />
+      ) : null}
 
       {/* The sheet moves only when dragged (or scrolled) itself; the map above it pans and zooms. */}
       <TripSheetHost height={height} overlay={tripOverlay} fixed={sheetFixed} top={sheetTop} rest={peek} onOpenChange={setSheetOpen} resetKey={choosing ? `${phase}:mark` : phase} startOpen={choosing} bottomInset={bottomInset + barSpace + (floatOptimize ? OPTIMIZE_SPACE : 0)} hold={holding} header={
@@ -522,6 +520,10 @@ export default function Trip() {
           ) : null}
         </View>
       </TripSheetHost>
+
+      {phase === 'onroute' && current ? (
+        <EtaSharingPanel stop={current} open={etaPanel} onClose={() => setEtaPanel(false)} onChanged={refresh} safeTop={safeTop} />
+      ) : null}
 
       <Modal transparent visible={barMenu && phase === 'onroute' && !!current} animationType="fade" onRequestClose={() => setBarMenu(false)}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => setBarMenu(false)} accessibilityLabel="Close menu" />

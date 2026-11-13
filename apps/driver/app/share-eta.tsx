@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { backend } from '../src/lib/backend';
 import { showMessage } from '../src/lib/dialog';
 import { fmtTime, miles } from '../src/lib/geo';
 import { contactCustomer, etaMessage } from '../src/lib/navigation';
@@ -10,13 +11,13 @@ import { useBottomInset } from '../src/lib/viewport';
 import { Button, IconButton } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
 import { NATIVE_CHROME } from '../src/ui/nativeChrome';
-import { color, font, radius, shadow, space, type } from '../src/ui/theme';
+import { color, font, shadow, space, type } from '../src/ui/theme';
 
 /**
  * After Start driving, before the drive: who and where, how long, the job's
- * notes, and two choices. Share ETA opens Messages with the customer's live
- * tracking link written in; Start trip starts the drive and opens the trip.
- * Share ETA leads until the text has been opened; then Start trip does.
+ * notes, and two choices, both starting the drive and opening the trip:
+ * Share ETA also opens Messages with the customer's live tracking link
+ * written in; Start trip doesn't. The trip shows whether the ETA is shared.
  * iPhone: Apple's sheet, sized to fit. Elsewhere: a card over the dimmed Schedule.
  */
 export default function ShareEta() {
@@ -24,8 +25,8 @@ export default function ShareEta() {
   const router = useRouter();
   const { stopById, profile, refresh } = useDriverData();
   const found = stopById(String(id));
-  const [shared, setShared] = useState(false);
-  const [starting, setStarting] = useState(false);
+  // Which button is working: sharing (start, then Messages) or starting without sharing.
+  const [busy, setBusy] = useState<'share' | 'start' | null>(null);
   const bottomInset = useBottomInset();
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
@@ -38,20 +39,23 @@ export default function ShareEta() {
   const arrive = legMin != null ? fmtTime(new Date(Date.now() + legMin * 60_000)) : null;
   const initials = stop.customer_name.split(/\s+/).map((p) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 
-  const share = () => {
-    if (!stop.customer_phone) { showMessage('No phone number', `There's no phone number for ${stop.customer_name}.`); return; }
-    contactCustomer('sms', stop.customer_phone, etaMessage(stop, profile?.name, profile?.org_name, true));
-    setShared(true);
-  };
-  const start = async () => {
-    setStarting(true);
+  // Both start the drive, then open the trip. Share ETA also opens Messages with the customer's live
+  // tracking link written in (the drive started first, so the link is live when they open it).
+  const go = async (how: 'share' | 'start') => {
+    if (how === 'share' && !stop.customer_phone) { showMessage('No phone number', `There's no phone number for ${stop.customer_name}.`); return; }
+    setBusy(how);
     try {
       await beginDrive(route, stop, refresh);
+      // Sharing is on for this stop (the trip screen shows it, and it can be switched off there).
+      if (how === 'share') {
+        if (stop.share_trip === false) await backend.setShareTrip(stop.id, true);
+        contactCustomer('sms', stop.customer_phone, etaMessage(stop, profile?.name, profile?.org_name, true));
+      }
       router.replace('/trip');
     } catch (e) {
       showMessage('Something went wrong', e instanceof Error ? e.message : String(e));
       refresh();
-      setStarting(false);
+      setBusy(null);
     }
   };
 
@@ -83,24 +87,14 @@ export default function ShareEta() {
         </View>
       ) : null}
 
-      {/* Back from Messages: the text was opened. */}
-      {shared ? (
-        <View accessibilityRole="alert" style={styles.sent}>
-          <Icon name="check" size={16} color={SENT} strokeWidth={2.6} />
-          <Text style={{ fontFamily: font.semibold, fontSize: 15, color: SENT }}>ETA shared with {stop.customer_name.split(/\s+/)[0]}</Text>
-        </View>
-      ) : null}
-
-      {/* Share ETA leads until it's been shared; then Start trip does. */}
+      {/* Share ETA (then the trip), or Start trip without sending the text. */}
       <View style={{ gap: 10, marginTop: space[6] }}>
-        <Button variant={shared ? 'secondary' : 'primary'} icon="message" label={shared ? 'Share again' : 'Share ETA'} onPress={share} />
-        <Button variant={shared ? 'primary' : 'secondary'} icon="navigate" label="Start trip" loading={starting} onPress={start} />
+        <Button icon="message" label="Share ETA" loading={busy === 'share'} disabled={!!busy} onPress={() => go('share')} />
+        <Button variant="secondary" icon="navigate" label="Start trip" loading={busy === 'start'} disabled={!!busy} onPress={() => go('start')} />
       </View>
     </Frame>
   );
 }
-
-const SENT = '#1E7A44';
 
 function Item({ icon, text }: { icon: 'clock' | 'navigate'; text: string }) {
   return (
@@ -137,5 +131,4 @@ const styles = StyleSheet.create({
   close: { position: 'absolute', top: space[3], right: space[3] },
   card: { paddingHorizontal: 20, paddingBottom: space[6], borderRadius: 36, backgroundColor: color.surface, width: '100%', maxWidth: 480, alignSelf: 'center' },
   drive: { flexDirection: 'row', justifyContent: 'center', gap: 28, marginTop: 20, paddingVertical: space[3], borderTopWidth: 1, borderBottomWidth: 1, borderColor: color.divider },
-  sent: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: space[2], marginTop: 20, height: 36, paddingHorizontal: 14, borderRadius: radius.full, backgroundColor: 'rgba(46,160,90,0.12)' },
 });
