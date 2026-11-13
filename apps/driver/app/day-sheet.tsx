@@ -16,8 +16,9 @@ export default function DaySheet() {
   const latest = useRef(sheet);
   latest.current = sheet;
 
-  // The two heights, as fractions of the screen: resting, and fully open (just below the avatar).
-  const full = sheet ? round((sheet.height - sheet.top) / sheet.height) : 0.9;
+  // The two heights, as fractions of the screen: resting, and fully open: Apple's full-height sheet (1,
+  // its "large" size, up to just under the status bar), as in Apple's apps.
+  const full = 1;
   const resting = sheet ? Math.max(0.08, round((sheet.height - sheet.top - sheet.rest) / sheet.height)) : 0.5;
   const detents = resting < full - 0.02 ? [resting, full] : [full];
   const detentsKey = detents.join(',');
