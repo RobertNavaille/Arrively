@@ -6,6 +6,7 @@ import { showMessage } from '../src/lib/dialog';
 import { fmtTime, miles } from '../src/lib/geo';
 import { contactCustomer, etaMessage } from '../src/lib/navigation';
 import { beginDrive } from '../src/lib/startDrive';
+import { openOverSchedule } from '../src/lib/scheduleNav';
 import { useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
 import { Button, IconButton } from '../src/ui/components';
@@ -51,7 +52,8 @@ export default function ShareEta() {
         if (stop.share_trip === false) await backend.setShareTrip(stop.id, true);
         contactCustomer('sms', stop.customer_phone, etaMessage(stop, profile?.name, profile?.org_name, true));
       }
-      router.replace('/trip');
+      // The trip opens as a screen of its own (on iPhone, not inside the Schedule's sheet).
+      openOverSchedule(router, '/trip', { replace: true });
     } catch (e) {
       showMessage('Something went wrong', e instanceof Error ? e.message : String(e));
       refresh();

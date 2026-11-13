@@ -20,6 +20,7 @@ import { FadeIn } from '../src/ui/FadeIn';
 import { FloatingSurface } from '../src/ui/FloatingSurface';
 import { NATIVE_CHROME } from '../src/ui/nativeChrome';
 import { publishDaySheet } from '../src/lib/sheetPortal';
+import { openOverSchedule, takePendingScreen } from '../src/lib/scheduleNav';
 import { RouteMap } from '../src/ui/RouteMap';
 import { RowMenuHost } from '../src/ui/RowMenu';
 import { StopMenu } from '../src/ui/StopMenu';
@@ -304,9 +305,9 @@ export default function MyDay() {
                 <View style={{ width, height: pagerH || undefined }}>
                   <DayPanel route={r} isToday={todayPage} driver={todayPage ? pos : null}
                     stats={i === index ? stats : straightStats(r, null)}
-                    loading={loading} onOpenStop={(st) => router.push(`/stop/${st.id}`)} bottomPad={TOOLBAR_H + bottomInset}
+                    loading={loading} onOpenStop={(st) => openOverSchedule(router, `/stop/${st.id}`)} bottomPad={TOOLBAR_H + bottomInset}
                     open={sheetOpen} onAtTop={i === index ? (v) => { pageAtTop.current = v; } : undefined}
-                    onStart={startDriving} onOpenTrip={() => router.push('/trip')}
+                    onStart={startDriving} onOpenTrip={() => openOverSchedule(router, '/trip')}
                     profile={profile} />
                 </View>
               );
@@ -327,7 +328,7 @@ export default function MyDay() {
 
       {/* Over the map: the avatar (settings and account). */}
       <View pointerEvents="box-none" style={{ position: 'absolute', top: safeTop + NAV_TOP, left: space[4], zIndex: 3 }}>
-        <Pressable onPress={() => router.push('/settings')} accessibilityRole="button" accessibilityLabel="Settings and account" hitSlop={6}
+        <Pressable onPress={() => openOverSchedule(router, '/settings')} accessibilityRole="button" accessibilityLabel="Settings and account" hitSlop={6}
           style={({ pressed }) => pressed && { opacity: 0.8 }}>
           <FloatingSurface style={{ width: NAV_H, height: NAV_H, borderRadius: NAV_H / 2, alignItems: 'center', justifyContent: 'center' }}>
             <Avatar name={profile?.name ?? 'Driver'} size={32} />
@@ -660,7 +661,7 @@ const styles = StyleSheet.create({
 
 /**
  * iPhone: hands the day sheet's content to app/day-sheet.tsx and presents it
- * (Apple's sheet) over the map once; it draws nothing here.
+ * (Apple's sheet) over the map; it draws nothing here.
  */
 function NativeDaySheet({ height, top, rest, body, overlay, onOpenChange, onWidth, onFocus, atTop }: {
   height: number; top: number; rest: number; body: ReactNode; overlay: ReactNode;
@@ -672,11 +673,13 @@ function NativeDaySheet({ height, top, rest, body, overlay, onOpenChange, onWidt
   useEffect(() => {
     publishDaySheet({ height, top, rest, body, overlay, onOpenChange, onWidth, onFocus, atTop });
   });
-  const presented = useRef(false);
-  useEffect(() => {
-    const t = setTimeout(() => { if (!presented.current) { presented.current = true; router.push('/day-sheet'); } }, 0);
-    return () => { clearTimeout(t); publishDaySheet(null); };
-  }, [router]);
+  // Whenever the Schedule itself is on screen, the sheet goes up over it, unless a full screen is waiting
+  // to open (see openOverSchedule): then that opens, and the sheet comes back when the driver returns.
+  useFocusEffect(useCallback(() => {
+    const t = setTimeout(() => { router.push((takePendingScreen() ?? '/day-sheet') as never); }, 0);
+    return () => clearTimeout(t);
+  }, [router]));
+  useEffect(() => () => publishDaySheet(null), []);
   return null;
 }
 
