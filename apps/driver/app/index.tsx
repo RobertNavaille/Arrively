@@ -537,8 +537,8 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
                       {current.address.split(',')[0]}{current.notes ? ` · ${current.notes}` : ''}
                     </Text>
                   </View>
-                  {call ? <IconButton icon="phone" size="compact" label={`Call ${current.customer_name}`} onPress={call} /> : null}
-                  {message ? <IconButton icon="message" size="compact" label={`Message ${current.customer_name}`} onPress={message} /> : null}
+                  {call ? <IconButton icon="phone" label={`Call ${current.customer_name}`} onPress={call} /> : null}
+                  {message ? <IconButton icon="message" label={`Message ${current.customer_name}`} onPress={message} /> : null}
                 </View>
                 {phase === 'next' && legMin != null && legM != null ? (
                   <Text style={type.body}><Text style={type.bodyStrong}>{legMin} min</Text>
