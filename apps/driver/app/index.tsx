@@ -346,7 +346,7 @@ export default function MyDay() {
           iPhone: Apple's own sheet (app/day-sheet.tsx); elsewhere the drawn one below. */}
       {NATIVE_CHROME ? (
         <NativeDaySheet height={screenH} top={openTop} rest={travel} body={sheetBody} overlay={optimize}
-          onOpenChange={setSheetOpen} onWidth={setSheetW} onFocus={onSheetFocus} />
+          onOpenChange={setSheetOpen} onWidth={setSheetW} onFocus={onSheetFocus} atTop={pageAtTop} />
       ) : (
         <>
           <DaySheet openTop={openTop} travel={travel} screenH={screenH} open={sheetOpen} onOpenChange={setSheetOpen} atTop={pageAtTop} offset={sheetY}>
@@ -664,14 +664,15 @@ const styles = StyleSheet.create({
  * iPhone: hands the day sheet's content to app/day-sheet.tsx and presents it
  * (Apple's sheet) over the map once; it draws nothing here.
  */
-function NativeDaySheet({ height, top, rest, body, overlay, onOpenChange, onWidth, onFocus }: {
+function NativeDaySheet({ height, top, rest, body, overlay, onOpenChange, onWidth, onFocus, atTop }: {
   height: number; top: number; rest: number; body: ReactNode; overlay: ReactNode;
   onOpenChange: (open: boolean) => void; onWidth: (width: number) => void; onFocus: () => void;
+  atTop: { current: boolean };
 }) {
   const router = useRouter();
   // The latest content on every render (the sheet screen redraws from it).
   useEffect(() => {
-    publishDaySheet({ height, top, rest, body, overlay, onOpenChange, onWidth, onFocus });
+    publishDaySheet({ height, top, rest, body, overlay, onOpenChange, onWidth, onFocus, atTop });
   });
   const presented = useRef(false);
   useEffect(() => {

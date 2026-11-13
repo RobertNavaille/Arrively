@@ -48,6 +48,8 @@ export interface DaySheetContent {
   onOpenChange: (open: boolean) => void;
   /** The sheet's width: Apple's sheet is inset from the screen's edges at its lower height. */
   onWidth: (width: number) => void;
+  /** Whether the day's list is scrolled to its top (a pull down there lowers the sheet). */
+  atTop: { current: boolean };
   /** The sheet is back on screen (a screen opened from it has closed): the Schedule's own focus handling. */
   onFocus: () => void;
 }
