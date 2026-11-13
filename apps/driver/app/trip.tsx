@@ -142,6 +142,9 @@ export default function Trip() {
     );
   }
 
+  // Back to where the driver came from (the Schedule): with the trip's own sheet on iPhone, two screens.
+  const leave = () => (!router.canGoBack() ? router.replace('/') : TRIP_SCREENS_TO_LEAVE > 1 ? router.dismiss(TRIP_SCREENS_TO_LEAVE) : router.back());
+
   async function run(label: string, fn: () => Promise<void>) {
     setBusy(label);
     try { await fn(); }
@@ -154,7 +157,8 @@ export default function Trip() {
   }
   // On the way's More menu: arrival is detected, this is the fallback; Cancel route goes back to the trip view.
   const markArrivedHere = () => { if (current) run('arrived', async () => { await backend.markArrived(current.id); await refresh(); }); };
-  const cancelRoute = () => { if (current) run('cancel', async () => { await backend.cancelTrip(current.id); await stopSharing(); await refresh(); }); };
+  // Cancelled, the drive is over: back to the Schedule (its sheet shows the next stop with Start driving again).
+  const cancelRoute = () => { if (current) run('cancel', async () => { await backend.cancelTrip(current.id); await stopSharing(); await refresh(); leave(); }); };
 
   // Optimize route opens in its own sheet (Apple's page sheet on iPhone).
   const optimize = () => router.push('/optimize-route');
@@ -332,7 +336,7 @@ export default function Trip() {
       <View style={{ position: 'absolute', top: NAV_TOP + safeTop, left: space[4], right: space[4], height: NAV_H, zIndex: 3, flexDirection: 'row', alignItems: 'center', gap: space[2] }}
         pointerEvents="box-none">
         {/* Floating over the map: Liquid Glass on iPhone, white elsewhere (FloatingSurface). */}
-        <Pressable onPress={() => (!router.canGoBack() ? router.replace('/') : TRIP_SCREENS_TO_LEAVE > 1 ? router.dismiss(TRIP_SCREENS_TO_LEAVE) : router.back())}
+        <Pressable onPress={leave}
           accessibilityRole="button" accessibilityLabel="Back" hitSlop={6}
           style={({ pressed }) => pressed && { opacity: 0.8 }}>
           <FloatingSurface style={{ width: NAV_H, height: NAV_H, borderRadius: NAV_H / 2, alignItems: 'center', justifyContent: 'center' }}>
