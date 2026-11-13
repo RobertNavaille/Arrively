@@ -20,6 +20,8 @@ import { Icon, type IconName } from '../src/ui/Icon';
 import { AheadRow } from '../src/ui/TripParts';
 import { FadeIn } from '../src/ui/FadeIn';
 import { FloatingSurface } from '../src/ui/FloatingSurface';
+import { NATIVE_CHROME } from '../src/ui/nativeChrome';
+import { publishDaySheet } from '../src/lib/sheetPortal';
 import { RouteMap } from '../src/ui/RouteMap';
 import { RowMenuHost } from '../src/ui/RowMenu';
 import { StopMenu } from '../src/ui/StopMenu';
@@ -32,7 +34,11 @@ const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 export default function MyDay() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { width: winW } = useWindowDimensions();
+  // The day pages and the week strip are as wide as the sheet: on iPhone, Apple's sheet (measured),
+  // which is inset from the screen's edges at its lower height.
+  const [sheetW, setSheetW] = useState<number | null>(null);
+  const width = NATIVE_CHROME && sheetW ? sheetW : winW;
   const { profile, routeFor, loading, error, refresh } = useDriverData();
   const pos = useLivePosition();
   // "Today" follows the clock, so an app left open overnight moves to the new day.
@@ -139,7 +145,7 @@ export default function MyDay() {
   // After Optimize week, it's today that shows.
   const todayIndexRef = useRef(range.todayIndex);
   todayIndexRef.current = range.todayIndex;
-  useFocusEffect(useCallback(() => {
+  const realign = useCallback(() => {
     const i = takeWeekOptimized() ? todayIndexRef.current : indexRef.current;
     touched.current = false;
     setIndex(i);
@@ -148,7 +154,12 @@ export default function MyDay() {
       stripRef.current?.scrollToOffset({ offset: width * Math.floor(i / 7), animated: false });
     }, 0);
     return () => clearTimeout(t);
-  }, [width]));
+  }, [width]);
+  useFocusEffect(realign);
+  // iPhone: screens opened from the day sheet close back onto the sheet (a screen of its own), not this one.
+  const realignRef = useRef(realign);
+  realignRef.current = realign;
+  const onSheetFocus = useCallback(() => { realignRef.current(); }, []);
 
   const bottomInset = useBottomInset();
   // The map fills the screen; the sheet rests a little below halfway and opens up to just under the avatar.
@@ -200,27 +211,17 @@ export default function MyDay() {
     } finally { setBusy(false); }
   }
 
-  return (
-    // Row menus (press and hold a stop) draw over the whole screen.
-    <RowMenuHost>
-    <View style={{ flex: 1, backgroundColor: color.mapGround }}>
-      {/* The selected day's stops on a map that fills the screen, framed in the part above the resting sheet. */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-        <RouteMap height={screenH} stops={selStops} driver={isToday ? pos : null} inset={{ top: openTop, bottom: screenH - restTop }} />
-      </View>
-
-      {/* Over the map: the avatar (settings and account). */}
-      <View pointerEvents="box-none" style={{ position: 'absolute', top: safeTop + NAV_TOP, left: space[4], zIndex: 3 }}>
-        <Pressable onPress={() => router.push('/settings')} accessibilityRole="button" accessibilityLabel="Settings and account" hitSlop={6}
-          style={({ pressed }) => pressed && { opacity: 0.8 }}>
-          <FloatingSurface style={{ width: NAV_H, height: NAV_H, borderRadius: NAV_H / 2, alignItems: 'center', justifyContent: 'center' }}>
-            <Avatar name={profile?.name ?? 'Driver'} size={32} />
-          </FloatingSurface>
-        </Pressable>
-      </View>
-
-      {/* The day in a sheet over the map: its date, the week strip, and its stops. */}
-      <DaySheet openTop={openTop} travel={travel} screenH={screenH} open={sheetOpen} onOpenChange={setSheetOpen} atTop={pageAtTop} offset={sheetY}>
+  // Optimize schedule, floating at the bottom of the pulled-up sheet (hidden while it rests): the week's optimize options.
+  // In Apple's sheet it sits just clear of the home indicator.
+  const optimize = sheetOpen ? (
+        <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', paddingTop: space[3], paddingBottom: NATIVE_CHROME ? Math.max(space[2], bottomInset - space[1]) : space[4] + bottomInset }}>
+          <FadeIn from={16}>
+            <Button variant="neutral" icon="route" label="Optimize schedule" style={shadow.float} onPress={() => router.push('/week-options')} />
+          </FadeIn>
+        </View>
+  ) : null;
+  const sheetBody = (
+    <>
         {/* Today (as in Apple's Calendar) goes back to the current day; the day and date in the middle; + adds a stop. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], paddingTop: space[1] }}>
           <IconButton icon="calendar" size="compact" label="Go to today" onPress={() => goTo(range.todayIndex)} />
@@ -319,16 +320,41 @@ export default function MyDay() {
             }}
           />
         </View>
-      </DaySheet>
+    </>
+  );
 
-      {/* Optimize schedule, floating at the bottom of the pulled-up sheet (hidden while it rests): the week's optimize options. */}
-      {sheetOpen ? (
-        <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', paddingTop: space[3], paddingBottom: space[4] + bottomInset }}>
-          <FadeIn from={16}>
-            <Button variant="neutral" icon="route" label="Optimize schedule" style={shadow.float} onPress={() => router.push('/week-options')} />
-          </FadeIn>
-        </View>
-      ) : null}
+  return (
+    // Row menus (press and hold a stop) draw over the whole screen.
+    <RowMenuHost>
+    <View style={{ flex: 1, backgroundColor: color.mapGround }}>
+      {/* The selected day's stops on a map that fills the screen, framed in the part above the resting sheet. */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        <RouteMap height={screenH} stops={selStops} driver={isToday ? pos : null} inset={{ top: openTop, bottom: screenH - restTop }} />
+      </View>
+
+      {/* Over the map: the avatar (settings and account). */}
+      <View pointerEvents="box-none" style={{ position: 'absolute', top: safeTop + NAV_TOP, left: space[4], zIndex: 3 }}>
+        <Pressable onPress={() => router.push('/settings')} accessibilityRole="button" accessibilityLabel="Settings and account" hitSlop={6}
+          style={({ pressed }) => pressed && { opacity: 0.8 }}>
+          <FloatingSurface style={{ width: NAV_H, height: NAV_H, borderRadius: NAV_H / 2, alignItems: 'center', justifyContent: 'center' }}>
+            <Avatar name={profile?.name ?? 'Driver'} size={32} />
+          </FloatingSurface>
+        </Pressable>
+      </View>
+
+      {/* The day in a sheet over the map: Today, the day and Add stop, the week strip, and its stops.
+          iPhone: Apple's own sheet (app/day-sheet.tsx); elsewhere the drawn one below. */}
+      {NATIVE_CHROME ? (
+        <NativeDaySheet height={screenH} top={openTop} rest={travel} body={sheetBody} overlay={optimize}
+          onOpenChange={setSheetOpen} onWidth={setSheetW} onFocus={onSheetFocus} />
+      ) : (
+        <>
+          <DaySheet openTop={openTop} travel={travel} screenH={screenH} open={sheetOpen} onOpenChange={setSheetOpen} atTop={pageAtTop} offset={sheetY}>
+            {sheetBody}
+          </DaySheet>
+          {optimize}
+        </>
+      )}
     </View>
     </RowMenuHost>
   );
@@ -509,13 +535,13 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
                     <Text style={{ color: color.inkMuted }}> · {miles(legM).toFixed(1)} mi</Text></Text>
                 ) : null}
                 {phase === 'next'
-                  ? <Button label="Start driving" loading={starting} onPress={() => onStart(current)} />
-                  : <Button icon="navigate" label={phase === 'onroute' ? 'On the way · Open trip' : 'At the stop · Open trip'} onPress={onOpenTrip} />}
+                  ? <Button label="Start driving" loading={starting} onPress={() => onStart(current)} style={{ marginTop: space[3] }} />
+                  : <Button icon="navigate" label={phase === 'onroute' ? 'On the way · Open trip' : 'At the stop · Open trip'} onPress={onOpenTrip} style={{ marginTop: space[3] }} />}
               </View>
             </View>
           ) : null}
           {current && upcoming.length ? (
-            <Text style={[type.bodyStrong, { color: color.inkMuted, paddingLeft: 20 + space[3], paddingBottom: space[3] }]}>
+            <Text style={[type.bodyStrong, { color: color.inkMuted, paddingLeft: 20 + space[3], paddingBottom: space[6] }]}>
               {upcoming.length} more {upcoming.length === 1 ? 'stop' : 'stops'}
             </Text>
           ) : null}
@@ -633,3 +659,24 @@ const styles = StyleSheet.create({
   line: { flex: 1, width: 2, marginTop: 4, marginBottom: -space[4], backgroundColor: color.divider },
   nextDot: { marginTop: 5, width: 20, height: 20, borderRadius: 10, backgroundColor: color.action, borderWidth: 4, borderColor: color.brandTint },
 });
+
+/**
+ * iPhone: hands the day sheet's content to app/day-sheet.tsx and presents it
+ * (Apple's sheet) over the map once; it draws nothing here.
+ */
+function NativeDaySheet({ height, top, rest, body, overlay, onOpenChange, onWidth, onFocus }: {
+  height: number; top: number; rest: number; body: ReactNode; overlay: ReactNode;
+  onOpenChange: (open: boolean) => void; onWidth: (width: number) => void; onFocus: () => void;
+}) {
+  const router = useRouter();
+  // The latest content on every render (the sheet screen redraws from it).
+  useEffect(() => {
+    publishDaySheet({ height, top, rest, body, overlay, onOpenChange, onWidth, onFocus });
+  });
+  const presented = useRef(false);
+  useEffect(() => {
+    const t = setTimeout(() => { if (!presented.current) { presented.current = true; router.push('/day-sheet'); } }, 0);
+    return () => { clearTimeout(t); publishDaySheet(null); };
+  }, [router]);
+  return null;
+}

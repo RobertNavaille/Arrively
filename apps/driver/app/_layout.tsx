@@ -61,6 +61,14 @@ export default function RootLayout() {
         // Dragging the list up at the resting height opens the sheet first (Apple's behaviour).
         sheetExpandsWhenScrolledToEdge: true,
       } : undefined} />
+      {/* iPhone: the Schedule's day sheet, presented by Apple over its map (as the trip sheet). */}
+      <Stack.Screen name="day-sheet" options={NATIVE_CHROME ? {
+        presentation: 'formSheet', sheetAllowedDetents: [0.5, 0.9], sheetInitialDetentIndex: 0, sheetGrabberVisible: true,
+        sheetLargestUndimmedDetentIndex: 'last', gestureEnabled: false,
+        // The sheet holds sideways pagers as well as the day's list: dragging the list doesn't resize it
+        // (drag the sheet's top instead), so a scroll never fights a page swipe.
+        sheetExpandsWhenScrolledToEdge: false,
+      } : undefined} />
       {/* iPhone: Apple's navigation bar and sheets (see nativeChrome.ts); elsewhere the screens draw their own. */}
       <Stack.Screen name="settings" options={NATIVE_CHROME ? { ...nativeHeader, title: 'Settings' } : undefined} />
       <Stack.Screen name="stop/[id]" options={NATIVE_CHROME ? { ...nativeHeader, title: '' } : undefined} />

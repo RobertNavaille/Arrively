@@ -34,3 +34,36 @@ export function useSheetContent(): SheetContent | null {
     () => content,
   );
 }
+
+/**
+ * The same for the Schedule (app/index.tsx): its day sheet, presented by Apple
+ * over the map on iPhone (app/day-sheet.tsx).
+ */
+export interface DaySheetContent {
+  /** The screen's height and the sheet's top when fully open, and how far below that it rests (px). */
+  height: number; top: number; rest: number;
+  body: ReactNode;
+  /** Fixed over the bottom of the sheet (Optimize schedule). */
+  overlay: ReactNode;
+  onOpenChange: (open: boolean) => void;
+  /** The sheet's width: Apple's sheet is inset from the screen's edges at its lower height. */
+  onWidth: (width: number) => void;
+  /** The sheet is back on screen (a screen opened from it has closed): the Schedule's own focus handling. */
+  onFocus: () => void;
+}
+
+let dayContent: DaySheetContent | null = null;
+const dayListeners = new Set<() => void>();
+
+export function publishDaySheet(next: DaySheetContent | null) {
+  dayContent = next;
+  dayListeners.forEach((l) => l());
+}
+
+export function useDaySheetContent(): DaySheetContent | null {
+  return useSyncExternalStore(
+    (l) => { dayListeners.add(l); return () => { dayListeners.delete(l); }; },
+    () => dayContent,
+    () => dayContent,
+  );
+}
