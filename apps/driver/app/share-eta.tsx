@@ -113,19 +113,28 @@ function Item({ icon, text }: { icon: 'clock' | 'navigate'; text: string }) {
 
 /** iPhone: the content of Apple's sheet. Elsewhere: a card at the bottom over the dimmed screen (tap outside to close). */
 function Frame({ children, onClose, bottomInset }: { children: ReactNode; onClose: () => void; bottomInset: number }) {
-  if (NATIVE_CHROME) return <View style={{ paddingHorizontal: 20, paddingBottom: space[4], backgroundColor: color.surface }}>{children}</View>;
+  // Close, at the top right (as in Apple's sheets): back to the Schedule without starting.
+  const closeButton = (
+    <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={8}
+      style={({ pressed }) => [styles.close, pressed && { opacity: 0.7 }]}>
+      <Icon name="close" size={16} color={color.inkMuted} strokeWidth={2.6} />
+    </Pressable>
+  );
+  if (NATIVE_CHROME) return <View style={{ paddingHorizontal: 20, paddingBottom: space[4], backgroundColor: color.surface }}>{children}{closeButton}</View>;
   return (
     <View style={{ flex: 1, justifyContent: 'flex-end', paddingHorizontal: space[2] }}>
       <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.28)' }]} onPress={onClose} accessibilityLabel="Close" />
       <View accessibilityViewIsModal style={[styles.card, shadow.sheet, { marginBottom: space[2] + bottomInset }]}>
         <View style={{ alignSelf: 'center', width: 36, height: 5, marginTop: 6, borderRadius: 3, backgroundColor: color.divider }} />
         {children}
+        {closeButton}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  close: { position: 'absolute', top: space[4], right: space[4], width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surfaceMuted },
   card: { paddingHorizontal: 20, paddingBottom: space[6], borderRadius: 36, backgroundColor: color.surface, width: '100%', maxWidth: 480, alignSelf: 'center' },
   drive: { flexDirection: 'row', justifyContent: 'center', gap: 28, marginTop: 20, paddingVertical: space[3], borderTopWidth: 1, borderBottomWidth: 1, borderColor: color.divider },
   sent: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: space[2], marginTop: 20, height: 36, paddingHorizontal: 14, borderRadius: radius.full, backgroundColor: 'rgba(46,160,90,0.12)' },
