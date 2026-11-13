@@ -79,7 +79,7 @@ export default function ShareEta() {
           <Item icon="clock" text={`${legMin} min`} />
           {arrive ? <Item icon="navigate" text={`Arrive ${arrive}`} /> : null}
         </View>
-      ) : <View style={[styles.drive, { borderBottomWidth: 0 }]} />}
+      ) : null}
 
       {/* The job's notes, on the sheet itself. */}
       {stop.notes ? (
