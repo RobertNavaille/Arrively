@@ -232,12 +232,12 @@ export default function MyDay() {
     <>
         {/* Today (as in Apple's Calendar) goes back to the current day; the day and date in the middle; + adds a stop. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], paddingTop: space[1] }}>
-          <IconButton icon="calendar" size="compact" label="Go to today" onPress={() => goTo(range.todayIndex)} />
+          <IconButton icon="calendar" label="Go to today" onPress={() => goTo(range.todayIndex)} />
           <View style={{ flex: 1, alignItems: 'center' }}>
             <Text style={[type.title, { fontSize: 17, lineHeight: 22 }]} accessibilityRole="header" numberOfLines={1}>{day.toLocaleDateString('en-US', { weekday: 'long' })}</Text>
             <Text style={[type.body, { fontSize: 13, lineHeight: 18, color: color.inkMuted }]} numberOfLines={1}>{day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}{isToday ? ' · Today' : ''}</Text>
           </View>
-          <IconButton icon="plus" size="compact" label="Add stop" onPress={() => router.push('/new-stop')} />
+          <IconButton icon="plus" label="Add stop" onPress={() => router.push('/new-stop')} />
         </View>
 
         {/* Week strip, Sunday to Saturday; swipe for the next or previous week. */}
