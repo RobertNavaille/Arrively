@@ -503,10 +503,10 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
         {stats ? (
           <FadeIn from={-6} style={{ marginHorizontal: space[4], marginTop: space[4], marginBottom: space[8] }}>
             <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${miles(stats.meters).toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}
-              style={[{ height: 44, borderRadius: 22, overflow: floated ? 'visible' : 'hidden' }, floated ? shadow.float : { backgroundColor: color.surfaceMuted }]}>
-              {floated ? <FloatingSurface style={[StyleSheet.absoluteFill, { borderRadius: 22 }]} /> : null}
+              style={[{ height: 48, borderRadius: 24, overflow: floated ? 'visible' : 'hidden' }, floated ? shadow.float : { backgroundColor: color.surfaceMuted }]}>
+              {floated ? <FloatingSurface style={[StyleSheet.absoluteFill, { borderRadius: 24 }]} /> : null}
               <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18 }}>
-                <TripInfo stats={stats} size={15} />
+                <TripInfo stats={stats} size={16} />
               </View>
             </View>
           </FadeIn>
