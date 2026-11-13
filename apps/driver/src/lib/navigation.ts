@@ -68,11 +68,12 @@ export function contactCustomer(how: 'tel' | 'sms', phone: string | null, body?:
  * drive it invites them to follow along. None once the driver has arrived or
  * the stop is done (no link, or no token: an empty message).
  */
-export function etaMessage(stop: Stop, driver?: string | null, business?: string | null): string | undefined {
+/** `leaving`: sent as the driver sets off to this stop (Share ETA before the trip starts), so it says they're on the way. */
+export function etaMessage(stop: Stop, driver?: string | null, business?: string | null, leaving = false): string | undefined {
   if (!stop.tracking_token || !['scheduled', 'queued', 'en_route'].includes(stop.status)) return undefined;
   const link = `${TRACKING_BASE_URL}${encodeURIComponent(stop.tracking_token)}`;
   const first = stop.customer_name.trim().split(/\s+/)[0];
   const who = [driver?.trim().split(/\s+/)[0], business?.trim() ? `from ${business.trim()}` : ''].filter(Boolean).join(' ');
   const hello = `Hi ${first}, ${who ? `${who} here. ` : ''}`;
-  return stop.status === 'en_route' ? `${hello}I'm on my way. Follow along live: ${link}` : `${hello}You can see when I'll arrive here: ${link}`;
+  return stop.status === 'en_route' || leaving ? `${hello}I'm on my way. Follow along live: ${link}` : `${hello}You can see when I'll arrive here: ${link}`;
 }

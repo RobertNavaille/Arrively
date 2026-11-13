@@ -76,6 +76,10 @@ export default function RootLayout() {
       <Stack.Screen name="new-stop" options={NATIVE_CHROME ? nativePageSheet : { presentation: 'modal' }} />
       {/* Optimize route: no swipe to close, so a drag in the list can't lose the new order (Cancel closes it). */}
       <Stack.Screen name="optimize-route" options={NATIVE_CHROME ? { ...nativePageSheet, gestureEnabled: false } : { presentation: 'modal' }} />
+      {/* After Start driving: Share ETA or Start trip. iPhone: Apple's sheet, sized to fit; elsewhere a card over the Schedule. */}
+      <Stack.Screen name="share-eta" options={NATIVE_CHROME
+        ? { ...nativeSheet([0.6]), sheetAllowedDetents: 'fitToContents' }
+        : { presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
       <Stack.Screen name="week-options" options={NATIVE_CHROME ? nativePageSheet : { presentation: 'modal' }} />
     </Stack>
   );
