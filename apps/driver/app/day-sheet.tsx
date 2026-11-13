@@ -1,6 +1,6 @@
 import { useFocusEffect, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
-import { PanResponder, View } from 'react-native';
+import { View } from 'react-native';
 import { useDaySheetContent } from '../src/lib/sheetPortal';
 import { RowMenuHost } from '../src/ui/RowMenu';
 import { color } from '../src/ui/theme';
@@ -32,28 +32,6 @@ export default function DaySheet() {
     open.current = v;
     latest.current?.onOpenChange(v);
   }
-  const setOpenRef = useRef(setOpen);
-  setOpenRef.current = setOpen;
-  // A swipe up on the resting sheet opens it to full height; a pull down with the list at its top lowers it.
-  // (The sheet holds sideways pagers, so Apple's own resize-on-scroll is off.) Apple's sheet moves to a height
-  // when it's briefly the only one allowed; then both are allowed again.
-  const snapTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const snap = useRef((toOpen: boolean) => {
-    const d = detentsRef.current;
-    if (d.length < 2) return;
-    clearTimeout(snapTimer.current);
-    navigation.setOptions({ sheetAllowedDetents: [toOpen ? d[d.length - 1] : d[0]] });
-    setOpenRef.current(toOpen);
-    snapTimer.current = setTimeout(() => navigation.setOptions({ sheetAllowedDetents: detentsRef.current }), 350);
-  }).current;
-  useEffect(() => () => clearTimeout(snapTimer.current), []);
-  const pan = useRef(PanResponder.create({
-    onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dy) > 8 && Math.abs(g.dy) > Math.abs(g.dx) * 1.2
-      && (open.current ? g.dy > 0 && !!latest.current?.atTop.current : g.dy < 0),
-    onPanResponderGrant: () => snap(!open.current),
-    onPanResponderTerminationRequest: () => false,
-  })).current;
-
   // Open or resting: from Apple's event when it comes, and from the height the sheet gives us.
   useEffect(() => {
     const off = (navigation as unknown as { addListener: (e: string, cb: (ev: { data?: { index?: number } }) => void) => () => void })
@@ -77,7 +55,7 @@ export default function DaySheet() {
   return (
     // Row menus (press and hold a stop) are drawn inside the sheet.
     <RowMenuHost>
-      <View style={{ flex: 1, backgroundColor: color.surface }} collapsable={false} {...pan.panHandlers}
+      <View style={{ flex: 1, backgroundColor: color.surface }} collapsable={false}
         onLayout={(e) => {
           const { width, height } = e.nativeEvent.layout;
           sheet.onWidth(Math.round(width));

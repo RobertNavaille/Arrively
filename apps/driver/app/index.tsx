@@ -213,6 +213,14 @@ export default function MyDay() {
 
   // Optimize schedule, floating at the bottom of the pulled-up sheet (hidden while it rests): the week's optimize options.
   // In Apple's sheet it sits just clear of the home indicator.
+  // iPhone, with the sheet resting: the week strip and day pages don't scroll sideways themselves, so an upward
+  // drag anywhere reaches Apple's sheet and raises it to full height, as in Apple's apps. A sideways swipe still
+  // moves a day (on the list) or a week (on the strip), handled here.
+  const nativeRest = NATIVE_CHROME && !sheetOpen;
+  const nativeRestRef = useRef(nativeRest);
+  nativeRestRef.current = nativeRest;
+  const daySwipe = useSideSwipe(nativeRestRef, (dir) => goToRef.current(Math.min(Math.max(indexRef.current + dir, 0), daysRef.current.length - 1)));
+  const weekSwipe = useSideSwipe(nativeRestRef, (dir) => goToWeekRef.current(Math.floor(indexRef.current / 7) + dir));
   const optimize = sheetOpen ? (
         <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', paddingTop: space[3], paddingBottom: NATIVE_CHROME ? Math.max(space[2], bottomInset - space[1]) : space[4] + bottomInset }}>
           <FadeIn from={16}>
@@ -233,9 +241,10 @@ export default function MyDay() {
         </View>
 
         {/* Week strip, Sunday to Saturday; swipe for the next or previous week. */}
-        <View>
+        <View {...weekSwipe}>
           <FlatList
             ref={stripRef}
+            scrollEnabled={!nativeRest}
             data={weeks}
             horizontal
             pagingEnabled
@@ -275,9 +284,10 @@ export default function MyDay() {
         <View style={{ height: StyleSheet.hairlineWidth * 2, backgroundColor: color.divider }} />
 
         {/* Day pages: swipe sideways for the next or previous day. */}
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1 }} {...daySwipe}>
           <FlatList
             ref={listRef}
+            scrollEnabled={!nativeRest}
             data={days}
             horizontal
             pagingEnabled
@@ -680,4 +690,19 @@ function NativeDaySheet({ height, top, rest, body, overlay, onOpenChange, onWidt
     return () => { clearTimeout(t); publishDaySheet(null); };
   }, [router]);
   return null;
+}
+
+/**
+ * A sideways swipe (left: next, right: previous) while `on` is set, for pagers whose own scrolling is off.
+ * Up-and-down drags are left alone.
+ */
+function useSideSwipe(on: { current: boolean }, step: (dir: 1 | -1) => void) {
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  return useRef(PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (_, g) => on.current && Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+    onPanResponderRelease: (_, g) => {
+      if (Math.abs(g.dx) > 40 || Math.abs(g.vx) > 0.3) stepRef.current(g.dx < 0 ? 1 : -1);
+    },
+  })).current.panHandlers;
 }
