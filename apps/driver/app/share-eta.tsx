@@ -8,6 +8,7 @@ import { beginDrive } from '../src/lib/startDrive';
 import { useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
 import { Button } from '../src/ui/components';
+import { FloatingSurface } from '../src/ui/FloatingSurface';
 import { Icon } from '../src/ui/Icon';
 import { NATIVE_CHROME } from '../src/ui/nativeChrome';
 import { color, font, radius, shadow, space, type } from '../src/ui/theme';
@@ -113,11 +114,14 @@ function Item({ icon, text }: { icon: 'clock' | 'navigate'; text: string }) {
 
 /** iPhone: the content of Apple's sheet. Elsewhere: a card at the bottom over the dimmed screen (tap outside to close). */
 function Frame({ children, onClose, bottomInset }: { children: ReactNode; onClose: () => void; bottomInset: number }) {
-  // Close, at the top right (as in Apple's sheets): back to the Schedule without starting.
+  // Close, at the top right, as in Apple's own sheets (Messages' New Message): a 44pt round glass
+  // button with a dark ✕. Back to the Schedule without starting.
   const closeButton = (
-    <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={8}
-      style={({ pressed }) => [styles.close, pressed && { opacity: 0.7 }]}>
-      <Icon name="close" size={16} color={color.inkMuted} strokeWidth={2.6} />
+    <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={6}
+      style={({ pressed }) => [styles.close, pressed && { opacity: 0.8 }]}>
+      <FloatingSurface style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name="close" size={20} color={color.ink} strokeWidth={2.25} />
+      </FloatingSurface>
     </Pressable>
   );
   if (NATIVE_CHROME) return <View style={{ paddingHorizontal: 20, paddingBottom: space[4], backgroundColor: color.surface }}>{children}{closeButton}</View>;
@@ -134,7 +138,7 @@ function Frame({ children, onClose, bottomInset }: { children: ReactNode; onClos
 }
 
 const styles = StyleSheet.create({
-  close: { position: 'absolute', top: space[4], right: space[4], width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surfaceMuted },
+  close: { position: 'absolute', top: space[4], right: space[4] },
   card: { paddingHorizontal: 20, paddingBottom: space[6], borderRadius: 36, backgroundColor: color.surface, width: '100%', maxWidth: 480, alignSelf: 'center' },
   drive: { flexDirection: 'row', justifyContent: 'center', gap: 28, marginTop: 20, paddingVertical: space[3], borderTopWidth: 1, borderBottomWidth: 1, borderColor: color.divider },
   sent: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: space[2], marginTop: 20, height: 36, paddingHorizontal: 14, borderRadius: radius.full, backgroundColor: 'rgba(46,160,90,0.12)' },
