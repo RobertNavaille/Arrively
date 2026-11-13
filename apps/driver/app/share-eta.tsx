@@ -7,8 +7,7 @@ import { contactCustomer, etaMessage } from '../src/lib/navigation';
 import { beginDrive } from '../src/lib/startDrive';
 import { useDriverData } from '../src/lib/store';
 import { useBottomInset } from '../src/lib/viewport';
-import { Button } from '../src/ui/components';
-import { FloatingSurface } from '../src/ui/FloatingSurface';
+import { Button, IconButton } from '../src/ui/components';
 import { Icon } from '../src/ui/Icon';
 import { NATIVE_CHROME } from '../src/ui/nativeChrome';
 import { color, font, radius, shadow, space, type } from '../src/ui/theme';
@@ -114,15 +113,12 @@ function Item({ icon, text }: { icon: 'clock' | 'navigate'; text: string }) {
 
 /** iPhone: the content of Apple's sheet. Elsewhere: a card at the bottom over the dimmed screen (tap outside to close). */
 function Frame({ children, onClose, bottomInset }: { children: ReactNode; onClose: () => void; bottomInset: number }) {
-  // Close, at the top right, as in Apple's own sheets (Messages' New Message): a 44pt round glass
-  // button with a dark ✕. Back to the Schedule without starting.
+  // Close, at the top right, as in Apple's own sheets: our standard round icon button. iPhone: Liquid Glass
+  // with a dark ✕ (as Messages' New Message); elsewhere the light-blue tint. Back to the Schedule without starting.
   const closeButton = (
-    <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={6}
-      style={({ pressed }) => [styles.close, pressed && { opacity: 0.8 }]}>
-      <FloatingSurface style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}>
-        <Icon name="close" size={20} color={color.ink} strokeWidth={2.25} />
-      </FloatingSurface>
-    </Pressable>
+    <View style={styles.close}>
+      <IconButton icon="close" label="Close" onPress={onClose} variant={NATIVE_CHROME ? 'plain' : 'tint'} size="compact" />
+    </View>
   );
   if (NATIVE_CHROME) return <View style={{ paddingHorizontal: 20, paddingBottom: space[4], backgroundColor: color.surface }}>{children}{closeButton}</View>;
   return (
