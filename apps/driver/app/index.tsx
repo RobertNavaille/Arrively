@@ -491,7 +491,7 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
       {/* The trip info ribbon (first, so it can stick over the stops as they scroll). */}
       <View>
         {stats ? (
-          <FadeIn from={-6} style={{ marginHorizontal: space[4], marginVertical: space[4] }}>
+          <FadeIn from={-6} style={{ marginHorizontal: space[4], marginTop: space[4], marginBottom: space[8] }}>
             <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${miles(stats.meters).toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}
               style={[{ height: 44, borderRadius: 22, overflow: floated ? 'visible' : 'hidden' }, floated ? shadow.float : { backgroundColor: color.surfaceMuted }]}>
               {floated ? <FloatingSurface style={[StyleSheet.absoluteFill, { borderRadius: 22 }]} /> : null}
