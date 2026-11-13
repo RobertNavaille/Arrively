@@ -545,8 +545,8 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
                     <Text style={{ color: color.inkMuted }}> · {miles(legM).toFixed(1)} mi</Text></Text>
                 ) : null}
                 {phase === 'next'
-                  ? <Button label="Start driving" loading={starting} onPress={() => onStart(current)} style={{ marginTop: space[6] + space[3] }} />
-                  : <Button icon="navigate" label={phase === 'onroute' ? 'On the way · Open trip' : 'At the stop · Open trip'} onPress={onOpenTrip} style={{ marginTop: space[6] + space[3] }} />}
+                  ? <Button label="Start driving" loading={starting} onPress={() => onStart(current)} style={{ marginTop: space[4] + space[3] }} />
+                  : <Button icon="navigate" label={phase === 'onroute' ? 'On the way · Open trip' : 'At the stop · Open trip'} onPress={onOpenTrip} style={{ marginTop: space[4] + space[3] }} />}
               </View>
             </View>
           ) : null}
