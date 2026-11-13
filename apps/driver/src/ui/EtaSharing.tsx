@@ -80,7 +80,7 @@ export function EtaSharingPanel({ stop, open, onClose, onChanged, safeTop }: {
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
       </Animated.View>
       <Animated.View {...pan.panHandlers} accessibilityViewIsModal onLayout={(e) => setH(e.nativeEvent.layout.height)}
-        style={[styles.panel, shadow.float, { paddingTop: safeTop + space[2], transform: [{ translateY: y.interpolate({ inputRange: [0, 1], outputRange: [-h - 16, 0] }) }] }]}>
+        style={[styles.panel, shadow.float, { paddingTop: safeTop + space[2], borderTopLeftRadius: topRadius(safeTop), borderTopRightRadius: topRadius(safeTop), transform: [{ translateY: y.interpolate({ inputRange: [0, 1], outputRange: [-h - 16, 0] }) }] }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={[type.title, { fontSize: 20, lineHeight: 28 }]} accessibilityRole="header">ETA sharing</Text>
           <View style={[styles.badge, { backgroundColor: on ? 'rgba(46,160,90,0.12)' : 'rgba(60,60,67,0.08)' }]}>
@@ -114,6 +114,16 @@ export function EtaSharingPanel({ stop, open, onClose, onChanged, safeTop }: {
       </Animated.View>
     </View>
   );
+}
+
+/**
+ * The panel's top corners follow the screen's own (rounder on newer iPhones), set in by the
+ * panel's 8pt margin so the two curves run side by side. iPhones with the Dynamic Island have
+ * about 55pt screen corners, those with a notch about 44, others (and browsers) square ones.
+ */
+function topRadius(safeTop: number) {
+  const screen = safeTop >= 59 ? 55 : safeTop >= 44 ? 44 : 0;
+  return Math.max(36, screen - space[2]);
 }
 
 const styles = StyleSheet.create({
