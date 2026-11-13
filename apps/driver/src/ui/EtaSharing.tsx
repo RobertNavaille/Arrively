@@ -118,11 +118,12 @@ export function EtaSharingPanel({ stop, open, onClose, onChanged, safeTop }: {
 
 /**
  * The panel's top corners follow the screen's own (rounder on newer iPhones), set in by the
- * panel's 8pt margin so the two curves run side by side. iPhones with the Dynamic Island have
- * about 55pt screen corners, those with a notch about 44, others (and browsers) square ones.
+ * panel's 8pt margin so the two curves run side by side (the gap the same all round). Known
+ * by the status bar's height: the iPhone 16 Pro and later about 62pt corners, the 14–15 Pro 55,
+ * the notched 12–14 about 47, the X–11 39; others (and browsers) square ones.
  */
 function topRadius(safeTop: number) {
-  const screen = safeTop >= 59 ? 55 : safeTop >= 44 ? 44 : 0;
+  const screen = safeTop >= 62 ? 62 : safeTop >= 59 ? 55 : safeTop >= 47 ? 47 : safeTop >= 44 ? 39 : 0;
   return Math.max(36, screen - space[2]);
 }
 
