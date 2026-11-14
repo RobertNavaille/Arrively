@@ -135,6 +135,18 @@ export default function Trip() {
   // Each step starts with the sheet at its resting height.
   // Each step follows the driver again (the sheet itself goes back to rest on its own).
   useEffect(() => { setFreeMap(false); setChoosing(false); setOutcome(null); setComments(''); setEtaPanel(false); }, [phase]);
+  // The stop just marked (completed, no show, skipped): back to the Schedule, where the next stop (with
+  // Start driving) or the finished day shows. Not when a step goes back (Continue route).
+  const prevPhase = useRef(phase);
+  useEffect(() => {
+    const was = prevPhase.current;
+    prevPhase.current = phase;
+    if (was === 'arrived' && (phase === 'next' || phase === 'finished')) {
+      if (!router.canGoBack()) router.replace('/');
+      else if (TRIP_SCREENS_TO_LEAVE > 1) router.dismiss(TRIP_SCREENS_TO_LEAVE);
+      else router.back();
+    }
+  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!route || !stops.length) {
     return (
