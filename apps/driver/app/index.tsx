@@ -189,15 +189,6 @@ export default function MyDay() {
   // The selected day's trip info (what's left of it): drive time, miles, stops, in a ribbon under the week strip.
   const { stats, line: dayLine } = useDayStats(route, isToday ? pos : null);
 
-  // Today's trip: the stop the driver is on, its step, and the drive to it (before starting). The card on
-  // today's page shows the drive; the bottom bar starts it.
-  const todayRoute = routeFor(dayKey(today));
-  const todayCurrent = todayRoute && todayRoute.status !== 'completed' ? currentStop(todayRoute) : undefined;
-  const todayPhase = !todayCurrent ? null : todayCurrent.status === 'en_route' ? 'onroute' : todayCurrent.status === 'arrived' ? 'arrived' : 'next';
-  const todayLeg = useRoadRoute(todayPhase === 'next' ? pos : null, todayPhase === 'next' && todayCurrent ? todayCurrent : null, todayRoute ? optionsOf(todayRoute) : {});
-  const todayLegM = todayLeg ? todayLeg.distanceM : pos && todayCurrent ? distanceM(pos, todayCurrent) : null;
-  const todayLegMin = todayLeg ? Math.max(1, Math.round(todayLeg.durationS / 60)) : todayLegM != null ? estimateDriveMin(todayLegM) : null;
-
   // Start driving: first the Share ETA sheet (who and where, the drive, Share ETA); Start trip there starts the drive.
   const startDriving = (stop: Stop, leg: { min: number | null; meters: number | null }) => router.push({
     pathname: '/share-eta',
@@ -214,20 +205,13 @@ export default function MyDay() {
   nativeRestRef.current = nativeRest;
   const daySwipe = useSideSwipe(nativeRestRef, (dir) => goToRef.current(Math.min(Math.max(indexRef.current + dir, 0), daysRef.current.length - 1)));
   const weekSwipe = useSideSwipe(nativeRestRef, (dir) => goToWeekRef.current(Math.floor(indexRef.current / 7) + dir));
-  // The bottom bar, floating over the bottom of the sheet: Optimize (the week's options) anchored at the left;
-  // today, Start driving across the rest (Open trip once the drive is under way). In Apple's sheet it sits
-  // just clear of the home indicator.
-  const tripStop = isToday ? todayCurrent : undefined;
-  const optimize = (
-    <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: NATIVE_CHROME ? Math.max(space[2], bottomInset - space[1]) : space[4] + bottomInset }}>
-      <IconButton icon="route" label="Optimize schedule" onPress={() => router.push('/week-options')} />
-      {tripStop && todayPhase === 'next' ? (
-        <Button label="Start driving" style={{ flex: 1 }} onPress={() => startDriving(tripStop, { min: todayLegMin, meters: todayLegM })} />
-      ) : tripStop ? (
-        <Button icon="navigate" label="Open trip" style={{ flex: 1 }} onPress={() => openOverSchedule(router, '/trip')} />
-      ) : null}
-    </View>
-  );
+  const optimize = sheetOpen ? (
+        <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', paddingTop: space[3], paddingBottom: NATIVE_CHROME ? Math.max(space[2], bottomInset - space[1]) : space[4] + bottomInset }}>
+          <FadeIn from={16}>
+            <Button variant="neutral" icon="route" label="Optimize schedule" style={shadow.float} onPress={() => router.push('/week-options')} />
+          </FadeIn>
+        </View>
+  ) : null;
   const sheetBody = (
     <>
         {/* Today (as in Apple's Calendar) goes back to the current day; the day and date in the middle; + adds a stop. */}
@@ -296,7 +280,7 @@ export default function MyDay() {
             // a day. Only the day on screen and its neighbours draw their list.
             initialNumToRender={days.length}
             windowSize={days.length * 2}
-            extraData={{ index, routeFor, loading, sheetOpen, stats, pos, todayLegMin, todayLegM }}
+            extraData={{ index, routeFor, loading, sheetOpen, stats, pos }}
             onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); if (h && h !== pagerH) setPagerH(h); }}
             getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
             showsHorizontalScrollIndicator={false}
@@ -323,7 +307,7 @@ export default function MyDay() {
                     stats={i === index ? stats : straightStats(r, null)}
                     loading={loading} onOpenStop={(st) => openOverSchedule(router, `/stop/${st.id}`)} bottomPad={TOOLBAR_H + bottomInset}
                     open={sheetOpen} onAtTop={i === index ? (v) => { pageAtTop.current = v; } : undefined}
-                    leg={todayPage ? { min: todayLegMin, meters: todayLegM } : null}
+                    onStart={startDriving} onOpenTrip={() => openOverSchedule(router, '/trip')}
                     profile={profile} />
                 </View>
               );
@@ -457,15 +441,14 @@ function TripInfo({ stats, size }: { stats: DayStats; size: number }) {
  * stops after it and the ones done; other days, the stops in order. The trip info is a ribbon at the
  * top: in line at first, then (pulled up) it stays put and floats over the stops as they scroll.
  */
-function DayPanel({ route, isToday, driver: _driver, stats, onOpenStop, loading, bottomPad, open, onAtTop, leg, profile }: {
+function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPad, open, onAtTop, onStart, onOpenTrip, profile }: {
   route: Route | undefined; isToday: boolean; driver: LatLng | null; stats: DayStats | null; onOpenStop: (s: Stop) => void; loading: boolean;
   bottomPad: number;
   /** The sheet is raised: the list scrolls (resting, a drag moves the sheet instead). */
   open: boolean;
   /** The day on screen: told whether its list is at the top. */
   onAtTop?: (atTop: boolean) => void;
-  /** Today: the drive to the next stop (minutes and meters, when known). */
-  leg: { min: number | null; meters: number | null } | null;
+  onStart: (s: Stop, leg: { min: number | null; meters: number | null }) => void; onOpenTrip: () => void;
   profile: { name?: string | null; org_name?: string | null } | null | undefined;
 }) {
   const locks = useLocks();
@@ -474,8 +457,11 @@ function DayPanel({ route, isToday, driver: _driver, stats, onOpenStop, loading,
   const phase = !current ? null : current.status === 'en_route' ? 'onroute' : current.status === 'arrived' ? 'arrived' : 'next';
   const done = stops.filter(isDone);
   const upcoming = stops.filter((s) => !isDone(s) && s.id !== current?.id);
-  const legM = leg?.meters ?? null;
-  const legMin = leg?.min ?? null;
+  const options = route ? optionsOf(route) : {};
+  // The drive to the next stop (today, before starting it).
+  const leg = useRoadRoute(phase === 'next' ? driver : null, phase === 'next' && current ? current : null, options);
+  const legM = leg ? leg.distanceM : driver && current ? distanceM(driver, current) : null;
+  const legMin = leg ? Math.max(1, Math.round(leg.durationS / 60)) : legM != null ? estimateDriveMin(legM) : null;
   // The ribbon floats (glass, with a shadow) once the stops scroll under it.
   const [floated, setFloated] = useState(false);
   // Lowered, the list goes back to its top.
@@ -547,6 +533,9 @@ function DayPanel({ route, isToday, driver: _driver, stats, onOpenStop, loading,
                   <Text style={type.body}><Text style={type.bodyStrong}>{legMin} min</Text>
                     <Text style={{ color: color.inkMuted }}> · {miles(legM).toFixed(1)} mi</Text></Text>
                 ) : null}
+                {phase === 'next'
+                  ? <Button label="Start driving" onPress={() => onStart(current, { min: legMin, meters: legM })} style={{ marginTop: space[4] + space[3] }} />
+                  : <Button icon="navigate" label="Open trip" onPress={onOpenTrip} style={{ marginTop: space[4] + space[3] }} />}
               </View>
             </View>
           ) : null}
