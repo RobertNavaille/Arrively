@@ -277,8 +277,8 @@ export default function MyDay() {
         {error ? <Text style={[type.caption, { color: color.danger, paddingHorizontal: space[4], paddingBottom: space[2] }]}>{error}</Text> : null}
         <View style={{ height: StyleSheet.hairlineWidth * 2, backgroundColor: color.divider }} />
 
-        {/* Day pages: swipe sideways for the next or previous day. */}
-        <View style={{ flex: 1 }} {...daySwipe}>
+        {/* Day pages: swipe sideways for the next or previous day. The heading above is white; the list is on the gray. */}
+        <View style={{ flex: 1, backgroundColor: color.groupedBg }} {...daySwipe}>
           <FlatList
             ref={listRef}
             scrollEnabled={!nativeRest}
@@ -690,8 +690,8 @@ function DaySheet({ openTop, travel, screenH, open, onOpenChange, atTop, offset,
     <Animated.View ref={sheetRef} {...pan.panHandlers}
       style={[sheetTouch.sheet, { top: openTop, height: screenH - openTop, transform: [{ translateY: offset }] }]}>
       {/* The shadow, on a layer of its own (the sheet clips its content). */}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.round, { backgroundColor: color.groupedBg }, shadow.sheet]} />
-      <View style={[{ flex: 1, backgroundColor: color.groupedBg, overflow: 'hidden' }, styles.round]}>
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.round, { backgroundColor: color.surface }, shadow.sheet]} />
+      <View style={[{ flex: 1, backgroundColor: color.surface, overflow: 'hidden' }, styles.round]}>
         {/* The grabber (also a button for raising and lowering the sheet). */}
         <Pressable onPress={() => snap(!openRef.current)} accessibilityRole="button" accessibilityLabel={open ? 'Lower the list' : 'Raise the list'}
           style={{ height: 18, alignItems: 'center', justifyContent: 'flex-end' }}>
