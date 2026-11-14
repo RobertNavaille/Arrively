@@ -205,8 +205,13 @@ export default function MyDay() {
   nativeRestRef.current = nativeRest;
   const daySwipe = useSideSwipe(nativeRestRef, (dir) => goToRef.current(Math.min(Math.max(indexRef.current + dir, 0), daysRef.current.length - 1)));
   const weekSwipe = useSideSwipe(nativeRestRef, (dir) => goToWeekRef.current(Math.floor(indexRef.current / 7) + dir));
-  // Optimize is in the header now (under the day); nothing floats over the bottom of the sheet.
-  const optimize = null;
+  // Floating over the bottom of the sheet (both heights): the day's trip info, centred; the stops scroll under it.
+  // In Apple's sheet it sits just clear of the home indicator. (Optimize is in the header, under the day.)
+  const optimize = stats ? (
+    <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: NATIVE_CHROME ? Math.max(space[3], bottomInset) : space[6] + bottomInset, alignItems: 'center' }}>
+      <TripPill stats={stats} />
+    </View>
+  ) : null;
   // Today's route can be optimized (two or more stops still to order): the header's Optimize opens Optimize route.
   const todayRoute = isToday ? route : undefined;
   const optimizeToday = !!todayRoute && todayRoute.status !== 'completed'
@@ -310,7 +315,7 @@ export default function MyDay() {
                 <View style={{ width, height: pagerH || undefined }}>
                   <DayPanel route={r} isToday={todayPage} driver={todayPage ? pos : null}
                     stats={i === index ? stats : straightStats(r, null)}
-                    loading={loading} onOpenStop={(st) => openOverSchedule(router, `/stop/${st.id}`)} bottomPad={TOOLBAR_H + bottomInset}
+                    loading={loading} onOpenStop={(st) => openOverSchedule(router, `/stop/${st.id}`)} bottomPad={TOOLBAR_H + space[6] + bottomInset}
                     open={sheetOpen} onAtTop={i === index ? (v) => { pageAtTop.current = v; } : undefined}
                     onStart={startDriving} onOpenTrip={() => openOverSchedule(router, '/trip')}
                     profile={profile} />
@@ -442,6 +447,32 @@ function TripInfo({ stats, size }: { stats: DayStats; size: number }) {
 }
 
 /**
+ * The day's trip info as a pill: number over a small label, three across (drive time, miles, stops).
+ * Liquid Glass on iPhone, white with a soft shadow elsewhere.
+ */
+function TripPill({ stats }: { stats: DayStats }) {
+  const mi = miles(stats.meters);
+  const items = [
+    stats.min < 60 ? { value: String(stats.min), label: 'minutes' } : { value: `${Math.floor(stats.min / 60)}:${String(stats.min % 60).padStart(2, '0')}`, label: 'hours' },
+    { value: mi < 10 ? mi.toFixed(1) : String(Math.round(mi)), label: 'miles' },
+    { value: String(stats.stops), label: stats.left ? 'left' : stats.stops === 1 ? 'stop' : 'stops' },
+  ];
+  return (
+    <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${mi.toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}
+      style={[{ borderRadius: 999 }, shadow.float]}>
+      <FloatingSurface style={{ flexDirection: 'row', alignItems: 'center', gap: 44, paddingVertical: 14, paddingHorizontal: 36, borderRadius: 999 }}>
+        {items.map((it) => (
+          <View key={it.label} style={{ alignItems: 'center' }}>
+            <Text style={{ fontFamily: font.semibold, fontSize: 20, lineHeight: 22, color: color.ink, fontVariant: ['tabular-nums'] }} maxFontSizeMultiplier={1.3}>{it.value}</Text>
+            <Text style={{ fontFamily: font.regular, fontSize: 12, lineHeight: 14, color: color.inkMuted }} maxFontSizeMultiplier={1.3}>{it.label}</Text>
+          </View>
+        ))}
+      </FloatingSurface>
+    </View>
+  );
+}
+
+/**
  * A day's page. Today, with the trip still to drive, the next stop leads (Start driving), then the
  * stops after it and the ones done; other days, the stops in order. The trip info is a ribbon at the
  * top: in line at first, then (pulled up) it stays put and floats over the stops as they scroll.
@@ -467,11 +498,9 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
   const leg = useRoadRoute(phase === 'next' ? driver : null, phase === 'next' && current ? current : null, options);
   const legM = leg ? leg.distanceM : driver && current ? distanceM(driver, current) : null;
   const legMin = leg ? Math.max(1, Math.round(leg.durationS / 60)) : legM != null ? estimateDriveMin(legM) : null;
-  // The ribbon floats (glass, with a shadow) once the stops scroll under it.
-  const [floated, setFloated] = useState(false);
   // Lowered, the list goes back to its top.
   const scrollRef = useRef<ScrollView>(null);
-  useEffect(() => { if (!open) { scrollRef.current?.scrollTo({ y: 0, animated: false }); onAtTop?.(true); setFloated(false); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!open) { scrollRef.current?.scrollTo({ y: 0, animated: false }); onAtTop?.(true); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const call = current?.customer_phone ? () => contactCustomer('tel', current.customer_phone!) : undefined;
   const message = current ? () => (current.customer_phone
     ? contactCustomer('sms', current.customer_phone, etaMessage(current, profile?.name ?? undefined, profile?.org_name ?? undefined))
@@ -481,26 +510,9 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
     // its overflow hidden: turning scrolling off there blocks sideways swipes (to the next day) too.
     <ScrollView ref={scrollRef} style={[{ flex: 1 }, open ? sheetTouch.listOpen : sheetTouch.listShut]} scrollEnabled={open || Platform.OS === 'web'}
       contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}
-      stickyHeaderIndices={[0]}
-      scrollEventThrottle={16} onScroll={(e) => {
-        const y = e.nativeEvent.contentOffset.y;
-        onAtTop?.(y <= 0);
-        if ((y > 4) !== floated) setFloated(y > 4);
-      }}>
-      {/* The trip info ribbon (first, so it can stick over the stops as they scroll). */}
-      <View>
-        {stats ? (
-          <FadeIn from={-6} style={{ marginHorizontal: space[4], marginTop: space[4], marginBottom: space[8] }}>
-            <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${miles(stats.meters).toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}
-              style={[{ height: 48, borderRadius: 24, overflow: floated ? 'visible' : 'hidden' }, floated ? shadow.float : { backgroundColor: color.groupedCell }]}>
-              {floated ? <FloatingSurface style={[StyleSheet.absoluteFill, { borderRadius: 24 }]} /> : null}
-              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18 }}>
-                <TripInfo stats={stats} size={16} />
-              </View>
-            </View>
-          </FadeIn>
-        ) : <View style={{ height: space[3] }} />}
-      </View>
+      scrollEventThrottle={16} onScroll={(e) => onAtTop?.(e.nativeEvent.contentOffset.y <= 0)}>
+      {/* (The day's trip info floats over the bottom of the sheet: TripPill.) */}
+      <View style={{ height: space[4] }} />
       {!stops.length ? (
         <View style={{ alignItems: 'center', paddingVertical: space[6], paddingHorizontal: space[6], gap: space[2] }}>
           <Icon name="route" size={28} color={color.inkMuted} />
@@ -514,10 +526,15 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
           {/* Today: the stop the driver is on, in a container of its own, with Start driving (or Open trip). */}
           {current && phase ? (
             <>
-              <Text style={styles.groupLabel}>{phase === 'next' ? 'Next stop' : phase === 'onroute' ? 'On the way' : 'At the stop'}</Text>
-              <View style={[styles.group, { padding: space[4], marginBottom: space[6] }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space[3] }}>
-                  <View style={[styles.nextDot, { marginTop: 4 }]} importantForAccessibility="no-hide-descendants" />
+              {/* No label: the card and the stops below read as one route, its line running from this dot down
+                  (stopping just short of the card's edge) and on through the stops' dots. */}
+              <View style={[styles.group, { padding: space[4], marginBottom: upcoming.length ? space[3] : space[6], flexDirection: 'row', gap: space[3] }]}>
+                <View style={{ width: 20, alignItems: 'center', marginBottom: -6 }} importantForAccessibility="no-hide-descendants">
+                  <View style={[styles.nextDot, { marginTop: 4 }]} />
+                  {upcoming.length ? <View style={[styles.routeLine, { flex: 1, marginTop: 4 }]} /> : null}
+                </View>
+                <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space[2] }}>
                   <View style={{ flex: 1 }}>
                     <Text style={[type.title, { fontSize: 20, lineHeight: 28 }]} accessibilityRole="header"
                       accessibilityLabel={`${phase === 'next' ? 'Next stop' : phase === 'onroute' ? 'On the way to' : 'At'} ${current.customer_name}`}>{current.customer_name}</Text>
@@ -535,6 +552,7 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
                 {phase === 'next'
                   ? <Button label="Start driving" onPress={() => onStart(current, { min: legMin, meters: legM })} style={{ marginTop: space[4] }} />
                   : <Button icon="navigate" label="Open trip" onPress={onOpenTrip} style={{ marginTop: space[4] }} />}
+                </View>
               </View>
             </>
           ) : null}
@@ -544,11 +562,11 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
             if (!list.length) return null;
             return (
               <>
-                <Text style={styles.groupLabel}>{current ? `Then · ${list.length} more ${list.length === 1 ? 'stop' : 'stops'}` : `${list.length} ${list.length === 1 ? 'stop' : 'stops'}`}</Text>
+                {current ? null : <Text style={styles.groupLabel}>{list.length} {list.length === 1 ? 'stop' : 'stops'}</Text>}
                 <View accessibilityRole="list" style={[styles.group, { marginBottom: space[6] }]}>
                   {list.map((s, i) => (
                     <StopMenu key={s.id} stop={s} day={route!.day} locked={locks.has(s.id)} onPress={() => onOpenStop(s)}>
-                      <GroupedStopRow stop={s} first={i === 0} last={i === list.length - 1} locked={locks.has(s.id)} />
+                      <GroupedStopRow stop={s} first={i === 0} last={i === list.length - 1} joinTop={!!current} locked={locks.has(s.id)} />
                     </StopMenu>
                   ))}
                 </View>
@@ -584,17 +602,18 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
  * below), name and address, and a hairline under it inset to the text, as in Apple's grouped lists.
  * Tapping and press and hold are StopMenu's (around it).
  */
-function GroupedStopRow({ stop, first, last, locked }: { stop: Stop; first: boolean; last: boolean; locked: boolean }) {
+function GroupedStopRow({ stop, first, last, locked, joinTop }: { stop: Stop; first: boolean; last: boolean; locked: boolean; joinTop?: boolean }) {
   return (
     <View accessibilityLabel={`${stop.customer_name}, ${stop.address}${locked ? ', locked in place' : ''}`}
       style={{ flexDirection: 'row', gap: space[3], paddingLeft: space[4], backgroundColor: color.groupedCell }}>
       <View style={{ width: 20, alignItems: 'center' }}>
-        {/* The line comes in from the row above (none above the first), through the marker, on to the next. */}
-        <View style={{ width: 2, height: locked ? 14 : 16, backgroundColor: first ? 'transparent' : color.divider }} />
+        {/* The line comes in from the row above (or, first, from the next stop's card: starting just below the
+            container's edge), stops short of the marker, and goes on below it; rounded ends. */}
+        <View style={[styles.routeLine, { height: (locked ? 14 : 16) - 4 - (first ? 6 : 0), marginTop: first ? 6 : 0, marginBottom: 4 }, first && !joinTop && { backgroundColor: 'transparent' }]} />
         {locked
           ? <View style={{ height: 20, justifyContent: 'center' }}><Icon name="lock" size={18} color={color.action} strokeWidth={2} /></View>
           : <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: color.action, backgroundColor: color.groupedCell }} />}
-        <View style={{ flex: 1, width: 2, backgroundColor: last ? 'transparent' : color.divider }} />
+        <View style={[styles.routeLine, { flex: 1, marginTop: 4 }, last && { backgroundColor: 'transparent' }]} />
       </View>
       <View style={[styles.rowText, { flexDirection: 'row', alignItems: 'center', gap: space[2] }, last && { borderBottomWidth: 0 }]}>
         <View style={{ flex: 1 }}>
@@ -697,6 +716,7 @@ const styles = StyleSheet.create({
   // The route's line, from the next stop down to the stops after it.
   line: { flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider },
   nextDot: { marginTop: 5, width: 20, height: 20, borderRadius: 10, backgroundColor: color.action, borderWidth: 4, borderColor: color.brandTint },
+  routeLine: { width: 2, borderRadius: 1, backgroundColor: color.divider },
   // Apple's grouped lists: the label above a container, and the container, inset on the gray.
   groupLabel: { fontFamily: font.medium, fontSize: 13, lineHeight: 18, letterSpacing: 0.2, textTransform: 'uppercase', color: color.inkMuted, paddingHorizontal: space[4], paddingBottom: space[2] },
   group: { borderRadius: 26, backgroundColor: color.groupedCell, overflow: 'hidden' },
