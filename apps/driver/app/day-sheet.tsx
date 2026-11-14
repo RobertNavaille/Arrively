@@ -52,11 +52,11 @@ export default function DaySheet() {
     if (!sheet && navigation.isFocused() && navigation.canGoBack()) navigation.goBack();
   }, [sheet, navigation]);
 
-  if (!sheet) return <View style={{ flex: 1, backgroundColor: color.surface }} />;
+  if (!sheet) return <View style={{ flex: 1, backgroundColor: color.groupedBg }} />;
   return (
     // Row menus (press and hold a stop) are drawn inside the sheet.
     <RowMenuHost>
-      <View style={{ flex: 1, backgroundColor: color.surface }} collapsable={false}
+      <View style={{ flex: 1, backgroundColor: color.groupedBg }} collapsable={false}
         onLayout={(e) => {
           const { width, height } = e.nativeEvent.layout;
           sheet.onWidth(Math.round(width));

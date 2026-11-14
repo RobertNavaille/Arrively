@@ -46,6 +46,9 @@ export const color = {
   divider: sys('separator', colorHex.divider),
   controlBorder: sys('tertiaryLabel', colorHex.controlBorder),
   mapGround: sys('secondarySystemBackground', colorHex.mapGround),
+  // Apple's grouped lists (as Settings): a light gray behind, white containers inset on it.
+  groupedBg: sys('systemGroupedBackground', '#F2F2F7'),
+  groupedCell: sys('secondarySystemGroupedBackground', '#FFFFFF'),
 } as const;
 
 export const space = { 1: 4, 2: 8, 3: 12, 4: 16, 6: 24, 8: 32 } as const;

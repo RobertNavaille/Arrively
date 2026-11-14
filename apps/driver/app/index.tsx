@@ -205,21 +205,26 @@ export default function MyDay() {
   nativeRestRef.current = nativeRest;
   const daySwipe = useSideSwipe(nativeRestRef, (dir) => goToRef.current(Math.min(Math.max(indexRef.current + dir, 0), daysRef.current.length - 1)));
   const weekSwipe = useSideSwipe(nativeRestRef, (dir) => goToWeekRef.current(Math.floor(indexRef.current / 7) + dir));
-  const optimize = sheetOpen ? (
-        <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', paddingTop: space[3], paddingBottom: NATIVE_CHROME ? Math.max(space[2], bottomInset - space[1]) : space[4] + bottomInset }}>
-          <FadeIn from={16}>
-            <Button variant="neutral" icon="route" label="Optimize schedule" style={shadow.float} onPress={() => router.push('/week-options')} />
-          </FadeIn>
-        </View>
-  ) : null;
+  // Optimize is in the header now (under the day); nothing floats over the bottom of the sheet.
+  const optimize = null;
+  // Today's route can be optimized (two or more stops still to order): the header's Optimize opens Optimize route.
+  const todayRoute = isToday ? route : undefined;
+  const optimizeToday = !!todayRoute && todayRoute.status !== 'completed'
+    && todayRoute.stops.filter((s) => s.status === 'scheduled' || s.status === 'queued').length >= 2;
   const sheetBody = (
     <>
         {/* Today (as in Apple's Calendar) goes back to the current day; the day and date in the middle; + adds a stop. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], paddingTop: space[1] }}>
           <IconButton icon="calendar" label="Go to today" onPress={() => goTo(range.todayIndex)} />
+          {/* The day, and under it Optimize (as Apple Maps' "Time and Options"): always in view. Today, with stops
+              to reorder, it optimizes the route; otherwise the week. The date shows in the week strip. */}
           <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={[type.title, { fontSize: 17, lineHeight: 22 }]} accessibilityRole="header" numberOfLines={1}>{day.toLocaleDateString('en-US', { weekday: 'long' })}</Text>
-            <Text style={[type.body, { fontSize: 13, lineHeight: 18, color: color.inkMuted }]} numberOfLines={1}>{day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}{isToday ? ' · Today' : ''}</Text>
+            <Text style={[type.title, { fontSize: 20, lineHeight: 26 }]} accessibilityRole="header" numberOfLines={1}
+              accessibilityLabel={`${day.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${isToday ? ', today' : ''}`}>{day.toLocaleDateString('en-US', { weekday: 'long' })}</Text>
+            <Pressable onPress={() => router.push(optimizeToday ? '/optimize-route' : '/week-options')} accessibilityRole="button" hitSlop={6}
+              style={({ pressed }) => [styles.optimizePill, pressed && { opacity: 0.7 }]}>
+              <Text style={{ fontFamily: font.medium, fontSize: 15, color: color.actionInk }}>{optimizeToday ? 'Optimize route' : 'Optimize schedule'}</Text>
+            </Pressable>
           </View>
           <IconButton icon="plus" label="Add stop" onPress={() => router.push('/new-stop')} />
         </View>
@@ -471,11 +476,6 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
   const message = current ? () => (current.customer_phone
     ? contactCustomer('sms', current.customer_phone, etaMessage(current, profile?.name ?? undefined, profile?.org_name ?? undefined))
     : showMessage('No phone number', `There's no phone number for ${current.customer_name}.`)) : undefined;
-  const row = (s: Stop, last: boolean, joinAbove: boolean) => (
-    <StopMenu key={s.id} stop={s} day={route!.day} locked={locks.has(s.id)} onPress={() => onOpenStop(s)}>
-      <AheadRow stop={s} detail={`${s.address.split(',')[0]}${s.notes ? ` · ${s.notes}` : ''}`} last={last} joinAbove={joinAbove} lock={{ on: locks.has(s.id) }} />
-    </StopMenu>
-  );
   return (
     // Resting, the list doesn't scroll (an up-or-down drag moves the sheet). On the web that's done with
     // its overflow hidden: turning scrolling off there blocks sideways swipes (to the next day) too.
@@ -492,7 +492,7 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
         {stats ? (
           <FadeIn from={-6} style={{ marginHorizontal: space[4], marginTop: space[4], marginBottom: space[8] }}>
             <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${miles(stats.meters).toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}
-              style={[{ height: 48, borderRadius: 24, overflow: floated ? 'visible' : 'hidden' }, floated ? shadow.float : { backgroundColor: color.surfaceMuted }]}>
+              style={[{ height: 48, borderRadius: 24, overflow: floated ? 'visible' : 'hidden' }, floated ? shadow.float : { backgroundColor: color.groupedCell }]}>
               {floated ? <FloatingSurface style={[StyleSheet.absoluteFill, { borderRadius: 24 }]} /> : null}
               <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18 }}>
                 <TripInfo stats={stats} size={16} />
@@ -509,69 +509,103 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
           </Text>
         </View>
       ) : (
+        // As Apple's grouped lists: labels in small gray capitals, white containers inset on the gray sheet.
         <View style={{ paddingHorizontal: space[4] }}>
-          {/* Today: the stop the driver is on leads, on the route's line. */}
+          {/* Today: the stop the driver is on, in a container of its own, with Start driving (or Open trip). */}
           {current && phase ? (
-            <View style={{ flexDirection: 'row', gap: space[3] }}>
-              <View style={{ width: 20, alignItems: 'center' }} importantForAccessibility="no-hide-descendants">
-                <View style={styles.nextDot} />
-                {upcoming.length ? <View style={styles.line} /> : null}
-              </View>
-              <View style={{ flex: 1, gap: space[3], paddingBottom: space[4] }}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space[2] }}>
+            <>
+              <Text style={styles.groupLabel}>{phase === 'next' ? 'Next stop' : phase === 'onroute' ? 'On the way' : 'At the stop'}</Text>
+              <View style={[styles.group, { padding: space[4], marginBottom: space[6] }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space[3] }}>
+                  <View style={[styles.nextDot, { marginTop: 4 }]} importantForAccessibility="no-hide-descendants" />
                   <View style={{ flex: 1 }}>
                     <Text style={[type.title, { fontSize: 20, lineHeight: 28 }]} accessibilityRole="header"
                       accessibilityLabel={`${phase === 'next' ? 'Next stop' : phase === 'onroute' ? 'On the way to' : 'At'} ${current.customer_name}`}>{current.customer_name}</Text>
                     <Text style={[type.body, { fontSize: 15, lineHeight: 22, color: color.inkMuted }]} numberOfLines={1}>
                       {current.address.split(',')[0]}{current.notes ? ` · ${current.notes}` : ''}
                     </Text>
+                    {phase === 'next' && legMin != null && legM != null ? (
+                      <Text style={[type.body, { marginTop: 6 }]}><Text style={type.bodyStrong}>{legMin} min</Text>
+                        <Text style={{ color: color.inkMuted }}> · {miles(legM).toFixed(1)} mi</Text></Text>
+                    ) : null}
                   </View>
                   {call ? <IconButton icon="phone" label={`Call ${current.customer_name}`} onPress={call} /> : null}
                   {message ? <IconButton icon="message" label={`Message ${current.customer_name}`} onPress={message} /> : null}
                 </View>
-                {phase === 'next' && legMin != null && legM != null ? (
-                  <Text style={type.body}><Text style={type.bodyStrong}>{legMin} min</Text>
-                    <Text style={{ color: color.inkMuted }}> · {miles(legM).toFixed(1)} mi</Text></Text>
-                ) : null}
                 {phase === 'next'
-                  ? <Button label="Start driving" onPress={() => onStart(current, { min: legMin, meters: legM })} style={{ marginTop: space[4] + space[3] }} />
-                  : <Button icon="navigate" label="Open trip" onPress={onOpenTrip} style={{ marginTop: space[4] + space[3] }} />}
+                  ? <Button label="Start driving" onPress={() => onStart(current, { min: legMin, meters: legM })} style={{ marginTop: space[4] }} />
+                  : <Button icon="navigate" label="Open trip" onPress={onOpenTrip} style={{ marginTop: space[4] }} />}
               </View>
-            </View>
+            </>
           ) : null}
-          {/* "N more stops", on the route's line (it runs on from the next stop to the stops after it). */}
-          {current && upcoming.length ? (
-            <View style={{ flexDirection: 'row', gap: space[3] }}>
-              <View style={{ width: 20, alignItems: 'center' }} importantForAccessibility="no-hide-descendants">
-                <View style={[styles.line, { marginTop: 0 }]} />
-              </View>
-              <Text style={[type.bodyStrong, { flex: 1, color: color.inkMuted, paddingBottom: space[6] }]}>
-                {upcoming.length} more {upcoming.length === 1 ? 'stop' : 'stops'}
-              </Text>
-            </View>
-          ) : null}
-          <View accessibilityRole="list">
-            {(current ? upcoming : stops.filter((s) => !isDone(s) || !isToday)).map((s, i, list) => row(s, i === list.length - 1, i > 0 || !!current))}
-          </View>
+          {/* The stops (today: the ones after it) in one container, the route's line running through their dots. */}
+          {(() => {
+            const list = current ? upcoming : stops.filter((s) => !isDone(s) || !isToday);
+            if (!list.length) return null;
+            return (
+              <>
+                <Text style={styles.groupLabel}>{current ? `Then · ${list.length} more ${list.length === 1 ? 'stop' : 'stops'}` : `${list.length} ${list.length === 1 ? 'stop' : 'stops'}`}</Text>
+                <View accessibilityRole="list" style={[styles.group, { marginBottom: space[6] }]}>
+                  {list.map((s, i) => (
+                    <StopMenu key={s.id} stop={s} day={route!.day} locked={locks.has(s.id)} onPress={() => onOpenStop(s)}>
+                      <GroupedStopRow stop={s} first={i === 0} last={i === list.length - 1} locked={locks.has(s.id)} />
+                    </StopMenu>
+                  ))}
+                </View>
+              </>
+            );
+          })()}
           {/* Today: the stops done, in gray. */}
           {isToday && done.length ? (
             <>
-              <Text style={[type.caption, { fontFamily: font.semibold, paddingTop: space[3], paddingBottom: space[3] }]}>Done · {done.length}</Text>
-              {done.map((s) => (
-                <Pressable key={s.id} onPress={() => onOpenStop(s)} accessibilityRole="button" accessibilityLabel={`${s.customer_name}, done`}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingBottom: space[4] }}>
-                  <View style={{ width: 20, alignItems: 'center' }}><Icon name="check" size={18} color={color.inkMuted} /></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[type.bodyStrong, { fontSize: 16, lineHeight: 22, color: color.inkMuted }]}>{s.customer_name}</Text>
-                    <Text style={type.caption}>{s.address.split(',')[0]}</Text>
-                  </View>
-                </Pressable>
-              ))}
+              <Text style={styles.groupLabel}>Done · {done.length}</Text>
+              <View style={styles.group}>
+                {done.map((s, i) => (
+                  <Pressable key={s.id} onPress={() => onOpenStop(s)} accessibilityRole="button" accessibilityLabel={`${s.customer_name}, done`}
+                    style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingLeft: space[4] }, pressed && { backgroundColor: color.surfaceMuted }]}>
+                    <View style={{ width: 20, alignItems: 'center' }}><Icon name="check" size={18} color={color.inkMuted} /></View>
+                    <View style={[styles.rowText, i === done.length - 1 && { borderBottomWidth: 0 }]}>
+                      <Text style={{ fontFamily: font.semibold, fontSize: 17, lineHeight: 24, color: color.inkMuted }}>{s.customer_name}</Text>
+                      <Text style={{ fontFamily: font.regular, fontSize: 14, lineHeight: 20, color: color.inkMuted }} numberOfLines={1}>{s.address.split(',')[0]}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
             </>
           ) : null}
         </View>
       )}
     </ScrollView>
+  );
+}
+
+/**
+ * A stop in the grouped list: the route's line through its dot (from the row above, on to the row
+ * below), name and address, and a hairline under it inset to the text, as in Apple's grouped lists.
+ * Tapping and press and hold are StopMenu's (around it).
+ */
+function GroupedStopRow({ stop, first, last, locked }: { stop: Stop; first: boolean; last: boolean; locked: boolean }) {
+  return (
+    <View accessibilityLabel={`${stop.customer_name}, ${stop.address}${locked ? ', locked in place' : ''}`}
+      style={{ flexDirection: 'row', gap: space[3], paddingLeft: space[4], backgroundColor: color.groupedCell }}>
+      <View style={{ width: 20, alignItems: 'center' }}>
+        {/* The line comes in from the row above (none above the first), through the marker, on to the next. */}
+        <View style={{ width: 2, height: locked ? 14 : 16, backgroundColor: first ? 'transparent' : color.divider }} />
+        {locked
+          ? <View style={{ height: 20, justifyContent: 'center' }}><Icon name="lock" size={18} color={color.action} strokeWidth={2} /></View>
+          : <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: color.action, backgroundColor: color.groupedCell }} />}
+        <View style={{ flex: 1, width: 2, backgroundColor: last ? 'transparent' : color.divider }} />
+      </View>
+      <View style={[styles.rowText, { flexDirection: 'row', alignItems: 'center', gap: space[2] }, last && { borderBottomWidth: 0 }]}>
+        <View style={{ flex: 1 }}>
+          <Text selectable={false} style={{ fontFamily: font.semibold, fontSize: 17, lineHeight: 24, color: color.ink }} numberOfLines={1}>{stop.customer_name}</Text>
+          <Text selectable={false} style={{ fontFamily: font.regular, fontSize: 14, lineHeight: 20, color: color.inkMuted }} numberOfLines={1}>
+            {stop.address.split(',')[0]}{stop.notes ? ` · ${stop.notes}` : ''}
+          </Text>
+        </View>
+        <View style={{ transform: [{ rotate: '180deg' }] }}><Icon name="back" size={14} color={color.controlBorder} strokeWidth={2.4} /></View>
+      </View>
+    </View>
   );
 }
 
@@ -637,8 +671,8 @@ function DaySheet({ openTop, travel, screenH, open, onOpenChange, atTop, offset,
     <Animated.View ref={sheetRef} {...pan.panHandlers}
       style={[sheetTouch.sheet, { top: openTop, height: screenH - openTop, transform: [{ translateY: offset }] }]}>
       {/* The shadow, on a layer of its own (the sheet clips its content). */}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.round, { backgroundColor: color.surface }, shadow.sheet]} />
-      <View style={[{ flex: 1, backgroundColor: color.surface, overflow: 'hidden' }, styles.round]}>
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.round, { backgroundColor: color.groupedBg }, shadow.sheet]} />
+      <View style={[{ flex: 1, backgroundColor: color.groupedBg, overflow: 'hidden' }, styles.round]}>
         {/* The grabber (also a button for raising and lowering the sheet). */}
         <Pressable onPress={() => snap(!openRef.current)} accessibilityRole="button" accessibilityLabel={open ? 'Lower the list' : 'Raise the list'}
           style={{ height: 18, alignItems: 'center', justifyContent: 'flex-end' }}>
@@ -663,6 +697,11 @@ const styles = StyleSheet.create({
   // The route's line, from the next stop down to the stops after it.
   line: { flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider },
   nextDot: { marginTop: 5, width: 20, height: 20, borderRadius: 10, backgroundColor: color.action, borderWidth: 4, borderColor: color.brandTint },
+  // Apple's grouped lists: the label above a container, and the container, inset on the gray.
+  groupLabel: { fontFamily: font.medium, fontSize: 13, lineHeight: 18, letterSpacing: 0.2, textTransform: 'uppercase', color: color.inkMuted, paddingHorizontal: space[4], paddingBottom: space[2] },
+  group: { borderRadius: 26, backgroundColor: color.groupedCell, overflow: 'hidden' },
+  optimizePill: { marginTop: space[1], height: 30, paddingHorizontal: space[3], borderRadius: 15, backgroundColor: color.brandTint, justifyContent: 'center' },
+  rowText: { flex: 1, paddingVertical: space[3], paddingRight: space[4], borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.divider },
 });
 
 /**
