@@ -495,7 +495,7 @@ export default function Trip() {
                 {/* Tap a stop for its details; press and hold for Edit stop and Lock. */}
                 {slide(shownAfter.map((s, i) => (
                   <StopMenu key={s.id} stop={s} day={route.day} onPress={() => router.push(`/stop/${s.id}`)} locked={locks.has(s.id)}>
-                    <AheadRow stop={s} detail={s.address.split(',')[0]} last={i === shownAfter.length - 1} lock={{ on: locks.has(s.id) }} />
+                    <AheadRow stop={s} detail={s.address.split(',')[0]} last={i === shownAfter.length - 1} joinAbove={i > 0 || phase === 'next'} lock={{ on: locks.has(s.id) }} />
                   </StopMenu>
                 )), slideDone)}
               </View>

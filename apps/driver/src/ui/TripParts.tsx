@@ -36,23 +36,27 @@ function TripTotals({ travelMin, meters, stops }: { travelMin: number; meters: n
   );
 }
 
-export function AheadRow({ stop, detail, last, onPress, highlight, trailing, lock }: {
+export function AheadRow({ stop, detail, last, onPress, highlight, trailing, lock, joinAbove }: {
   stop: Stop; detail: string; last: boolean; onPress?: () => void;
+  /** The route's line comes in from above (a row or the next stop before it): it runs on into the marker, unbroken. */
+  joinAbove?: boolean;
   /** Moved earlier in a new order: the name is blue. */
   highlight?: boolean;
   trailing?: ReactNode;
   /** A lock in place of the circle while the stop is locked (press and hold the row to lock or unlock). */
   lock?: { on: boolean };
 }) {
+  // Above the marker: the gap down to the name's first line, filled by the line when it comes in from above.
+  const above = (h: number) => (joinAbove ? <View style={{ width: 2, height: h, backgroundColor: color.divider }} /> : <View style={{ height: h }} />);
   const marker = lock?.on
-    ? <View style={{ marginTop: 3, height: 20, alignItems: 'center', justifyContent: 'center' }}><Icon name="lock" size={20} color={color.action} strokeWidth={2} /></View>
-    : <View style={{ marginTop: 5, width: 16, height: 16, borderRadius: 8, backgroundColor: color.surface, borderWidth: 3, borderColor: color.action }} />;
+    ? <>{above(3)}<View style={{ height: 20, alignItems: 'center', justifyContent: 'center' }}><Icon name="lock" size={20} color={color.action} strokeWidth={2} /></View></>
+    : <>{above(5)}<View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: color.surface, borderWidth: 3, borderColor: color.action }} /></>;
   const label = `${stop.customer_name}, ${detail}${lock?.on ? ', locked in place' : ''}${highlight ? ', moved earlier' : ''}`;
   const content = (
     <>
       <View style={{ width: 20, alignItems: 'center' }}>
         {marker}
-        {last ? null : <View style={{ flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider }} />}
+        {last ? null : <View style={{ flex: 1, width: 2, marginTop: joinAbove ? 0 : 4, backgroundColor: color.divider }} />}
       </View>
       <View style={{ flex: 1, paddingBottom: 20 }}>
         {/* Not selectable: press and hold opens the row's menu (and a drag mustn't select text). */}

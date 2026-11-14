@@ -471,9 +471,9 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
   const message = current ? () => (current.customer_phone
     ? contactCustomer('sms', current.customer_phone, etaMessage(current, profile?.name ?? undefined, profile?.org_name ?? undefined))
     : showMessage('No phone number', `There's no phone number for ${current.customer_name}.`)) : undefined;
-  const row = (s: Stop, last: boolean) => (
+  const row = (s: Stop, last: boolean, joinAbove: boolean) => (
     <StopMenu key={s.id} stop={s} day={route!.day} locked={locks.has(s.id)} onPress={() => onOpenStop(s)}>
-      <AheadRow stop={s} detail={`${s.address.split(',')[0]}${s.notes ? ` · ${s.notes}` : ''}`} last={last} lock={{ on: locks.has(s.id) }} />
+      <AheadRow stop={s} detail={`${s.address.split(',')[0]}${s.notes ? ` · ${s.notes}` : ''}`} last={last} joinAbove={joinAbove} lock={{ on: locks.has(s.id) }} />
     </StopMenu>
   );
   return (
@@ -535,17 +535,23 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
                 ) : null}
                 {phase === 'next'
                   ? <Button label="Start driving" onPress={() => onStart(current, { min: legMin, meters: legM })} style={{ marginTop: space[4] + space[3] }} />
-                  : <Button icon="navigate" label={phase === 'onroute' ? 'On the way · Open trip' : 'At the stop · Open trip'} onPress={onOpenTrip} style={{ marginTop: space[4] + space[3] }} />}
+                  : <Button icon="navigate" label="Open trip" onPress={onOpenTrip} style={{ marginTop: space[4] + space[3] }} />}
               </View>
             </View>
           ) : null}
+          {/* "N more stops", on the route's line (it runs on from the next stop to the stops after it). */}
           {current && upcoming.length ? (
-            <Text style={[type.bodyStrong, { color: color.inkMuted, paddingLeft: 20 + space[3], paddingBottom: space[6] }]}>
-              {upcoming.length} more {upcoming.length === 1 ? 'stop' : 'stops'}
-            </Text>
+            <View style={{ flexDirection: 'row', gap: space[3] }}>
+              <View style={{ width: 20, alignItems: 'center' }} importantForAccessibility="no-hide-descendants">
+                <View style={[styles.line, { marginTop: 0 }]} />
+              </View>
+              <Text style={[type.bodyStrong, { flex: 1, color: color.inkMuted, paddingBottom: space[6] }]}>
+                {upcoming.length} more {upcoming.length === 1 ? 'stop' : 'stops'}
+              </Text>
+            </View>
           ) : null}
           <View accessibilityRole="list">
-            {(current ? upcoming : stops.filter((s) => !isDone(s) || !isToday)).map((s, i, list) => row(s, i === list.length - 1))}
+            {(current ? upcoming : stops.filter((s) => !isDone(s) || !isToday)).map((s, i, list) => row(s, i === list.length - 1, i > 0 || !!current))}
           </View>
           {/* Today: the stops done, in gray. */}
           {isToday && done.length ? (
@@ -655,7 +661,7 @@ const sheetTouch = StyleSheet.create({
 const styles = StyleSheet.create({
   round: { borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg },
   // The route's line, from the next stop down to the stops after it.
-  line: { flex: 1, width: 2, marginTop: 4, marginBottom: -space[4], backgroundColor: color.divider },
+  line: { flex: 1, width: 2, marginTop: 4, backgroundColor: color.divider },
   nextDot: { marginTop: 5, width: 20, height: 20, borderRadius: 10, backgroundColor: color.action, borderWidth: 4, borderColor: color.brandTint },
 });
 
