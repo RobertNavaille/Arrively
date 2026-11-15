@@ -398,8 +398,8 @@ function sideSwipe(node: HTMLElement, onInput: () => void, step: (dir: 1 | -1) =
 }
 
 const TOOLBAR_H = 88;
-// What the sheet's content paints behind itself: nothing on iPhone, where the sheet is Apple's blur material
-// (app/day-sheet.tsx) and the map shows softly through; white on the drawn sheet elsewhere.
+// What the sheet's content paints behind itself: nothing on iPhone, where Apple's own sheet background (Liquid
+// Glass on iOS 26) shows through; white on the drawn sheet elsewhere.
 const SHEET_FILL = NATIVE_CHROME ? 'transparent' : color.surface;
 // The avatar's bar over the map; pulled all the way up, the sheet stops just under it.
 const NAV_TOP = 10;

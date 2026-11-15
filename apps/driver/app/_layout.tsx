@@ -68,7 +68,7 @@ export default function RootLayout() {
         // The sheet holds sideways pagers as well as the day's list: dragging the list doesn't resize it
         // (drag the sheet's top instead), so a scroll never fights a page swipe.
         sheetExpandsWhenScrolledToEdge: false,
-        // See-through, so the sheet's blur material (app/day-sheet.tsx) shows the map behind it.
+        // See-through, so Apple's own sheet background (Liquid Glass on iOS 26) shows behind the content.
         contentStyle: { backgroundColor: 'transparent' },
       } : undefined} />
       {/* iPhone: Apple's navigation bar and sheets (see nativeChrome.ts); elsewhere the screens draw their own. */}
