@@ -459,7 +459,7 @@ function TripPill({ stats }: { stats: DayStats }) {
   ];
   return (
     <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${mi.toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}
-      style={[{ borderRadius: 999 }, shadow.float]}>
+      style={{ borderRadius: 999 }}>
       <FloatingSurface thick style={{ flexDirection: 'row', alignItems: 'center', gap: 24, paddingVertical: 18, paddingHorizontal: 32, borderRadius: 999 }}>
         {/* Each number with its label beside it, on the text's baseline. */}
         {items.map((it) => (
