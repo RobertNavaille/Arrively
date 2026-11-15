@@ -21,7 +21,7 @@ export function FloatingSurface({ style, children, thick }: { style?: StyleProp<
     return (
       <View style={[shadow.float, { borderRadius: radius }]}>
         <BlurView tint={dark ? 'systemThickMaterialDark' : 'systemMaterial'} intensity={100} style={[{ overflow: 'hidden' }, style]}>
-          {dark ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 0, 0, 0.2)' }]} /> : null}
+          {dark ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 0, 0, 0.1)' }]} /> : null}
           {children}
         </BlurView>
       </View>
