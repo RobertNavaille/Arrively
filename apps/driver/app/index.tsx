@@ -224,11 +224,11 @@ export default function MyDay() {
           {/* The day, and under it Optimize (as Apple Maps' "Time and Options"): always in view. Today, with stops
               to reorder, it optimizes the route; otherwise the week. The date shows in the week strip. */}
           <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={[type.title, { fontSize: 20, lineHeight: 26 }]} accessibilityRole="header" numberOfLines={1}
+            <Text style={[type.title, { fontSize: 17, lineHeight: 22 }]} accessibilityRole="header" numberOfLines={1}
               accessibilityLabel={`${day.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${isToday ? ', today' : ''}`}>{day.toLocaleDateString('en-US', { weekday: 'long' })}</Text>
             <Pressable onPress={() => router.push(optimizeToday ? '/optimize-route' : '/week-options')} accessibilityRole="button" hitSlop={6}
               style={({ pressed }) => [styles.optimizePill, pressed && { opacity: 0.7 }]}>
-              <Text style={{ fontFamily: font.medium, fontSize: 15, color: color.actionInk }}>{optimizeToday ? 'Optimize route' : 'Optimize schedule'}</Text>
+              <Text style={{ fontFamily: font.medium, fontSize: 13, color: color.actionInk }}>{optimizeToday ? 'Optimize route' : 'Optimize schedule'}</Text>
             </Pressable>
           </View>
           <IconButton icon="plus" label="Add stop" onPress={() => router.push('/new-stop')} />
@@ -720,7 +720,7 @@ const styles = StyleSheet.create({
   // Apple's grouped lists: the label above a container, and the container, inset on the gray.
   groupLabel: { fontFamily: font.medium, fontSize: 13, lineHeight: 18, letterSpacing: 0.2, textTransform: 'uppercase', color: color.inkMuted, paddingHorizontal: space[4], paddingBottom: space[2] },
   group: { borderRadius: 26, backgroundColor: color.groupedCell, overflow: 'hidden' },
-  optimizePill: { marginTop: space[1], height: 30, paddingHorizontal: space[3], borderRadius: 15, backgroundColor: color.brandTint, justifyContent: 'center' },
+  optimizePill: { marginTop: space[1], height: 26, paddingHorizontal: 10, borderRadius: 13, backgroundColor: color.brandTint, justifyContent: 'center' },
   rowText: { flex: 1, paddingVertical: space[3], paddingRight: space[4], borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.divider },
 });
 
