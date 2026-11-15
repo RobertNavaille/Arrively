@@ -207,9 +207,14 @@ export default function MyDay() {
   const weekSwipe = useSideSwipe(nativeRestRef, (dir) => goToWeekRef.current(Math.floor(indexRef.current / 7) + dir));
   // Floating over the bottom of the sheet (both heights): the day's trip info, centred; the stops scroll under it.
   // In Apple's sheet it sits just clear of the home indicator. (Optimize is in the header, under the day.)
+  // As far from the sheet's bottom as from its sides (the pill is centred: half the room left beside it).
+  const [pillW, setPillW] = useState(0);
+  const sideGap = pillW ? Math.max(space[1], Math.round((width - pillW) / 2)) : space[3];
   const optimize = stats ? (
-    <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: NATIVE_CHROME ? Math.max(space[3], bottomInset) : space[6] + bottomInset, alignItems: 'center' }}>
-      <TripPill stats={stats} />
+    <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: NATIVE_CHROME ? sideGap : space[6] + bottomInset, alignItems: 'center' }}>
+      <View onLayout={(e) => { const w = Math.round(e.nativeEvent.layout.width); if (w !== pillW) setPillW(w); }}>
+        <TripPill stats={stats} />
+      </View>
     </View>
   ) : null;
   // Today's route can be optimized (two or more stops still to order): the header's Optimize opens Optimize route.
