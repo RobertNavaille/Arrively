@@ -207,8 +207,17 @@ export default function MyDay() {
   const weekSwipe = useSideSwipe(nativeRestRef, (dir) => goToWeekRef.current(Math.floor(indexRef.current / 7) + dir));
   // Floating over the bottom of the sheet (both heights): the day's trip info, centred; the stops scroll under it.
   // In Apple's sheet it sits just clear of the home indicator. (Optimize is in the header, under the day.)
-  // (The day's trip info is at the top of the list now, in a filled container: nothing floats over the sheet.)
-  const optimize = null;
+  // The day's trip info, floating over the bottom of the sheet (both heights), centred; the stops scroll under it.
+  // As far from the sheet's bottom as from its sides (half the room left beside it).
+  const [pillW, setPillW] = useState(0);
+  const sideGap = pillW ? Math.max(space[1], Math.round((width - pillW) / 2)) : space[3];
+  const optimize = stats ? (
+    <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: NATIVE_CHROME ? sideGap : space[6] + bottomInset, alignItems: 'center' }}>
+      <View onLayout={(e) => { const w = Math.round(e.nativeEvent.layout.width); if (w !== pillW) setPillW(w); }}>
+        <TripPill stats={stats} />
+      </View>
+    </View>
+  ) : null;
   // Today's route can be optimized (two or more stops still to order): the header's Optimize opens Optimize route.
   const todayRoute = isToday ? route : undefined;
   const optimizeToday = !!todayRoute && todayRoute.status !== 'completed'
@@ -312,7 +321,7 @@ export default function MyDay() {
                 <View style={{ width, height: pagerH || undefined }}>
                   <DayPanel route={r} isToday={todayPage} driver={todayPage ? pos : null}
                     stats={i === index ? stats : straightStats(r, null)}
-                    loading={loading} onOpenStop={(st) => openOverSchedule(router, `/stop/${st.id}`)} bottomPad={space[6] + bottomInset}
+                    loading={loading} onOpenStop={(st) => openOverSchedule(router, `/stop/${st.id}`)} bottomPad={TOOLBAR_H + space[6] + bottomInset}
                     open={sheetOpen} onAtTop={i === index ? (v) => { pageAtTop.current = v; } : undefined}
                     onStart={startDriving} onOpenTrip={() => openOverSchedule(router, '/trip')}
                     profile={profile} />
@@ -448,7 +457,7 @@ function TripInfo({ stats, size }: { stats: DayStats; size: number }) {
 
 /**
  * The day's trip info as a pill: each number with its small label beside it, three across (drive time, miles, stops).
- * In a container filled with Apple's see-through system fill: it adapts to the sheet (glass or solid) as Maps' do.
+ * Filled with Apple's see-through system fill (as Maps' containers): it adapts to the sheet, glass or solid.
  */
 function TripPill({ stats }: { stats: DayStats }) {
   const mi = miles(stats.meters);
@@ -459,7 +468,7 @@ function TripPill({ stats }: { stats: DayStats }) {
   ];
   return (
     <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${mi.toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}
-      style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 24, paddingVertical: 16, paddingHorizontal: 24, borderRadius: 999, backgroundColor: color.fill }}>
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 24, paddingVertical: 18, paddingHorizontal: 32, borderRadius: 999, backgroundColor: color.fill }}>
         {/* Each number with its label beside it, on the text's baseline. */}
         {items.map((it) => (
           <Text key={it.label} maxFontSizeMultiplier={1.3}>
@@ -510,12 +519,8 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
     <ScrollView ref={scrollRef} style={[{ flex: 1 }, open ? sheetTouch.listOpen : sheetTouch.listShut]} scrollEnabled={open || Platform.OS === 'web'}
       contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}
       scrollEventThrottle={16} onScroll={(e) => onAtTop?.(e.nativeEvent.contentOffset.y <= 0)}>
-      {/* The day's trip info, at the top of the list in a filled container (as Apple Maps' containers on its sheet). */}
-      {stats ? (
-        <View style={{ alignItems: 'center', paddingHorizontal: space[4], paddingTop: space[4], paddingBottom: space[4] }}>
-          <TripPill stats={stats} />
-        </View>
-      ) : <View style={{ height: space[4] }} />}
+      {/* (The day's trip info floats over the bottom of the sheet: TripPill.) */}
+      <View style={{ height: space[4] }} />
       {!stops.length ? (
         <View style={{ alignItems: 'center', paddingVertical: space[6], paddingHorizontal: space[6], gap: space[2] }}>
           <Icon name="route" size={28} color={color.inkMuted} />
