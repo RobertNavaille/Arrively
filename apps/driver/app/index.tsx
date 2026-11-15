@@ -456,7 +456,7 @@ function TripInfo({ stats, size }: { stats: DayStats; size: number }) {
 
 /**
  * The day's trip info as a pill: each number with its small label beside it, three across (drive time, miles, stops).
- * On Apple's thick blur material (white in light mode, dark gray in dark mode): it stands out over the list.
+ * On Liquid Glass, the regular style (the blur material on iPhones without it; white elsewhere).
  */
 function TripPill({ stats }: { stats: DayStats }) {
   const mi = miles(stats.meters);
@@ -468,7 +468,7 @@ function TripPill({ stats }: { stats: DayStats }) {
   return (
     <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${mi.toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}
       style={{ borderRadius: 999 }}>
-      <FloatingSurface thick style={{ flexDirection: 'row', alignItems: 'center', gap: 24, paddingVertical: 18, paddingHorizontal: 32, borderRadius: 999 }}>
+      <FloatingSurface glass style={{ flexDirection: 'row', alignItems: 'center', gap: 24, paddingVertical: 18, paddingHorizontal: 32, borderRadius: 999 }}>
         {/* Each number with its label beside it, on the text's baseline. */}
         {items.map((it) => (
           <Text key={it.label} maxFontSizeMultiplier={1.3}>

@@ -11,9 +11,12 @@ const GLASS = isLiquidGlassAvailable();
  * `thick`: Apple's standard blur material instead (between thin and thick): white-ish in light mode, dark gray
  * in dark mode, frosted enough to see the content behind it move while text on it stays readable.
  */
-export function FloatingSurface({ style, children, thick }: { style?: StyleProp<ViewStyle>; children?: ReactNode; thick?: boolean }) {
+export function FloatingSurface({ style, children, thick, glass }: { style?: StyleProp<ViewStyle>; children?: ReactNode; thick?: boolean; glass?: boolean }) {
   const dark = useColorScheme() === 'dark';
-  if (thick) {
+  // `glass`: plain Liquid Glass, the regular style and nothing else (no tint, not interactive). Where there's no
+  // Liquid Glass (before iOS 26), the blur material below.
+  if (glass && GLASS) return <GlassView glassEffectStyle="regular" style={[{ overflow: 'hidden' }, style]}>{children}</GlassView>;
+  if (thick || glass) {
     // The shadow on a wrapper (the blur clips its own content to the corners); the layout on the blur itself.
     const radius = StyleSheet.flatten(style)?.borderRadius;
     // Dark mode: the sheet behind is the same dark material, so the pill takes the thick one and a darker
