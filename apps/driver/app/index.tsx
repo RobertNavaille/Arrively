@@ -277,8 +277,8 @@ export default function MyDay() {
         {error ? <Text style={[type.caption, { color: color.danger, paddingHorizontal: space[4], paddingBottom: space[2] }]}>{error}</Text> : null}
         <View style={{ height: StyleSheet.hairlineWidth * 2, backgroundColor: color.divider }} />
 
-        {/* Day pages: swipe sideways for the next or previous day. The heading above is white; the list is on the gray. */}
-        <View style={{ flex: 1, backgroundColor: color.groupedBg }} {...daySwipe}>
+        {/* Day pages: swipe sideways for the next or previous day. One white sheet: heading and list. */}
+        <View style={{ flex: 1, backgroundColor: color.surface }} {...daySwipe}>
           <FlatList
             ref={listRef}
             scrollEnabled={!nativeRest}
@@ -447,7 +447,7 @@ function TripInfo({ stats, size }: { stats: DayStats; size: number }) {
 }
 
 /**
- * The day's trip info as a pill: number over a small label, three across (drive time, miles, stops).
+ * The day's trip info as a pill: each number with its small label beside it, three across (drive time, miles, stops).
  * Liquid Glass on iPhone, white with a soft shadow elsewhere.
  */
 function TripPill({ stats }: { stats: DayStats }) {
@@ -460,12 +460,13 @@ function TripPill({ stats }: { stats: DayStats }) {
   return (
     <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${mi.toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}
       style={[{ borderRadius: 999 }, shadow.float]}>
-      <FloatingSurface style={{ flexDirection: 'row', alignItems: 'center', gap: 44, paddingVertical: 14, paddingHorizontal: 36, borderRadius: 999 }}>
+      <FloatingSurface style={{ flexDirection: 'row', alignItems: 'center', gap: 28, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 999 }}>
+        {/* Each number with its label beside it, on the text's baseline. */}
         {items.map((it) => (
-          <View key={it.label} style={{ alignItems: 'center' }}>
-            <Text style={{ fontFamily: font.semibold, fontSize: 20, lineHeight: 22, color: color.ink, fontVariant: ['tabular-nums'] }} maxFontSizeMultiplier={1.3}>{it.value}</Text>
-            <Text style={{ fontFamily: font.regular, fontSize: 12, lineHeight: 14, color: color.inkMuted }} maxFontSizeMultiplier={1.3}>{it.label}</Text>
-          </View>
+          <Text key={it.label} maxFontSizeMultiplier={1.3}>
+            <Text style={{ fontFamily: font.semibold, fontSize: 24, lineHeight: 28, color: color.ink, fontVariant: ['tabular-nums'] }}>{it.value}</Text>
+            <Text style={{ fontFamily: font.regular, fontSize: 13, color: color.inkMuted }}>{` ${it.label}`}</Text>
+          </Text>
         ))}
       </FloatingSurface>
     </View>
@@ -521,15 +522,15 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
           </Text>
         </View>
       ) : (
-        // As Apple's grouped lists: labels in small gray capitals, white containers inset on the gray sheet.
-        <View style={{ paddingHorizontal: space[4] }}>
+        // One white sheet, rows full width (no inset cards); small gray capital labels where a list needs one.
+        <View>
           {/* Today: the stop the driver is on, in a container of its own, with Start driving (or Open trip). */}
           {current && phase ? (
             <>
-              {/* No label: the card and the stops below read as one route, its line running from this dot down
-                  (stopping just short of the card's edge) and on through the stops' dots. */}
-              <View style={[styles.group, { padding: space[4], marginBottom: upcoming.length ? space[3] : space[6], flexDirection: 'row', gap: space[3] }]}>
-                <View style={{ width: 20, alignItems: 'center', marginBottom: -6 }} importantForAccessibility="no-hide-descendants">
+              {/* No label: the next stop and the stops below read as one route, its line running from this dot
+                  down through the stops' dots, unbroken. */}
+              <View style={[styles.group, { padding: space[4], marginBottom: upcoming.length ? 0 : space[6], flexDirection: 'row', gap: space[3] }]}>
+                <View style={{ width: 20, alignItems: 'center', marginBottom: -space[4] }} importantForAccessibility="no-hide-descendants">
                   <View style={[styles.nextDot, { marginTop: 4 }]} />
                   {upcoming.length ? <View style={[styles.routeLine, { flex: 1, marginTop: 4 }]} /> : null}
                 </View>
@@ -605,14 +606,14 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
 function GroupedStopRow({ stop, first, last, locked, joinTop }: { stop: Stop; first: boolean; last: boolean; locked: boolean; joinTop?: boolean }) {
   return (
     <View accessibilityLabel={`${stop.customer_name}, ${stop.address}${locked ? ', locked in place' : ''}`}
-      style={{ flexDirection: 'row', gap: space[3], paddingLeft: space[4], backgroundColor: color.groupedCell }}>
+      style={{ flexDirection: 'row', gap: space[3], paddingLeft: space[4], backgroundColor: color.surface }}>
       <View style={{ width: 20, alignItems: 'center' }}>
-        {/* The line comes in from the row above (or, first, from the next stop's card: starting just below the
-            container's edge), stops short of the marker, and goes on below it; rounded ends. */}
-        <View style={[styles.routeLine, { height: (locked ? 14 : 16) - 4 - (first ? 6 : 0), marginTop: first ? 6 : 0, marginBottom: 4 }, first && !joinTop && { backgroundColor: 'transparent' }]} />
+        {/* The line comes in from the row above (or, first, from the next stop), stops short of the marker,
+            and goes on below it; rounded ends. */}
+        <View style={[styles.routeLine, { height: (locked ? 14 : 16) - 4, marginBottom: 4 }, first && !joinTop && { backgroundColor: 'transparent' }]} />
         {locked
           ? <View style={{ height: 20, justifyContent: 'center' }}><Icon name="lock" size={18} color={color.action} strokeWidth={2} /></View>
-          : <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: color.action, backgroundColor: color.groupedCell }} />}
+          : <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: color.action, backgroundColor: color.surface }} />}
         <View style={[styles.routeLine, { flex: 1, marginTop: 4 }, last && { backgroundColor: 'transparent' }]} />
       </View>
       <View style={[styles.rowText, { flexDirection: 'row', alignItems: 'center', gap: space[2] }, last && { borderBottomWidth: 0 }]}>
@@ -719,7 +720,7 @@ const styles = StyleSheet.create({
   routeLine: { width: 2, borderRadius: 1, backgroundColor: color.divider },
   // Apple's grouped lists: the label above a container, and the container, inset on the gray.
   groupLabel: { fontFamily: font.medium, fontSize: 13, lineHeight: 18, letterSpacing: 0.2, textTransform: 'uppercase', color: color.inkMuted, paddingHorizontal: space[4], paddingBottom: space[2] },
-  group: { borderRadius: 26, backgroundColor: color.groupedCell, overflow: 'hidden' },
+  group: { backgroundColor: color.surface, overflow: 'hidden' },
   optimizePill: { marginTop: space[1], height: 26, paddingHorizontal: 10, borderRadius: 13, backgroundColor: color.brandTint, justifyContent: 'center' },
   rowText: { flex: 1, paddingVertical: space[3], paddingRight: space[4], borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.divider },
 });
