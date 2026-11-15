@@ -13,9 +13,10 @@ const GLASS = isLiquidGlassAvailable();
  */
 export function FloatingSurface({ style, children, thick, glass }: { style?: StyleProp<ViewStyle>; children?: ReactNode; thick?: boolean; glass?: boolean }) {
   const dark = useColorScheme() === 'dark';
-  // `glass`: plain Liquid Glass, the regular style and nothing else (no tint, not interactive). Where there's no
+  // `glass`: Liquid Glass, the regular style (not interactive). Where there's no
   // Liquid Glass (before iOS 26), the blur material below.
-  if (glass && GLASS) return <GlassView glassEffectStyle="regular" style={[{ overflow: 'hidden' }, style]}>{children}</GlassView>;
+  // Light mode: a light gray tint at 30%, so it holds its tone over the white list.
+  if (glass && GLASS) return <GlassView glassEffectStyle="regular" tintColor={dark ? undefined : 'rgba(209, 209, 214, 0.3)'} style={[{ overflow: 'hidden' }, style]}>{children}</GlassView>;
   if (thick || glass) {
     // The shadow on a wrapper (the blur clips its own content to the corners); the layout on the blur itself.
     const radius = StyleSheet.flatten(style)?.borderRadius;
