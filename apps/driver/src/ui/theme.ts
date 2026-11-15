@@ -1,4 +1,4 @@
-import { DynamicColorIOS, Platform, PlatformColor, type ColorValue } from 'react-native';
+import { Platform, PlatformColor, type ColorValue } from 'react-native';
 
 // Arrively design tokens (mirrors the Arrively design system's tokens.json).
 // The light values, as plain colors, for places that need a color string
@@ -36,8 +36,6 @@ export const colorHex = {
 // follow light and dark mode by themselves. Buttons and brand colors stay ours.
 const ios = Platform.OS === 'ios';
 const sys = (name: string, light: string): ColorValue => (ios ? PlatformColor(name) : light);
-// A color of our own with a dark-mode version (iPhone follows light and dark mode; elsewhere, the light one).
-const dyn = (light: string, dark: string): ColorValue => (ios ? DynamicColorIOS({ light, dark }) : light);
 
 export const color = {
   ...colorHex,
@@ -51,11 +49,6 @@ export const color = {
   // Apple's grouped lists (as Settings): a light gray behind, white containers inset on it.
   groupedBg: sys('systemGroupedBackground', '#F2F2F7'),
   groupedCell: sys('secondarySystemGroupedBackground', '#FFFFFF'),
-  // An inverted surface that stands out from the sheet in either mode: near-black in light mode, near-white in
-  // dark mode (the floating trip info), with its text and muted text.
-  inverseSurface: dyn('#1C1C1E', '#F2F2F7'),
-  inverseInk: dyn('#FFFFFF', '#000000'),
-  inverseInkMuted: dyn('rgba(235, 235, 245, 0.7)', 'rgba(60, 60, 67, 0.7)'),
 } as const;
 
 export const space = { 1: 4, 2: 8, 3: 12, 4: 16, 6: 24, 8: 32 } as const;

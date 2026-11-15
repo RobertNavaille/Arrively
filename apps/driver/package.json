@@ -10,6 +10,7 @@
     "@rnmapbox/maps": "^10.3.8",
     "@supabase/supabase-js": "^2.117.3",
     "expo": "~57.0.29",
+    "expo-blur": "~57.0.3",
     "expo-constants": "~57.0.22",
     "expo-dev-client": "~57.0.20",
     "expo-font": "~57.0.4",
