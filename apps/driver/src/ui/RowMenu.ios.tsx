@@ -3,7 +3,10 @@ import { Pressable, StyleSheet } from 'react-native';
 import { ContextMenuView } from 'react-native-ios-context-menu';
 import type { RowMenuItem } from './RowMenu';
 import { SF_SYMBOLS } from './sfSymbols';
-import { color } from './theme';
+import { color, colorHex } from './theme';
+
+// The lifted card's color (the menu takes a plain color).
+const SURFACE = colorHex.surface;
 
 export type { RowMenuItem } from './RowMenu';
 
@@ -19,7 +22,11 @@ export function RowMenuHost({ children }: { children: ReactNode }) {
  * springs out beside it with a haptic tap, and it all settles back on close.
  * A tap does `onPress`.
  */
-export function RowMenu({ children, items, label, onPress }: { children: ReactNode; items: RowMenuItem[]; label: string; onPress?: () => void }) {
+export function RowMenu({ children, items, label, onPress, seeThrough }: {
+  children: ReactNode; items: RowMenuItem[]; label: string; onPress?: () => void;
+  /** No background of its own (the row sits on a blur): the lifted card gets one from the menu instead. */
+  seeThrough?: boolean;
+}) {
   return (
     <ContextMenuView
       menuConfig={{
@@ -33,13 +40,14 @@ export function RowMenu({ children, items, label, onPress }: { children: ReactNo
       }}
       // The lifted row is the row itself (it has its own background: styles.card), with round corners.
       // No preview background colour: the library leaves it on the row for a while after the menu closes.
-      previewConfig={{ previewType: 'DEFAULT', borderRadius: 16 }}
+      // See-through rows (on the Schedule's blurred sheet) get the card's color from the menu while lifted.
+      previewConfig={seeThrough ? { previewType: 'DEFAULT', borderRadius: 16, backgroundColor: SURFACE } : { previewType: 'DEFAULT', borderRadius: 16 }}
       onPressMenuItem={({ nativeEvent }) => items[Number(nativeEvent.actionKey)]?.onPress()}>
       <Pressable onPress={onPress} disabled={!onPress} accessibilityRole={onPress ? 'button' : undefined}
         accessibilityLabel={label} accessibilityHint="Press and hold for options"
         accessibilityActions={items.map((it, i) => ({ name: `a${i}`, label: it.label }))}
         onAccessibilityAction={(e) => items[Number(e.nativeEvent.actionName.slice(1))]?.onPress()}
-        style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}>
+        style={({ pressed }) => [styles.card, seeThrough && { backgroundColor: 'transparent' }, pressed && { opacity: 0.85 }]}>
         {children}
       </Pressable>
     </ContextMenuView>

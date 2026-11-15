@@ -66,7 +66,7 @@ export function RowMenuHost({ children }: { children: ReactNode }) {
  * the bottom). A tap does `onPress` (the row's own action). Needs a RowMenuHost
  * around the screen.
  */
-export function RowMenu({ children, items, label, onPress }: { children: ReactNode; items: RowMenuItem[]; label: string; onPress?: () => void }) {
+export function RowMenu({ children, items, label, onPress }: { children: ReactNode; items: RowMenuItem[]; label: string; onPress?: () => void; seeThrough?: boolean }) {
   const ref = useRef<View>(null);
   const open = useContext(Ctx);
   const show = () => ref.current?.measureInWindow((x, y, w, h) => open?.(items, { x, y, w, h }));

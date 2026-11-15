@@ -569,7 +569,7 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
                 {current ? null : <Text style={styles.groupLabel}>{list.length} {list.length === 1 ? 'stop' : 'stops'}</Text>}
                 <View accessibilityRole="list" style={[styles.group, { marginBottom: space[6] }]}>
                   {list.map((s, i) => (
-                    <StopMenu key={s.id} stop={s} day={route!.day} locked={locks.has(s.id)} onPress={() => onOpenStop(s)}>
+                    <StopMenu key={s.id} stop={s} day={route!.day} locked={locks.has(s.id)} onPress={() => onOpenStop(s)} seeThrough={NATIVE_CHROME}>
                       <GroupedStopRow stop={s} first={i === 0} last={i === list.length - 1} joinTop={!!current} locked={locks.has(s.id)} />
                     </StopMenu>
                   ))}
