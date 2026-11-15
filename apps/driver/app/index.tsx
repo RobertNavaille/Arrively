@@ -448,7 +448,7 @@ function TripInfo({ stats, size }: { stats: DayStats; size: number }) {
 
 /**
  * The day's trip info as a pill: each number with its small label beside it, three across (drive time, miles, stops).
- * Dark Liquid Glass on iPhone (near-black elsewhere), white numbers and light gray labels: it stands out over the list.
+ * On an inverted, solid surface (near-black in light mode, near-white in dark mode): it stands out over the list.
  */
 function TripPill({ stats }: { stats: DayStats }) {
   const mi = miles(stats.meters);
@@ -464,8 +464,8 @@ function TripPill({ stats }: { stats: DayStats }) {
         {/* Each number with its label beside it, on the text's baseline. */}
         {items.map((it) => (
           <Text key={it.label} maxFontSizeMultiplier={1.3}>
-            <Text style={{ fontFamily: font.semibold, fontSize: 24, lineHeight: 28, color: '#FFFFFF', fontVariant: ['tabular-nums'] }}>{it.value}</Text>
-            <Text style={{ fontFamily: font.regular, fontSize: 17, color: 'rgba(235, 235, 245, 0.7)' }}>{` ${it.label}`}</Text>
+            <Text style={{ fontFamily: font.semibold, fontSize: 24, lineHeight: 28, color: color.inverseInk, fontVariant: ['tabular-nums'] }}>{it.value}</Text>
+            <Text style={{ fontFamily: font.regular, fontSize: 17, color: color.inverseInkMuted }}>{` ${it.label}`}</Text>
           </Text>
         ))}
       </FloatingSurface>
