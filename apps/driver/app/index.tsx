@@ -465,7 +465,7 @@ function TripPill({ stats }: { stats: DayStats }) {
         {items.map((it) => (
           <Text key={it.label} maxFontSizeMultiplier={1.3}>
             <Text style={{ fontFamily: font.semibold, fontSize: 24, lineHeight: 28, color: color.ink, fontVariant: ['tabular-nums'] }}>{it.value}</Text>
-            <Text style={{ fontFamily: font.regular, fontSize: 15, color: color.inkMuted }}>{` ${it.label}`}</Text>
+            <Text style={{ fontFamily: font.regular, fontSize: 17, color: color.inkMuted }}>{` ${it.label}`}</Text>
           </Text>
         ))}
       </FloatingSurface>
