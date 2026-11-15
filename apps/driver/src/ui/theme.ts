@@ -49,6 +49,9 @@ export const color = {
   // Apple's grouped lists (as Settings): a light gray behind, white containers inset on it.
   groupedBg: sys('systemGroupedBackground', '#F2F2F7'),
   groupedCell: sys('secondarySystemGroupedBackground', '#FFFFFF'),
+  // Apple's see-through fill for shapes on a sheet (as Maps' containers): light gray on a solid sheet, a frosted
+  // tint of what's behind on Liquid Glass.
+  fill: sys('tertiarySystemFill', 'rgba(118, 118, 128, 0.12)'),
 } as const;
 
 export const space = { 1: 4, 2: 8, 3: 12, 4: 16, 6: 24, 8: 32 } as const;
