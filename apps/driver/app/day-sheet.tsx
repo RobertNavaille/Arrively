@@ -1,6 +1,7 @@
 import { useFocusEffect, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
-import { View } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { StyleSheet, View } from 'react-native';
 import { useDaySheetContent } from '../src/lib/sheetPortal';
 import { RowMenuHost } from '../src/ui/RowMenu';
 import { color } from '../src/ui/theme';
@@ -56,7 +57,7 @@ export default function DaySheet() {
   return (
     // Row menus (press and hold a stop) are drawn inside the sheet.
     <RowMenuHost>
-      <View style={{ flex: 1, backgroundColor: color.surface }} collapsable={false}
+      <View style={{ flex: 1, backgroundColor: 'transparent' }} collapsable={false}
         onLayout={(e) => {
           const { width, height } = e.nativeEvent.layout;
           sheet.onWidth(Math.round(width));
@@ -65,8 +66,9 @@ export default function DaySheet() {
             setOpen(height > sheet.height * ((a + b) / 2));
           }
         }}>
-        {/* First inside the sheet, before any list: with a list first, Apple's sheet can leave it blank. */}
-        <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 1 }} pointerEvents="none" />
+        {/* First inside the sheet, before any list (with a list first, Apple's sheet can leave it blank): the sheet's
+            background, Apple's blur material, so the map shows softly through. */}
+        <BlurView tint="systemMaterial" intensity={100} style={StyleSheet.absoluteFill} pointerEvents="none" />
         {/* Room for Apple's grabber. */}
         <View style={{ height: 14 }} />
         {sheet.body}

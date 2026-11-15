@@ -278,7 +278,7 @@ export default function MyDay() {
         <View style={{ height: StyleSheet.hairlineWidth * 2, backgroundColor: color.divider }} />
 
         {/* Day pages: swipe sideways for the next or previous day. One white sheet: heading and list. */}
-        <View style={{ flex: 1, backgroundColor: color.surface }} {...daySwipe}>
+        <View style={{ flex: 1, backgroundColor: SHEET_FILL }} {...daySwipe}>
           <FlatList
             ref={listRef}
             scrollEnabled={!nativeRest}
@@ -393,6 +393,9 @@ function sideSwipe(node: HTMLElement, onInput: () => void, step: (dir: 1 | -1) =
 }
 
 const TOOLBAR_H = 88;
+// What the sheet's content paints behind itself: nothing on iPhone, where the sheet is Apple's blur material
+// (app/day-sheet.tsx) and the map shows softly through; white on the drawn sheet elsewhere.
+const SHEET_FILL = NATIVE_CHROME ? 'transparent' : color.surface;
 // The avatar's bar over the map; pulled all the way up, the sheet stops just under it.
 const NAV_TOP = 10;
 const NAV_H = 44;
@@ -606,14 +609,14 @@ function DayPanel({ route, isToday, driver, stats, onOpenStop, loading, bottomPa
 function GroupedStopRow({ stop, first, last, locked, joinTop }: { stop: Stop; first: boolean; last: boolean; locked: boolean; joinTop?: boolean }) {
   return (
     <View accessibilityLabel={`${stop.customer_name}, ${stop.address}${locked ? ', locked in place' : ''}`}
-      style={{ flexDirection: 'row', gap: space[3], paddingLeft: space[4], backgroundColor: color.surface }}>
+      style={{ flexDirection: 'row', gap: space[3], paddingLeft: space[4], backgroundColor: SHEET_FILL }}>
       <View style={{ width: 20, alignItems: 'center' }}>
         {/* The line comes in from the row above (or, first, from the next stop), stops short of the marker,
             and goes on below it; rounded ends. */}
         <View style={[styles.routeLine, { height: (locked ? 14 : 16) - 4, marginBottom: 4 }, first && !joinTop && { backgroundColor: 'transparent' }]} />
         {locked
           ? <View style={{ height: 20, justifyContent: 'center' }}><Icon name="lock" size={18} color={color.action} strokeWidth={2} /></View>
-          : <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: color.action, backgroundColor: color.surface }} />}
+          : <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: color.action, backgroundColor: SHEET_FILL }} />}
         <View style={[styles.routeLine, { flex: 1, marginTop: 4 }, last && { backgroundColor: 'transparent' }]} />
       </View>
       <View style={[styles.rowText, { flexDirection: 'row', alignItems: 'center', gap: space[2] }, last && { borderBottomWidth: 0 }]}>
@@ -720,7 +723,7 @@ const styles = StyleSheet.create({
   routeLine: { width: 2, borderRadius: 1, backgroundColor: color.divider },
   // Apple's grouped lists: the label above a container, and the container, inset on the gray.
   groupLabel: { fontFamily: font.medium, fontSize: 13, lineHeight: 18, letterSpacing: 0.2, textTransform: 'uppercase', color: color.inkMuted, paddingHorizontal: space[4], paddingBottom: space[2] },
-  group: { backgroundColor: color.surface, overflow: 'hidden' },
+  group: { backgroundColor: SHEET_FILL, overflow: 'hidden' },
   optimizePill: { marginTop: space[1], height: 26, paddingHorizontal: 10, borderRadius: 13, backgroundColor: color.brandTint, justifyContent: 'center' },
   rowText: { flex: 1, paddingVertical: space[3], paddingRight: space[4], borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.divider },
 });
