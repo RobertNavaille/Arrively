@@ -7,6 +7,7 @@ import { color, shadow } from './theme';
  * re-center). Web and Android: white with a soft shadow. On iPhone it's
  * Apple's Liquid Glass (FloatingSurface.ios.tsx).
  */
-export function FloatingSurface({ style, children }: { style?: StyleProp<ViewStyle>; children?: ReactNode }) {
-  return <View style={[{ backgroundColor: color.surface }, shadow.float, style]}>{children}</View>;
+export function FloatingSurface({ style, children, dark }: { style?: StyleProp<ViewStyle>; children?: ReactNode; dark?: boolean }) {
+  // `dark`: a near-black, slightly see-through surface (with a blur in browsers), for more contrast over busy content.
+  return <View style={[{ backgroundColor: dark ? 'rgba(28, 28, 30, 0.88)' : color.surface }, dark && ({ backdropFilter: 'blur(16px)' } as object), shadow.float, style]}>{children}</View>;
 }
