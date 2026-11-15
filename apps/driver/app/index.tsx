@@ -468,9 +468,9 @@ function TripPill({ stats, sheetUp }: { stats: DayStats; sheetUp: boolean }) {
   ];
   return (
     <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${mi.toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}>
-      {/* Liquid Glass, regular. Light mode tint: white 10% with the sheet down (over the glass sheet), gray 10% with
+      {/* Liquid Glass, regular. Light mode tint: white 20% with the sheet down (over the glass sheet), gray 10% with
           it up (over the solid one). Dark mode: untinted. */}
-      <FloatingSurface glass lightTint={sheetUp ? 'rgba(142, 142, 147, 0.1)' : 'rgba(255, 255, 255, 0.1)'}
+      <FloatingSurface glass lightTint={sheetUp ? 'rgba(142, 142, 147, 0.1)' : 'rgba(255, 255, 255, 0.2)'}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 24, paddingVertical: 18, paddingHorizontal: 32, borderRadius: 999 }}>
         {/* Each number with its label beside it, on the text's baseline. */}
         {items.map((it) => (
