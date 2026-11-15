@@ -8,8 +8,8 @@ const GLASS = isLiquidGlassAvailable();
 
 /**
  * Controls floating over the map: Apple's Liquid Glass, as in Apple Maps (white on iOS versions without it).
- * `thick`: Apple's thick blur material instead (as in Control Center): white in light mode, dark gray in dark
- * mode, and opaque enough that busy content behind it blurs away and text on it stays sharp.
+ * `thick`: Apple's standard blur material instead (between thin and thick): white-ish in light mode, dark gray
+ * in dark mode, frosted enough to see the content behind it move while text on it stays readable.
  */
 export function FloatingSurface({ style, children, thick }: { style?: StyleProp<ViewStyle>; children?: ReactNode; thick?: boolean }) {
   if (thick) {
@@ -17,7 +17,7 @@ export function FloatingSurface({ style, children, thick }: { style?: StyleProp<
     const radius = StyleSheet.flatten(style)?.borderRadius;
     return (
       <View style={[shadow.float, { borderRadius: radius }]}>
-        <BlurView tint="systemThickMaterial" intensity={100} style={[{ overflow: 'hidden' }, style]}>{children}</BlurView>
+        <BlurView tint="systemMaterial" intensity={100} style={[{ overflow: 'hidden' }, style]}>{children}</BlurView>
       </View>
     );
   }
