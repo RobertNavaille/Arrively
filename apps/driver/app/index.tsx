@@ -214,7 +214,7 @@ export default function MyDay() {
   const optimize = stats ? (
     <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: NATIVE_CHROME ? sideGap : space[6] + bottomInset, alignItems: 'center' }}>
       <View onLayout={(e) => { const w = Math.round(e.nativeEvent.layout.width); if (w !== pillW) setPillW(w); }}>
-        <TripPill stats={stats} />
+        <TripPill stats={stats} sheetUp={sheetOpen} />
       </View>
     </View>
   ) : null;
@@ -459,7 +459,7 @@ function TripInfo({ stats, size }: { stats: DayStats; size: number }) {
  * The day's trip info as a pill: each number with its small label beside it, three across (drive time, miles, stops).
  * Filled with Apple's see-through system fill (as Maps' containers): it adapts to the sheet, glass or solid.
  */
-function TripPill({ stats }: { stats: DayStats }) {
+function TripPill({ stats, sheetUp }: { stats: DayStats; sheetUp: boolean }) {
   const mi = miles(stats.meters);
   const items = [
     stats.min < 60 ? { value: String(stats.min), label: 'minutes' } : { value: `${Math.floor(stats.min / 60)}:${String(stats.min % 60).padStart(2, '0')}`, label: 'hours' },
@@ -467,8 +467,11 @@ function TripPill({ stats }: { stats: DayStats }) {
     { value: String(stats.stops), label: stats.left ? 'left' : stats.stops === 1 ? 'stop' : 'stops' },
   ];
   return (
-    <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${mi.toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}
-      style={{ flexDirection: 'row', alignItems: 'center', gap: 24, paddingVertical: 18, paddingHorizontal: 32, borderRadius: 999, backgroundColor: color.fill }}>
+    <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${mi.toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}>
+      {/* Liquid Glass, regular. Light mode tint: white 10% with the sheet down (over the glass sheet), gray 10% with
+          it up (over the solid one). Dark mode: untinted. */}
+      <FloatingSurface glass lightTint={sheetUp ? 'rgba(142, 142, 147, 0.1)' : 'rgba(255, 255, 255, 0.1)'}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 24, paddingVertical: 18, paddingHorizontal: 32, borderRadius: 999 }}>
         {/* Each number with its label beside it, on the text's baseline. */}
         {items.map((it) => (
           <Text key={it.label} maxFontSizeMultiplier={1.3}>
@@ -476,6 +479,7 @@ function TripPill({ stats }: { stats: DayStats }) {
             <Text style={{ fontFamily: font.medium, fontSize: 17, color: color.inkMuted }}>{` ${it.label}`}</Text>
           </Text>
         ))}
+      </FloatingSurface>
     </View>
   );
 }
