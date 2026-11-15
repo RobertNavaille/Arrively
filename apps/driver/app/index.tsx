@@ -460,12 +460,12 @@ function TripPill({ stats }: { stats: DayStats }) {
   return (
     <View accessible accessibilityLabel={`${fmtTripTime(stats.min)} driving, ${mi.toFixed(1)} miles, ${stats.stops} ${stats.left ? 'stops left' : stats.stops === 1 ? 'stop' : 'stops'}`}
       style={[{ borderRadius: 999 }, shadow.float]}>
-      <FloatingSurface style={{ flexDirection: 'row', alignItems: 'center', gap: 28, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 999 }}>
+      <FloatingSurface style={{ flexDirection: 'row', alignItems: 'center', gap: 22, paddingVertical: 14, paddingHorizontal: 24, borderRadius: 999 }}>
         {/* Each number with its label beside it, on the text's baseline. */}
         {items.map((it) => (
           <Text key={it.label} maxFontSizeMultiplier={1.3}>
             <Text style={{ fontFamily: font.semibold, fontSize: 24, lineHeight: 28, color: color.ink, fontVariant: ['tabular-nums'] }}>{it.value}</Text>
-            <Text style={{ fontFamily: font.regular, fontSize: 13, color: color.inkMuted }}>{` ${it.label}`}</Text>
+            <Text style={{ fontFamily: font.regular, fontSize: 15, color: color.inkMuted }}>{` ${it.label}`}</Text>
           </Text>
         ))}
       </FloatingSurface>
